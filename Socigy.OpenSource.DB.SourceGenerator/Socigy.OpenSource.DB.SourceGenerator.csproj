@@ -1,0 +1,75 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+
+		<Nullable>enable</Nullable>
+
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+		<IsRoslynComponent>true</IsRoslynComponent>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+		<PackageReference Include="System.CodeDom" Version="10.0.0" GeneratePathProperty="true" PrivateAssets="All" />
+		<PackageReference Include="System.Text.Json" Version="10.0.0" GeneratePathProperty="true" PrivateAssets="All" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" GeneratePathProperty="true" PrivateAssets="All" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Templates\MigrationTableTemplate.tt">
+			<Generator>TextTemplatingFilePreprocessor</Generator>
+			<LastGenOutput>MigrationTableTemplate.cs</LastGenOutput>
+		</None>
+		<None Update="Templates\TableColumnNameClassTemplate.tt">
+		  <Generator>TextTemplatingFilePreprocessor</Generator>
+		  <LastGenOutput>TableColumnNameClassTemplate.cs</LastGenOutput>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Templates\MigrationTableTemplate.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>MigrationTableTemplate.tt</DependentUpon>
+		</Compile>
+		<Compile Update="Templates\TableColumnNameClassTemplate.cs">
+		  <DesignTime>True</DesignTime>
+		  <AutoGen>True</AutoGen>
+		  <DependentUpon>TableColumnNameClassTemplate.tt</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<GetTargetPathDependsOn>
+			$(GetTargetPathDependsOn);GetDependencyTargetPaths
+		</GetTargetPathDependsOn>
+	</PropertyGroup>
+
+	<Target Name="GetDependencyTargetPaths">
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" Targets="GetTargetPath">
+			<Output TaskParameter="TargetOutputs" ItemName="SocigyCoreDll" />
+		</MSBuild>
+
+		<ItemGroup>
+			<TargetPathWithTargetPlatformMoniker Include="$(PKGSystem_Text_Json)\lib\netstandard2.0\System.Text.Json.dll" IncludeRuntimeDependency="false" />
+			<TargetPathWithTargetPlatformMoniker Include="$(PKGSystem_CodeDom)\lib\netstandard2.0\System.CodeDom.dll" IncludeRuntimeDependency="false" />
+			<TargetPathWithTargetPlatformMoniker Include="@(SocigyCoreDll)" IncludeRuntimeDependency="false" />
+		</ItemGroup>
+	</Target>
+
+</Project>

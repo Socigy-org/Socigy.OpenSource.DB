@@ -1,0 +1,64 @@
+﻿<#@ template language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+using System;
+using System.CodeDom.Compiler;
+using Socigy.OpenSource.DB.Migrations;
+
+/*
+    This code was generated using Socigy.OpenSource.DB generation tool at <#= DateTime.UtcNow.ToString() #> by <#= GitHelper.GetGitSignature(Configuration.ProjectDir) #>
+*/
+
+namespace <#= BaseNamespace #>
+{
+    [GeneratedCode("Socigy.OpenSource.DB", "<#= System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location).ProductVersion #>")]
+    public class <#= Name #> : IMigration
+    {
+        public string Id => _Id;
+
+        public string UpSql => _UpSql;
+        public string DownSql => _DownSql;
+
+        public const string _Id = "<#= Id #>";
+        <#
+            if(PreviousId != null) 
+            {
+            #>
+        public const string _PreviousId = "<#= PreviousId #>";
+        public string PreviousId => _PreviousId;
+<#
+            }
+            else 
+            {
+            #>
+#nullable enable
+        public string? PreviousId => null;
+        #nullable disable
+<#
+            }
+        #>
+
+public const string _UpSql = """
+<#= UpSql #>
+""";
+        
+public const string _DownSql = """
+<#= DownSql #>
+""";
+    }
+}
+
+<#+
+    public string BaseNamespace { get; set; }
+    public string Name { get; set; }
+
+    public string Id { get; set; }
+#nullable enable
+    public string? PreviousId { get; set; }
+#nullable disable
+
+    public string UpSql { get; set; }
+    public string DownSql { get; set; }
+#>

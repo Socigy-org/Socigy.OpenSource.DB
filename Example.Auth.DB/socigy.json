@@ -1,0 +1,6 @@
+{
+  "database": {
+    "platform": "postgresql",
+    "className": "AuthDb"
+  }
+}

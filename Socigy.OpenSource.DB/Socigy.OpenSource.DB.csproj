@@ -1,0 +1,103 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Title>Socigy.OpenSource.DB</Title>
+		<PackageVersion>0.0.24</PackageVersion>
+		<Company>Socigy s.r.o.</Company>
+		<Product>$(PackageTitle)</Product>
+		<Description>Automated cross-DB model generation and automation nuget. Auto-generates and propagates db model across multiple DB</Description>
+		<PackageTags>db;migration;automated</PackageTags>
+		<PackageOutputPath>C:\Users\patri\Shared\LocalNuget</PackageOutputPath>
+
+		<AssemblyVersion>$(PackageVersion)</AssemblyVersion>
+		<FileVersion>$(PackageVersion)</FileVersion>
+		<Version>$(PackageVersion)</Version>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsAotCompatible>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsAotCompatible>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="build\Socigy.OpenSource.DB.targets" Pack="true" PackagePath="build\Socigy.OpenSource.DB.targets" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj">
+			<PrivateAssets>all</PrivateAssets>
+		</ProjectReference>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+			<OutputItemType>Analyzer</OutputItemType>
+		</ProjectReference>
+	</ItemGroup>
+
+	<Target Name="IncludeCoreDllInPackage" BeforeTargets="GenerateNuspec">
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj"
+					 Targets="GetTargetPath">
+			<Output TaskParameter="TargetOutputs" ItemName="SocigyCoreDll" />
+		</MSBuild>
+		<!--<ItemGroup>
+			<_CoreDll Include="..\Socigy.OpenSource.DB.Core\bin\$(Configuration)\netstandard2.0\Socigy.OpenSource.DB.Core.dll" />
+		</ItemGroup>-->
+
+		<Message Text="[Socigy.OpenSource.DB] Injecting Core DLL from @(SocigyCoreDll)" Importance="High" />
+
+		<ItemGroup>
+			<_PackageFiles Include="@(SocigyCoreDll)">
+				<PackagePath>lib\$(TargetFramework)</PackagePath>
+				<Visible>true</Visible>
+				<BuildAction>Content</BuildAction>
+			</_PackageFiles>
+		</ItemGroup>
+	</Target>
+
+	<Target Name="PackCliTool" BeforeTargets="GenerateNuspec">
+		<PropertyGroup>
+			<ToolPublishDir>$(MSBuildProjectDirectory)\obj\ToolPublish\</ToolPublishDir>
+			<ToolPublishDirAny>$(ToolPublishDir)\any\</ToolPublishDirAny>
+			<ToolPublishDirWin>$(ToolPublishDir)\win\</ToolPublishDirWin>
+		</PropertyGroup>
+
+		<RemoveDir Directories="$(ToolPublishDir)" />
+
+		<Message Text="[Socigy] Building Portable (Linux) Tool..." Importance="High" />
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0;PublishDir=$(ToolPublishDirAny);SelfContained=false" />
+
+		<Message Text="[Socigy] Building Windows Tool..." Importance="High" />
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0-windows;PublishDir=$(ToolPublishDirWin);SelfContained=false" />
+
+		<ItemGroup>
+			<_ToolFilesAny Include="$(ToolPublishDirAny)**\*" />
+			<_ToolFilesWin Include="$(ToolPublishDirWin)**\*" />
+		</ItemGroup>
+
+		<ItemGroup>
+			<_PackageFiles Include="@(_ToolFilesAny)">
+				<PackagePath>tools/any/%(RecursiveDir)</PackagePath>
+				<Visible>false</Visible>
+				<BuildAction>Content</BuildAction>
+			</_PackageFiles>
+
+			<_PackageFiles Include="@(_ToolFilesWin)">
+				<PackagePath>tools/win/%(RecursiveDir)</PackagePath>
+				<Visible>false</Visible>
+				<BuildAction>Content</BuildAction>
+			</_PackageFiles>
+		</ItemGroup>
+	</Target>
+</Project>

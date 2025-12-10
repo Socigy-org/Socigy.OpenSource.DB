@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
+		<LangVersion>preview</LangVersion>
+
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+		<UseWindowsForms>true</UseWindowsForms>
+		<DefineConstants>$(DefineConstants);IsWindows</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.CodeDom" Version="10.0.0" />
+		<PackageReference Include="System.CommandLine" Version="2.0.0" />
+		<PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Templates\GitignoreTemplate.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>GitignoreTemplate.tt</DependentUpon>
+		</Compile>
+		<Compile Update="Templates\MigrationFileTemplate.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>MigrationFileTemplate.tt</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Templates\GitignoreTemplate.tt">
+			<Generator>TextTemplatingFilePreprocessor</Generator>
+			<LastGenOutput>GitignoreTemplate.cs</LastGenOutput>
+		</None>
+		<None Update="Templates\MigrationFileTemplate.tt">
+			<Generator>TextTemplatingFilePreprocessor</Generator>
+			<LastGenOutput>MigrationFileTemplate.cs</LastGenOutput>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+	</ItemGroup>
+
+</Project>

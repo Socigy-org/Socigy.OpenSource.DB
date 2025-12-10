@@ -1,0 +1,291 @@
+{
+  "id": "2025127120__ChangeUserVisibility",
+  "previousId": "2025127057__UserVisibility",
+  "tables": [
+    {
+      "name": "user_visibility",
+      "sourceName": "Example.Auth.DB.UserVisibility",
+      "isEnum": true,
+      "instantiatedValues": [
+        {
+          "id": 0,
+          "value": "Public",
+          "description": "This will make the user visible to everyone"
+        },
+        {
+          "id": 1,
+          "value": "CirclesOnly",
+          "description": null
+        },
+        {
+          "id": 2,
+          "value": "CustomCircles",
+          "description": null
+        }
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint",
+          "isPrimaryKey": true,
+          "valueConvertor": "EnumConvertor\u003CExample.Auth.DB.UserVisibility\u003E"
+        },
+        {
+          "name": "value",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "description",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "sourceName": "Example.Auth.DB.User",
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "ID",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "username",
+          "sourceName": "Username",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "tag",
+          "sourceName": "Tag",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint"
+        },
+        {
+          "name": "icon_url",
+          "sourceName": "IconUrl",
+          "dotnetType": "System.String",
+          "databaseType": "text",
+          "nullable": true
+        },
+        {
+          "name": "email",
+          "sourceName": "Email",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "email_verified",
+          "sourceName": "EmailVerified",
+          "dotnetType": "System.Boolean",
+          "databaseType": "boolean"
+        },
+        {
+          "name": "registration_complete",
+          "sourceName": "RegistrationComplete",
+          "dotnetType": "System.Boolean",
+          "databaseType": "boolean"
+        },
+        {
+          "name": "phone_number",
+          "sourceName": "PhoneNumber",
+          "dotnetType": "System.String",
+          "databaseType": "text",
+          "nullable": true
+        },
+        {
+          "name": "first_name",
+          "sourceName": "FirstName",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "last_name",
+          "sourceName": "LastName",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "birth_date",
+          "sourceName": "BirthDate",
+          "dotnetType": "System.DateTime",
+          "databaseType": "timestamp without time zone",
+          "nullable": true
+        },
+        {
+          "name": "is_child",
+          "sourceName": "IsChild",
+          "dotnetType": "System.Boolean",
+          "databaseType": "boolean"
+        },
+        {
+          "name": "parent_id",
+          "sourceName": "ParentId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "visibility",
+          "sourceName": "Visibility",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_Visibility",
+          "columns": [
+            "Visibility"
+          ],
+          "targetTable": "Example.Auth.DB.UserVisibility",
+          "targetColumns": [
+            "Id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "courses",
+      "sourceName": "Example.Auth.DB.Course",
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "name",
+          "sourceName": "Name",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "created_at",
+          "sourceName": "CreatedAt",
+          "dotnetType": "System.DateTime",
+          "databaseType": "timestamp without time zone",
+          "defaultValue": "timezone(\u0027utc\u0027, now())"
+        }
+      ]
+    },
+    {
+      "name": "user_course",
+      "sourceName": "Example.Auth.DB.UserCourse",
+      "columns": [
+        {
+          "name": "user_id",
+          "sourceName": "UserId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "course_id",
+          "sourceName": "CourseId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "registered_at",
+          "sourceName": "RegisteredAt",
+          "dotnetType": "System.DateTime",
+          "databaseType": "timestamp without time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_UserId",
+          "columns": [
+            "UserId"
+          ],
+          "targetTable": "Example.Auth.DB.User",
+          "targetColumns": [
+            "ID"
+          ]
+        },
+        {
+          "type": "foreign_key",
+          "name": "FK_CourseId",
+          "columns": [
+            "CourseId"
+          ],
+          "targetTable": "Example.Auth.DB.Course",
+          "targetColumns": [
+            "Id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_course_agreement",
+      "sourceName": "Example.Auth.DB.UserCourseAgreement",
+      "columns": [
+        {
+          "name": "user_id",
+          "sourceName": "UserId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid"
+        },
+        {
+          "name": "course_id",
+          "sourceName": "CourseId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_UserId_CourseId",
+          "columns": [
+            "UserId",
+            "CourseId"
+          ],
+          "targetTable": "Example.Auth.DB.UserCourse",
+          "targetColumns": [
+            "UserId",
+            "CourseId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_login",
+      "sourceName": "Example.Auth.DB.UserLogin",
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "username",
+          "sourceName": "Username",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "password_hash",
+          "sourceName": "PasswordHash",
+          "dotnetType": "System.String",
+          "databaseType": "text",
+          "nullable": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "2025127117__Changes",
+  "tables": [
+    {
+      "name": "user_login",
+      "sourceName": "Example.User.DB.UserInfo",
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "email",
+          "sourceName": "Email",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "username",
+          "sourceName": "Username",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "first_name",
+          "sourceName": "FirstName",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "last_name",
+          "sourceName": "LastName",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "name": "UQ_Email",
+          "columns": [
+            "Email"
+          ]
+        }
+      ]
+    }
+  ]
+}

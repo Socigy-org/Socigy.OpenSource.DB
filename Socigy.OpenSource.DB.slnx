@@ -1,0 +1,22 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="DB_Migration" />
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+  </Configurations>
+  <Folder Name="/Example/">
+    <Project Path="Example.API/Example.API.csproj" />
+    <Project Path="Example.Auth.DB/Example.Auth.DB.csproj" />
+    <Project Path="Example.Shared.DB/Example.Shared.DB.csproj" Id="d315f04e-7ff8-46c4-a731-7b6f453242d1" />
+    <Project Path="Example.User.DB/Example.User.DB.csproj" />
+  </Folder>
+  <Folder Name="/Socigy.OpenSource/">
+    <Project Path="Socigy.OpenSource.DB.Core/Socigy.OpenSource.DB.Core.csproj" Id="ad375276-6c17-44cb-8596-62492b36c3a4" />
+    <Project Path="Socigy.OpenSource.DB.SourceGenerator/Socigy.OpenSource.DB.SourceGenerator.csproj" />
+    <Project Path="Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj" />
+    <Project Path="Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+</Solution>

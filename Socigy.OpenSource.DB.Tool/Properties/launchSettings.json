@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Run Generation": {
+      "commandName": "Project",
+      "commandLineArgs": "generate --target-assembly \"D:\\Socigy.OpenSource.DB\\Example.Auth.DB\\bin\\Debug\\net10.0\\Example.Auth.DB.dll\" --project-dir \"D:\\Socigy.OpenSource.DB\\Example.Auth.DB\\"
+    },
+    "Run Migration": {
+      "commandName": "Project",
+      "commandLineArgs": "generate --target-assembly \"D:\\Socigy.OpenSource.DB\\Example.Auth.DB\\bin\\Debug\\net10.0\\Example.Auth.DB.dll\" --migrate --project-dir \"D:\\Socigy.OpenSource.DB\\Example.Auth.DB\\"
+    }
+  }
+}

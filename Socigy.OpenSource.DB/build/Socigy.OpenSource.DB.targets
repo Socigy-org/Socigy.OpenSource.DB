@@ -1,0 +1,43 @@
+<Project>
+	<PropertyGroup>
+		<IsMigrationBuild Condition="('$(DbMigration)' == 'true' OR '$(Mode)' == 'DbMigration' OR '$(Configuration)' == 'DB_MIGRATION') AND '$(IsSecondPass)' != 'true'">true</IsMigrationBuild>
+		<SocigyMigrateArg Condition="'$(IsMigrationBuild)' == 'true'">--migrate</SocigyMigrateArg>
+	</PropertyGroup>
+
+	<Choose>
+		<When Condition="'$(OS)' == 'Windows_NT'">
+			<PropertyGroup>
+				<MigratorToolSubPath>tools\win\Socigy.OpenSource.DB.Tool.dll</MigratorToolSubPath>
+			</PropertyGroup>
+		</When>
+		<Otherwise>
+			<PropertyGroup>
+				<MigratorToolSubPath>tools\any\Socigy.OpenSource.DB.Tool.dll</MigratorToolSubPath>
+			</PropertyGroup>
+		</Otherwise>
+	</Choose>
+
+	<Target Name="SocigyModelBuild" AfterTargets="Build" Condition="'$(IsSecondPass)' != 'true'">
+		<PropertyGroup>
+			<MigratorToolPath>$(MSBuildThisFileDirectory)..\$(MigratorToolSubPath)</MigratorToolPath>
+		</PropertyGroup>
+
+		<Message Text="[Socigy.OpenSource.DB.Tool] Selected Tool Path: $(MigratorToolPath)" Importance="normal" />
+		<Message Text="[Socigy.OpenSource.DB.Tool] Generating DB Model ..." Importance="high" />
+
+		<Exec Command="dotnet &quot;$(MigratorToolPath)&quot; generate --target-assembly &quot;$(TargetPath)&quot; $(SocigyMigrateArg) --project-dir &quot;$(ProjectDir)\&quot;" />
+
+		<Message Text="[Socigy.OpenSource.DB.Tool] Migration generated. Starting rebuild with source generators..."
+             Importance="high"
+             Condition="'$(IsMigrationBuild)' == 'true'" />
+
+		<MSBuild Projects="$(MSBuildProjectFullPath)"
+             Targets="Build"
+             Properties="IsSecondPass=true;Configuration=$(Configuration);Platform=$(Platform)"
+             Condition="'$(IsMigrationBuild)' == 'true'" />
+
+		<Message Text="[Socigy.OpenSource.DB.Tool] Model generated"
+				 Importance="high"
+				 Condition="'$(IsMigrationBuild)' != 'true'" />
+	</Target>
+</Project>

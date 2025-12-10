@@ -1,0 +1,29 @@
+﻿<#@ template language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+using System;
+using Socigy.OpenSource.DB.Attributes;
+
+namespace <#= BaseNamespace #>.Generated
+{
+    [Table("_scg_migrations")]
+    public partial class Migrations
+    {
+        [PrimaryKey]
+        public string Id { get; set; }
+    
+        [Default]
+        public DateTime AppliedAt { get; set; }
+
+        [Default("false")]
+        public bool IsRollback { get; set; }
+
+        public string ExecutedBy { get; set; }
+    }
+}
+
+<#+
+    public string BaseNamespace { get; set; }
+#>

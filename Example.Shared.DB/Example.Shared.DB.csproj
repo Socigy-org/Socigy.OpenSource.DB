@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Configurations>Debug;Release;DB_Migration</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Socigy.OpenSource.DB" Version="0.0.24" />
+  </ItemGroup>
+
+</Project>

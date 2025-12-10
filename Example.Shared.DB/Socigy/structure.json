@@ -1,0 +1,18 @@
+{
+  "id": "20251271236__Initialization",
+  "tables": [
+    {
+      "name": "shared",
+      "sourceName": "Example.Shared.DB.Shared",
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        }
+      ]
+    }
+  ]
+}
