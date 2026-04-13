@@ -128,6 +128,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance for method chaining.</returns>
         public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithAllFields()
         {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException("Cannot combine WithAllFields() with WithFields().");
+
             AllFieldsSet = true;
             return this;
         }
@@ -146,6 +149,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (AllFieldsSet)
                 throw new InvalidOperationException("Cannot specify individual fields when WithAllFields() is set.");
 
+            if (_UpdateExceptClause != null)
+                throw new InvalidOperationException("Cannot combine WithFields() with ExceptFields().");
+
             _UpdateClause = select;
             return this;
         }
@@ -160,8 +166,36 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance with the specified fields excluded from updates.</returns>
         public Postgresql<#= ClassName #>UpdateCommandBuilder<T> ExceptFields(Expression<Func<T, object?[]>> except)
         {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException("Cannot combine ExceptFields() with WithFields().");
+
             _UpdateExceptClause = except;
             return this;
+        }
+
+        private HashSet<string>? BuildExcludedDbColumns(NpgsqlCommand command)
+        {
+            if (_UpdateExceptClause == null)
+                return null;
+
+            var extractor = new PostgresqlUpdateVisitor(
+                _UpdateExceptClause.Parameters[0],
+                <#= ClassName #>.GetColumnDbName,
+                command);
+
+            // Extracted values are C# member names.
+            var extractedMemberNames = extractor.ExtractColumnNames(_UpdateExceptClause);
+
+            // Convert to DB column names so they match _TableRow.GetColumns() keys.
+            var excludedDbColumns = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var memberName in extractedMemberNames)
+            {
+                var dbName = <#= ClassName #>.GetColumnDbName(memberName);
+                if (!string.IsNullOrEmpty(dbName))
+                    excludedDbColumns.Add(dbName);
+            }
+
+            return excludedDbColumns;
         }
 
         private string BuildSetClause(NpgsqlCommand command)
@@ -173,20 +207,11 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 <#= ClassName #>.GetColumnDbName,
                 command);
 
-            if (_UpdateClause != null)
+            // IMPORTANT: only use explicit WithFields() when not in AllFields mode
+            if (_UpdateClause != null && !AllFieldsSet)
                 return updateVisitor.Parse(_UpdateClause);
 
-            HashSet<string>? excluded = null;
-
-            if (_UpdateExceptClause != null)
-            {
-                var extractor = new PostgresqlUpdateVisitor(
-                    _UpdateExceptClause.Parameters[0],
-                    <#= ClassName #>.GetColumnDbName,
-                    command);
-
-                excluded = extractor.ExtractColumnNames(_UpdateExceptClause);
-            }
+            HashSet<string>? excludedDbColumns = BuildExcludedDbColumns(command);
 
             Dictionary<string, ColumnInfo> allColumns = _TableRow.GetColumns();
             var sb = new StringBuilder();
@@ -194,19 +219,16 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
             foreach (var kv in allColumns)
             {
-                var propName = kv.Key;
+                var dbColumnName = kv.Key;
                 var info = kv.Value;
 
-                if (excluded != null && excluded.Contains(propName))
+                if (excludedDbColumns != null && excludedDbColumns.Contains(dbColumnName))
                     continue;
 
                 if (!first)
                     sb.Append(", ");
 
                 first = false;
-
-                string colName = <#= ClassName #>.GetColumnDbName(propName)
-                    ?? throw new InvalidDataException("Invalid propName was provided to <#= ClassName #> update postgresql command builder");
 
                 string paramName = $"@p{command.Parameters.Count}";
 
@@ -222,7 +244,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                     p.NpgsqlDbType = GetDbType(info.Type);
 
                 command.Parameters.Add(p);
-                sb.Append($"\"{colName}\" = {paramName}");
+                sb.Append($"\"{dbColumnName}\" = {paramName}");
             }
 
             return sb.ToString();

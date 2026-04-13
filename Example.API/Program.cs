@@ -71,9 +71,9 @@ async Task TestAsync(DbConnection connection)
 
     await buser.Update()
         .WithConnection(connection)
-        //.WithAllFields()
-        .WithFields(x => new object?[] { x.Email, x.Username, x.Visibility })
-        //.ExceptFields(x => new object?[] { x.Email, x.Username })
+        .WithAllFields()
+        //.WithFields(x => new object?[] { x.Email, x.Username, x.Visibility })
+        .ExceptFields(x => new object?[] { x.Email, x.Username })
         .ExecuteAsync();
 
     //User.Delete();

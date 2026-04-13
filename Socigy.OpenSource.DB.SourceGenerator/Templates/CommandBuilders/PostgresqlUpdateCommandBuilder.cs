@@ -184,6 +184,9 @@ using ");
             #line hidden
             this.Write(@"UpdateCommandBuilder<T> WithAllFields()
         {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException(""Cannot combine WithAllFields() with WithFields()."");
+
             AllFieldsSet = true;
             return this;
         }
@@ -197,7 +200,7 @@ using ");
         /// array of properties to include in the update.</param>
         /// <returns>The current <see cref=""Postgresql");
             
-            #line 142 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 145 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -206,7 +209,7 @@ using ");
         /// <exception cref=""InvalidOperationException"">Thrown if all fields have already been specified using <see cref=""WithAllFields""/>.</exception>
         public Postgresql");
             
-            #line 144 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 147 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -215,6 +218,9 @@ using ");
         {
             if (AllFieldsSet)
                 throw new InvalidOperationException(""Cannot specify individual fields when WithAllFields() is set."");
+
+            if (_UpdateExceptClause != null)
+                throw new InvalidOperationException(""Cannot combine WithFields() with ExceptFields()."");
 
             _UpdateClause = select;
             return this;
@@ -229,7 +235,7 @@ using ");
         /// operation. The expression should return an array of properties to be omitted.</param>
         /// <returns>The current <see cref=""Postgresql");
             
-            #line 160 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 166 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -237,15 +243,57 @@ using ");
             this.Write("UpdateCommandBuilder{T}\"/> instance with the specified fields excluded from updat" +
                     "es.</returns>\r\n        public Postgresql");
             
-            #line 161 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 167 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
             this.Write(@"UpdateCommandBuilder<T> ExceptFields(Expression<Func<T, object?[]>> except)
         {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException(""Cannot combine ExceptFields() with WithFields()."");
+
             _UpdateExceptClause = except;
             return this;
+        }
+
+        private HashSet<string>? BuildExcludedDbColumns(NpgsqlCommand command)
+        {
+            if (_UpdateExceptClause == null)
+                return null;
+
+            var extractor = new PostgresqlUpdateVisitor(
+                _UpdateExceptClause.Parameters[0],
+                ");
+            
+            #line 183 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(@".GetColumnDbName,
+                command);
+
+            // Extracted values are C# member names.
+            var extractedMemberNames = extractor.ExtractColumnNames(_UpdateExceptClause);
+
+            // Convert to DB column names so they match _TableRow.GetColumns() keys.
+            var excludedDbColumns = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var memberName in extractedMemberNames)
+            {
+                var dbName = ");
+            
+            #line 193 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(@".GetColumnDbName(memberName);
+                if (!string.IsNullOrEmpty(dbName))
+                    excludedDbColumns.Add(dbName);
+            }
+
+            return excludedDbColumns;
         }
 
         private string BuildSetClause(NpgsqlCommand command)
@@ -256,101 +304,54 @@ using ");
                     ?? Expression.Parameter(typeof(T), ""x""),
                 ");
             
-            #line 173 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 207 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
-            this.Write(@".GetColumnDbName,
-                command);
-
-            if (_UpdateClause != null)
-                return updateVisitor.Parse(_UpdateClause);
-
-            HashSet<string>? excluded = null;
-
-            if (_UpdateExceptClause != null)
-            {
-                var extractor = new PostgresqlUpdateVisitor(
-                    _UpdateExceptClause.Parameters[0],
-                    ");
+            this.Write(".GetColumnDbName,\r\n                command);\r\n\r\n            // IMPORTANT: only us" +
+                    "e explicit WithFields() when not in AllFields mode\r\n            if (_UpdateClaus" +
+                    "e != null && !AllFieldsSet)\r\n                return updateVisitor.Parse(_UpdateC" +
+                    "lause);\r\n\r\n            HashSet<string>? excludedDbColumns = BuildExcludedDbColum" +
+                    "ns(command);\r\n\r\n            Dictionary<string, ColumnInfo> allColumns = _TableRo" +
+                    "w.GetColumns();\r\n            var sb = new StringBuilder();\r\n            bool fir" +
+                    "st = true;\r\n\r\n            foreach (var kv in allColumns)\r\n            {\r\n       " +
+                    "         var dbColumnName = kv.Key;\r\n                var info = kv.Value;\r\n\r\n   " +
+                    "             if (excludedDbColumns != null && excludedDbColumns.Contains(dbColum" +
+                    "nName))\r\n                    continue;\r\n\r\n                if (!first)\r\n         " +
+                    "           sb.Append(\", \");\r\n\r\n                first = false;\r\n\r\n               " +
+                    " string paramName = $\"@p{command.Parameters.Count}\";\r\n\r\n                var p = " +
+                    "command.CreateParameter()\r\n                    ?? throw new InvalidOperationExce" +
+                    "ption(\"Expected NpgsqlCommand.\");\r\n\r\n                object? dbValue = Normalize" +
+                    "DbValue(info.Type, info.Value);\r\n\r\n                p.ParameterName = paramName;\r" +
+                    "\n                p.Value = dbValue ?? DBNull.Value;\r\n\r\n                if (dbVal" +
+                    "ue == null || dbValue == DBNull.Value || IsEnumType(info.Type))\r\n               " +
+                    "     p.NpgsqlDbType = GetDbType(info.Type);\r\n\r\n                command.Parameter" +
+                    "s.Add(p);\r\n                sb.Append($\"\\\"{dbColumnName}\\\" = {paramName}\");\r\n    " +
+                    "        }\r\n\r\n            return sb.ToString();\r\n        }\r\n\r\n        /// <summar" +
+                    "y>\r\n        /// Executes the update command asynchronously against the database " +
+                    "connection and returns the number of rows\r\n        /// affected.\r\n        /// </" +
+                    "summary>\r\n        /// <remarks>If the database connection is not already open, t" +
+                    "his method opens it before executing\r\n        /// the command. The update is per" +
+                    "formed using either the specified WHERE clause or the primary key columns of\r\n  " +
+                    "      /// the table row.</remarks>\r\n        /// <returns>A task that represents " +
+                    "the asynchronous operation. The task result contains the number of rows affected" +
+                    " by\r\n        /// the update command. Returns 0 if the command could not be creat" +
+                    "ed.</returns>\r\n        /// <exception cref=\"InvalidOperationException\">Thrown if" +
+                    " a DbBatch was provided, or if no DbConnection is available.</exception>\r\n      " +
+                    "  public async Task<int> ExecuteAsync()\r\n        {\r\n#if NET6_0_OR_GREATER\r\n     " +
+                    "       if (_Batch != null)\r\n                throw new InvalidOperationException(" +
+                    "\"Cannot execute command when DbBatch was provided.\");\r\n#endif\r\n\r\n            if " +
+                    "(_Connection == null)\r\n                throw new InvalidOperationException(\"No D" +
+                    "bConnection provided.\");\r\n\r\n            if (_Connection.State != System.Data.Con" +
+                    "nectionState.Open)\r\n                await _Connection.OpenAsync();\r\n\r\n          " +
+                    "  await using var command = _Connection.CreateCommand() as NpgsqlCommand;\r\n     " +
+                    "       if (command == null) return 0;\r\n\r\n            if (_Transaction != null)\r\n" +
+                    "                command.Transaction = _Transaction as NpgsqlTransaction;\r\n\r\n    " +
+                    "        string? where = null;\r\n            if (_WhereClause != null)\r\n          " +
+                    "      where = GetWhereVisitor(_WhereClause.Parameters[0], ");
             
-            #line 185 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
-            
-            #line default
-            #line hidden
-            this.Write(@".GetColumnDbName,
-                    command);
-
-                excluded = extractor.ExtractColumnNames(_UpdateExceptClause);
-            }
-
-            Dictionary<string, ColumnInfo> allColumns = _TableRow.GetColumns();
-            var sb = new StringBuilder();
-            bool first = true;
-
-            foreach (var kv in allColumns)
-            {
-                var propName = kv.Key;
-                var info = kv.Value;
-
-                if (excluded != null && excluded.Contains(propName))
-                    continue;
-
-                if (!first)
-                    sb.Append("", "");
-
-                first = false;
-
-                string colName = ");
-            
-            #line 208 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
-            
-            #line default
-            #line hidden
-            this.Write(".GetColumnDbName(propName)\r\n                    ?? throw new InvalidDataException" +
-                    "(\"Invalid propName was provided to ");
-            
-            #line 209 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
-            
-            #line default
-            #line hidden
-            this.Write(" update postgresql command builder\");\r\n\r\n                string paramName = $\"@p{" +
-                    "command.Parameters.Count}\";\r\n\r\n                var p = command.CreateParameter()" +
-                    "\r\n                    ?? throw new InvalidOperationException(\"Expected NpgsqlCom" +
-                    "mand.\");\r\n\r\n                object? dbValue = NormalizeDbValue(info.Type, info.V" +
-                    "alue);\r\n\r\n                p.ParameterName = paramName;\r\n                p.Value " +
-                    "= dbValue ?? DBNull.Value;\r\n\r\n                if (dbValue == null || dbValue == " +
-                    "DBNull.Value || IsEnumType(info.Type))\r\n                    p.NpgsqlDbType = Get" +
-                    "DbType(info.Type);\r\n\r\n                command.Parameters.Add(p);\r\n              " +
-                    "  sb.Append($\"\\\"{colName}\\\" = {paramName}\");\r\n            }\r\n\r\n            retur" +
-                    "n sb.ToString();\r\n        }\r\n\r\n        /// <summary>\r\n        /// Executes the u" +
-                    "pdate command asynchronously against the database connection and returns the num" +
-                    "ber of rows\r\n        /// affected.\r\n        /// </summary>\r\n        /// <remarks" +
-                    ">If the database connection is not already open, this method opens it before exe" +
-                    "cuting\r\n        /// the command. The update is performed using either the specif" +
-                    "ied WHERE clause or the primary key columns of\r\n        /// the table row.</rema" +
-                    "rks>\r\n        /// <returns>A task that represents the asynchronous operation. Th" +
-                    "e task result contains the number of rows affected by\r\n        /// the update co" +
-                    "mmand. Returns 0 if the command could not be created.</returns>\r\n        /// <ex" +
-                    "ception cref=\"InvalidOperationException\">Thrown if a DbBatch was provided, or if" +
-                    " no DbConnection is available.</exception>\r\n        public async Task<int> Execu" +
-                    "teAsync()\r\n        {\r\n#if NET6_0_OR_GREATER\r\n            if (_Batch != null)\r\n  " +
-                    "              throw new InvalidOperationException(\"Cannot execute command when D" +
-                    "bBatch was provided.\");\r\n#endif\r\n\r\n            if (_Connection == null)\r\n       " +
-                    "         throw new InvalidOperationException(\"No DbConnection provided.\");\r\n\r\n  " +
-                    "          if (_Connection.State != System.Data.ConnectionState.Open)\r\n          " +
-                    "      await _Connection.OpenAsync();\r\n\r\n            await using var command = _C" +
-                    "onnection.CreateCommand() as NpgsqlCommand;\r\n            if (command == null) re" +
-                    "turn 0;\r\n\r\n            if (_Transaction != null)\r\n                command.Transa" +
-                    "ction = _Transaction as NpgsqlTransaction;\r\n\r\n            string? where = null;\r" +
-                    "\n            if (_WhereClause != null)\r\n                where = GetWhereVisitor(" +
-                    "_WhereClause.Parameters[0], ");
-            
-            #line 262 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 284 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -400,7 +401,7 @@ using ");
                     "erlyingType(actualType);\r\n            return Convert.ChangeType(value, enumUnder" +
                     "lyingType);\r\n        }\r\n    }\r\n    ");
             
-            #line 349 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+            #line 371 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(CustomPostClass));
             
             #line default
@@ -409,7 +410,7 @@ using ");
             return this.GenerationEnvironment.ToString();
         }
         
-        #line 354 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
+        #line 376 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlUpdateCommandBuilder.tt"
 
 	public string ClassName { get; set; }
 	public string Namespace { get; set; }
