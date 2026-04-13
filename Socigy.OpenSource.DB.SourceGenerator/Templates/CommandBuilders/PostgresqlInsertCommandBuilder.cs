@@ -28,126 +28,135 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write("using System;\r\nusing System.Text;\r\nusing System.Data.Common;\r\nusing System.Thread" +
-                    "ing.Tasks;\r\nusing System.Collections.Generic;\r\nusing Socigy.OpenSource.DB.Core;\r" +
-                    "\nusing Socigy.OpenSource.DB.Core.CommandBuilders;\r\nusing Socigy.OpenSource.DB.Co" +
-                    "re.Interfaces;\r\nusing Npgsql;\r\nusing NpgsqlTypes;\r\n\r\n#nullable enable\r\n\r\nnamespa" +
-                    "ce Socigy.OpenSource.DB.CommandBuilders.Postgresql\r\n{\r\n    public class Postgres" +
-                    "qlInsertCommandBuilder<T> : SqlCommandBuilder<PostgresqlInsertCommandBuilder<T>>" +
-                    "\r\n        where T : IDbTable\r\n    {\r\n#if NET6_0_OR_GREATER\r\n        protected Sy" +
-                    "stem.Data.Common.DbBatch? _Batch;\r\n\r\n        /// <summary>\r\n        /// Specifie" +
-                    "s the batch to use for subsequent database operations.\r\n        /// </summary>\r\n" +
-                    "        /// <remarks>If <paramref name=\"batch\"/> is <see langword=\"null\"/>, the " +
-                    "method attempts to create a new\r\n        /// batch from the current connection o" +
-                    "r transaction. The batch is used to group multiple database commands for\r\n      " +
-                    "  /// execution as a single unit.</remarks>\r\n        /// <param name=\"batch\">The" +
-                    " <see cref=\"DbBatch\"/> instance to associate with the operation, or <see langwor" +
-                    "d=\"null\"/> to create a new\r\n        /// batch from the current connection or tra" +
-                    "nsaction.</param>\r\n        /// <returns>The current instance with the specified " +
-                    "batch applied.</returns>\r\n        /// <exception cref=\"ArgumentNullException\">Th" +
-                    "rown if <paramref name=\"batch\"/> is <see langword=\"null\"/> and neither a connect" +
-                    "ion nor a transaction is\r\n        /// specified.</exception>\r\n        /// <excep" +
-                    "tion cref=\"InvalidOperationException\">Thrown if <paramref name=\"batch\"/> is <see" +
-                    " langword=\"null\"/> and the provided transaction does not have an\r\n        /// as" +
-                    "sociated <see cref=\"DbConnection\"/>.</exception>\r\n        public PostgresqlInser" +
-                    "tCommandBuilder<T> WithBatch(DbBatch? batch)\r\n        {\r\n            if (batch =" +
-                    "= null)\r\n            {\r\n                if (_Connection == null && _Transaction " +
-                    "== null)\r\n                    throw new ArgumentNullException(nameof(batch), \"If" +
-                    " batch is null, either connection or transaction must be specified!\");\r\n\r\n      " +
-                    "          _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.Creat" +
-                    "eBatch() ?? throw new InvalidOperationException(\"The provided transaction has no" +
-                    " DbConnection from which a DbBatch could be created\");\r\n                _Batch.T" +
-                    "ransaction = _Transaction;\r\n            }\r\n            else\r\n                _Ba" +
-                    "tch = batch;\r\n\r\n            return this;\r\n        }\r\n\r\n        /// <summary>\r\n  " +
-                    "      /// Adds a new command to the current batch operation.\r\n        /// </summ" +
-                    "ary>\r\n        /// <remarks>This method should be called only after a batch has b" +
-                    "een initialized using\r\n        /// WithBatch(). Attempting to add to a batch wit" +
-                    "hout initialization will result in an exception.</remarks>\r\n        /// <excepti" +
-                    "on cref=\"InvalidOperationException\">Thrown if no batch has been provided. Call W" +
-                    "ithBatch() before invoking this method.</exception>\r\n        public void AddToBa" +
-                    "tch()\r\n        {\r\n            if (_Batch == null)\r\n                throw new Inv" +
-                    "alidOperationException(\"Cannot add to batch when no DbBatch was provided. Please" +
-                    " call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.CreateBatch" +
-                    "Command();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n        }\r\n\r\n  " +
-                    "      /// <summary>\r\n        /// Adds a new command to the current database batc" +
-                    "h asynchronously.\r\n        /// </summary>\r\n        /// <remarks>This method shou" +
-                    "ld be called only after a batch has been initialized using\r\n        /// WithBatc" +
-                    "h(). It is typically used to accumulate multiple commands for execution as a sin" +
-                    "gle batch\r\n        /// operation.</remarks>\r\n        /// <returns>A task that re" +
-                    "presents the asynchronous operation.</returns>\r\n        /// <exception cref=\"Inv" +
-                    "alidOperationException\">Thrown if no database batch has been provided. Call With" +
-                    "Batch() before invoking this method.</exception>\r\n        public async Task AddT" +
-                    "oBatchAsync()\r\n        {\r\n            if (_Batch == null)\r\n                throw" +
-                    " new InvalidOperationException(\"Cannot add to batch when no DbBatch was provided" +
-                    ". Please call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.Cre" +
-                    "ateBatchCommand();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n       " +
-                    " }\r\n#endif\r\n\r\n        private readonly T _TableRow;\r\n        private Dictionary<" +
-                    "string, ColumnInfo>? _ColumnInfo;\r\n\r\n        public PostgresqlInsertCommandBuild" +
-                    "er(T rowInstance, Dictionary<string, ColumnInfo>? columnInfo = null)\r\n        {\r" +
-                    "\n            _TableRow = rowInstance;\r\n            _ColumnInfo = columnInfo;\r\n  " +
-                    "      }\r\n\r\n        /// <summary>\r\n        /// Sets the column metadata to be use" +
-                    "d for building the PostgreSQL insert command.\r\n        /// </summary>\r\n        /" +
-                    "// <param name=\"columnInfo\">A dictionary mapping column names to their associate" +
-                    "d metadata. Cannot be null.</param>\r\n        /// <returns>The current instance o" +
-                    "f <see cref=\"PostgresqlInsertCommandBuilder{T}\"/> with updated column informatio" +
-                    "n.</returns>\r\n        public PostgresqlInsertCommandBuilder<T> WithColumnInfo(Di" +
-                    "ctionary<string, ColumnInfo> columnInfo)\r\n        {\r\n            _ColumnInfo = c" +
-                    "olumnInfo;\r\n            return this;\r\n        }\r\n\r\n        // TODO: Implement Ex" +
-                    "ecuteReturningAsync\r\n        public async Task<TReturning?> ExecuteReturningAsyn" +
-                    "c<TReturning>()\r\n        {\r\n            // TODO: Automatic Sequence value insert" +
-                    "ion\r\n            throw new NotImplementedException();\r\n            return defaul" +
-                    "t;\r\n        }\r\n\r\n        // TODO: Automatic Sequence value insertion\r\n        //" +
-                    "/ <summary>\r\n        /// Executes the configured INSERT command asynchronously a" +
-                    "gainst the database connection.\r\n        /// </summary>\r\n        /// <remarks>Th" +
-                    "e method requires a valid and open database connection. If a transaction is\r\n   " +
-                    "     /// configured, the command will execute within that transaction. Ensure th" +
-                    "at the connection and table row are\r\n        /// properly set up before calling " +
-                    "this method.</remarks>\r\n        /// <returns>A task that represents the asynchro" +
-                    "nous operation. The task result is <see langword=\"true\"/> if one or more\r\n      " +
-                    "  /// rows were inserted; otherwise, <see langword=\"false\"/>.</returns>\r\n       " +
-                    " /// <exception cref=\"InvalidOperationException\">Thrown if a batch operation is " +
-                    "configured or if no database connection has been provided.</exception>\r\n        " +
-                    "public async Task<bool> ExecuteAsync()\r\n        {\r\n#if NET6_0_OR_GREATER\r\n      " +
-                    "      if (_Batch != null)\r\n                throw new InvalidOperationException(\"" +
-                    "Cannot execute command when DbBatch was provided.\");\r\n#endif\r\n\r\n            if (" +
-                    "_Connection == null)\r\n                throw new InvalidOperationException(\"No Db" +
-                    "Connection provided.\");\r\n\r\n            if (_Connection.State != System.Data.Conn" +
-                    "ectionState.Open)\r\n                await _Connection.OpenAsync();\r\n\r\n           " +
-                    " await using var command = _Connection.CreateCommand() as NpgsqlCommand;\r\n      " +
-                    "      if (command == null) return false;\r\n\r\n            if (_Transaction != null" +
-                    ")\r\n                command.Transaction = _Transaction as NpgsqlTransaction;\r\n\r\n " +
-                    "           _ColumnInfo ??= _TableRow.GetColumns();\r\n\r\n            var columnName" +
-                    "s = new List<string>();\r\n            var paramNames = new List<string>();\r\n\r\n   " +
-                    "         foreach (var row in _ColumnInfo)\r\n            {\r\n                string" +
-                    " colName = row.Key;\r\n                object? value = row.Value.Value;\r\n         " +
-                    "       Type type = row.Value.Type;\r\n\r\n                columnNames.Add($\"\\\"{colNa" +
-                    "me}\\\"\");\r\n\r\n                string paramName = $\"@{colName}\";\r\n                p" +
-                    "aramNames.Add(paramName);\r\n\r\n                var param = new NpgsqlParameter(par" +
-                    "amName, value ?? DBNull.Value);\r\n\r\n                // If the value is null, we M" +
-                    "UST specify the type explicitly\r\n                // If the value exists, Npgsql " +
-                    "can usually infer it, but being explicit doesn\'t hurt.\r\n                if (valu" +
-                    "e == null || value == DBNull.Value)\r\n                {\r\n                    para" +
-                    "m.NpgsqlDbType = GetDbType(type);\r\n                }\r\n\r\n                command." +
-                    "Parameters.Add(param);\r\n            }\r\n\r\n            command.CommandText = $@\"\r\n" +
-                    "        INSERT INTO \"\"{_TableRow.GetTableName()}\"\" \r\n        ({string.Join(\", \"," +
-                    " columnNames)}) \r\n        VALUES \r\n        ({string.Join(\", \", paramNames)})\";\r\n" +
-                    "\r\n            int rowsAffected = await command.ExecuteNonQueryAsync();\r\n        " +
-                    "    return rowsAffected > 0;\r\n        }\r\n\r\n        public NpgsqlDbType GetDbType" +
-                    "(Type type)\r\n        {\r\n            type = Nullable.GetUnderlyingType(type) ?? t" +
-                    "ype;\r\n\r\n            return type switch\r\n            {\r\n                Type t wh" +
-                    "en t == typeof(int) => NpgsqlDbType.Integer,\r\n                Type t when t == t" +
-                    "ypeof(long) => NpgsqlDbType.Bigint,\r\n                Type t when t == typeof(str" +
-                    "ing) => NpgsqlDbType.Text,\r\n                Type t when t == typeof(bool) => Npg" +
-                    "sqlDbType.Boolean,\r\n                Type t when t == typeof(DateTime) => NpgsqlD" +
-                    "bType.Timestamp,\r\n                Type t when t == typeof(float) => NpgsqlDbType" +
-                    ".Real,\r\n                Type t when t == typeof(double) => NpgsqlDbType.Double,\r" +
-                    "\n                Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,\r\n    " +
-                    "            Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,\r\n               " +
-                    " Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,\r\n                Type t " +
-                    "when t == typeof(short) => NpgsqlDbType.Smallint,\r\n                Type t when t" +
-                    " == typeof(char) => NpgsqlDbType.Char,\r\n                // Fallback or specific " +
-                    "handling for JSON, Arrays, etc.\r\n                _ => NpgsqlDbType.Text\r\n       " +
-                    "     };\r\n        }\r\n    }\r\n}\r\n\r\n#nullable disable\r\n");
+            this.Write("\n");
+            this.Write("\n");
+            this.Write("\n");
+            this.Write("\n");
+            this.Write("\nusing System;\nusing System.Text;\nusing System.Data.Common;\nusing System.Threadin" +
+                    "g.Tasks;\nusing System.Collections.Generic;\nusing Socigy.OpenSource.DB.Core;\nusin" +
+                    "g Socigy.OpenSource.DB.Core.CommandBuilders;\nusing Socigy.OpenSource.DB.Core.Int" +
+                    "erfaces;\nusing Npgsql;\nusing NpgsqlTypes;\n\n#nullable enable\n\nnamespace Socigy.Op" +
+                    "enSource.DB.CommandBuilders.Postgresql\n{\n    public class PostgresqlInsertComman" +
+                    "dBuilder<T> : SqlCommandBuilder<PostgresqlInsertCommandBuilder<T>>\n        where" +
+                    " T : IDbTable\n    {\n#if NET6_0_OR_GREATER\n        protected System.Data.Common.D" +
+                    "bBatch? _Batch;\n\n        /// <summary>\n        /// Specifies the batch to use fo" +
+                    "r subsequent database operations.\n        /// </summary>\n        /// <remarks>If" +
+                    " <paramref name=\"batch\"/> is <see langword=\"null\"/>, the method attempts to crea" +
+                    "te a new\n        /// batch from the current connection or transaction. The batch" +
+                    " is used to group multiple database commands for\n        /// execution as a sing" +
+                    "le unit.</remarks>\n        /// <param name=\"batch\">The <see cref=\"DbBatch\"/> ins" +
+                    "tance to associate with the operation, or <see langword=\"null\"/> to create a new" +
+                    "\n        /// batch from the current connection or transaction.</param>\n        /" +
+                    "// <returns>The current instance with the specified batch applied.</returns>\n   " +
+                    "     /// <exception cref=\"ArgumentNullException\">Thrown if <paramref name=\"batch" +
+                    "\"/> is <see langword=\"null\"/> and neither a connection nor a transaction is\n    " +
+                    "    /// specified.</exception>\n        /// <exception cref=\"InvalidOperationExce" +
+                    "ption\">Thrown if <paramref name=\"batch\"/> is <see langword=\"null\"/> and the prov" +
+                    "ided transaction does not have an\n        /// associated <see cref=\"DbConnection" +
+                    "\"/>.</exception>\n        public PostgresqlInsertCommandBuilder<T> WithBatch(DbBa" +
+                    "tch? batch)\n        {\n            if (batch == null)\n            {\n             " +
+                    "   if (_Connection == null && _Transaction == null)\n                    throw ne" +
+                    "w ArgumentNullException(nameof(batch), \"If batch is null, either connection or t" +
+                    "ransaction must be specified!\");\n\n                _Batch = _Connection?.CreateBa" +
+                    "tch() ?? _Transaction!.Connection?.CreateBatch() ?? throw new InvalidOperationEx" +
+                    "ception(\"The provided transaction has no DbConnection from which a DbBatch could" +
+                    " be created\");\n                _Batch.Transaction = _Transaction;\n            }\n" +
+                    "            else\n                _Batch = batch;\n\n            return this;\n     " +
+                    "   }\n\n        /// <summary>\n        /// Adds a new command to the current batch " +
+                    "operation.\n        /// </summary>\n        /// <remarks>This method should be cal" +
+                    "led only after a batch has been initialized using\n        /// WithBatch(). Attem" +
+                    "pting to add to a batch without initialization will result in an exception.</rem" +
+                    "arks>\n        /// <exception cref=\"InvalidOperationException\">Thrown if no batch" +
+                    " has been provided. Call WithBatch() before invoking this method.</exception>\n  " +
+                    "      public void AddToBatch()\n        {\n            if (_Batch == null)\n       " +
+                    "         throw new InvalidOperationException(\"Cannot add to batch when no DbBatc" +
+                    "h was provided. Please call WithBatch() first.\");\n\n            var batchCommand " +
+                    "= _Batch.CreateBatchCommand();\n            _Batch.BatchCommands.Add(batchCommand" +
+                    ");\n        }\n\n        /// <summary>\n        /// Adds a new command to the curren" +
+                    "t database batch asynchronously.\n        /// </summary>\n        /// <remarks>Thi" +
+                    "s method should be called only after a batch has been initialized using\n        " +
+                    "/// WithBatch(). It is typically used to accumulate multiple commands for execut" +
+                    "ion as a single batch\n        /// operation.</remarks>\n        /// <returns>A ta" +
+                    "sk that represents the asynchronous operation.</returns>\n        /// <exception " +
+                    "cref=\"InvalidOperationException\">Thrown if no database batch has been provided. " +
+                    "Call WithBatch() before invoking this method.</exception>\n        public async T" +
+                    "ask AddToBatchAsync()\n        {\n            if (_Batch == null)\n                " +
+                    "throw new InvalidOperationException(\"Cannot add to batch when no DbBatch was pro" +
+                    "vided. Please call WithBatch() first.\");\n\n            var batchCommand = _Batch." +
+                    "CreateBatchCommand();\n            _Batch.BatchCommands.Add(batchCommand);\n      " +
+                    "  }\n#endif\n\n        private readonly T _TableRow;\n        private Dictionary<str" +
+                    "ing, ColumnInfo>? _ColumnInfo;\n\n        public PostgresqlInsertCommandBuilder(T " +
+                    "rowInstance, Dictionary<string, ColumnInfo>? columnInfo = null)\n        {\n      " +
+                    "      _TableRow = rowInstance;\n            _ColumnInfo = columnInfo;\n        }\n\n" +
+                    "        /// <summary>\n        /// Sets the column metadata to be used for buildi" +
+                    "ng the PostgreSQL insert command.\n        /// </summary>\n        /// <param name" +
+                    "=\"columnInfo\">A dictionary mapping column names to their associated metadata. Ca" +
+                    "nnot be null.</param>\n        /// <returns>The current instance of <see cref=\"Po" +
+                    "stgresqlInsertCommandBuilder{T}\"/> with updated column information.</returns>\n  " +
+                    "      public PostgresqlInsertCommandBuilder<T> WithColumnInfo(Dictionary<string," +
+                    " ColumnInfo> columnInfo)\n        {\n            _ColumnInfo = columnInfo;\n       " +
+                    "     return this;\n        }\n\n        // TODO: Implement ExecuteReturningAsync\n  " +
+                    "      public async Task<TReturning?> ExecuteReturningAsync<TReturning>()\n       " +
+                    " {\n            // TODO: Automatic Sequence value insertion\n            throw new" +
+                    " NotImplementedException();\n            return default;\n        }\n\n        // TO" +
+                    "DO: Automatic Sequence value insertion\n        /// <summary>\n        /// Execute" +
+                    "s the configured INSERT command asynchronously against the database connection.\n" +
+                    "        /// </summary>\n        /// <remarks>The method requires a valid and open" +
+                    " database connection. If a transaction is\n        /// configured, the command wi" +
+                    "ll execute within that transaction. Ensure that the connection and table row are" +
+                    "\n        /// properly set up before calling this method.</remarks>\n        /// <" +
+                    "returns>A task that represents the asynchronous operation. The task result is <s" +
+                    "ee langword=\"true\"/> if one or more\n        /// rows were inserted; otherwise, <" +
+                    "see langword=\"false\"/>.</returns>\n        /// <exception cref=\"InvalidOperationE" +
+                    "xception\">Thrown if a batch operation is configured or if no database connection" +
+                    " has been provided.</exception>\n        public async Task<bool> ExecuteAsync()\n " +
+                    "       {\n#if NET6_0_OR_GREATER\n            if (_Batch != null)\n                t" +
+                    "hrow new InvalidOperationException(\"Cannot execute command when DbBatch was prov" +
+                    "ided.\");\n#endif\n\n            if (_Connection == null)\n                throw new " +
+                    "InvalidOperationException(\"No DbConnection provided.\");\n\n            if (_Connec" +
+                    "tion.State != System.Data.ConnectionState.Open)\n                await _Connectio" +
+                    "n.OpenAsync();\n\n            await using var command = _Connection.CreateCommand(" +
+                    ") as NpgsqlCommand;\n            if (command == null) return false;\n\n            " +
+                    "if (_Transaction != null)\n                command.Transaction = _Transaction as " +
+                    "NpgsqlTransaction;\n\n            _ColumnInfo ??= _TableRow.GetColumns();\n\n       " +
+                    "     var columnNames = new List<string>();\n            var paramNames = new List" +
+                    "<string>();\n\n            foreach (var row in _ColumnInfo)\n            {\n        " +
+                    "        string colName = row.Key;\n                object? value = row.Value.Valu" +
+                    "e;\n                Type type = row.Value.Type;\n\n                var actualType =" +
+                    " Nullable.GetUnderlyingType(type) ?? type;\n                if (actualType.IsEnum" +
+                    ")\n                {\n                    var enumUnderlyingType = Enum.GetUnderly" +
+                    "ingType(actualType);\n                    if (value != null && value != DBNull.Va" +
+                    "lue)\n                        value = Convert.ChangeType(value, enumUnderlyingTyp" +
+                    "e);\n                }\n\n                columnNames.Add($\"\\\"{colName}\\\"\");\n\n     " +
+                    "           string paramName = $\"@{colName}\";\n                paramNames.Add(para" +
+                    "mName);\n\n                var param = new NpgsqlParameter(paramName, value ?? DBN" +
+                    "ull.Value);\n\n                if (value == null || value == DBNull.Value || actua" +
+                    "lType.IsEnum)\n                {\n                    param.NpgsqlDbType = GetDbTy" +
+                    "pe(type);\n                }\n\n                command.Parameters.Add(param);\n    " +
+                    "        }\n\n            command.CommandText = $@\"\n        INSERT INTO \"\"{_TableRo" +
+                    "w.GetTableName()}\"\" \n        ({string.Join(\", \", columnNames)}) \n        VALUES " +
+                    "\n        ({string.Join(\", \", paramNames)})\";\n\n            int rowsAffected = awa" +
+                    "it command.ExecuteNonQueryAsync();\n            return rowsAffected > 0;\n        " +
+                    "}\n\n        public NpgsqlDbType GetDbType(Type type)\n        {\n            type =" +
+                    " Nullable.GetUnderlyingType(type) ?? type;\n\n            if (type.IsEnum)\n       " +
+                    "         type = Enum.GetUnderlyingType(type);\n\n            return type switch\n  " +
+                    "          {\n                Type t when t == typeof(short) => NpgsqlDbType.Small" +
+                    "int,\n                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,\n   " +
+                    "             Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,\n\n         " +
+                    "       Type t when t == typeof(int) => NpgsqlDbType.Integer,\n                Typ" +
+                    "e t when t == typeof(ushort) => NpgsqlDbType.Integer,\n\n                Type t wh" +
+                    "en t == typeof(long) => NpgsqlDbType.Bigint,\n                Type t when t == ty" +
+                    "peof(uint) => NpgsqlDbType.Bigint,\n\n                Type t when t == typeof(ulon" +
+                    "g) => NpgsqlDbType.Numeric,\n\n                Type t when t == typeof(string) => " +
+                    "NpgsqlDbType.Text,\n                Type t when t == typeof(bool) => NpgsqlDbType" +
+                    ".Boolean,\n                Type t when t == typeof(DateTime) => NpgsqlDbType.Time" +
+                    "stamp,\n                Type t when t == typeof(float) => NpgsqlDbType.Real,\n    " +
+                    "            Type t when t == typeof(double) => NpgsqlDbType.Double,\n            " +
+                    "    Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,\n                Ty" +
+                    "pe t when t == typeof(Guid) => NpgsqlDbType.Uuid,\n                Type t when t " +
+                    "== typeof(byte[]) => NpgsqlDbType.Bytea,\n                Type t when t == typeof" +
+                    "(char) => NpgsqlDbType.Char,\n                _ => NpgsqlDbType.Text\n            " +
+                    "};\n        }\n    }\n}\n\n#nullable disable\n");
             return this.GenerationEnvironment.ToString();
         }
     }

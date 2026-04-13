@@ -118,19 +118,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         public string? GetDatabasePrefix()
         {
-            if (Settings == null)
+            var platform = Settings?.Database?.Platform;
+            if (string.IsNullOrWhiteSpace(platform))
                 return null;
 
-            switch (Settings.Database.Platform.ToLower())
+            return platform.Trim().ToLowerInvariant() switch
             {
-                case "postgresql":
-                case "postgre":
-                case "postgres":
-                    return DatabasePrefixes.Postgresql;
-
-                default:
-                    return null;
-            }
+                "postgresql" or "postgre" or "postgres" => DatabasePrefixes.Postgresql,
+                _ => null,
+            };
         }
     }
 

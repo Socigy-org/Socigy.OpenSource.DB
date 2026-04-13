@@ -11,9 +11,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     {
         public static void Execute(SourceProductionContext ctx, Compilation compilation, Program program)
         {
-            string databaseName = program.Settings?.Database.DatabaseName ?? "UnnamedDb";
+            string databaseName = program.Settings?.Database?.DatabaseName ?? "UnnamedDb";
 
-            if (program.Settings?.Database.GenerateWebAppExtensions ?? true)
+            // No configured provider for this project (e.g. API project without socigy.json)
+            if (string.IsNullOrWhiteSpace(program.DatabasePrefix))
+                return;
+
+            bool includeConnectionFactory = program.Settings?.Database?.GenerateDbConnectionFactory ?? true;
+
+            if (program.Settings?.Database?.GenerateWebAppExtensions ?? true)
             {
                 ctx.AddSource($"{databaseName}Extensions.g.cs", new ClassExtensionsTemplate()
                 {
@@ -21,11 +27,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     BaseNamespace = $"Socigy.OpenSource.DB.{databaseName}.Extensions",
                     DatabaseName = databaseName,
                     DatabasePrefix = program.DatabasePrefix,
-                    IncludeConnectionFactory = program.Settings?.Database.GenerateDbConnectionFactory ?? true
+                    IncludeConnectionFactory = includeConnectionFactory
                 }.TransformText());
             }
 
-            if (program.Settings?.Database.GenerateDbConnectionFactory ?? true)
+            if (includeConnectionFactory)
             {
                 switch (program.DatabasePrefix)
                 {

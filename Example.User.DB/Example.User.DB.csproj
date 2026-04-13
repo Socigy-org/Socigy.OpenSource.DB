@@ -10,7 +10,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Npgsql" Version="10.0.1" />
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.50" />
+		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.55" />
 	</ItemGroup>
 
 	<ItemGroup>

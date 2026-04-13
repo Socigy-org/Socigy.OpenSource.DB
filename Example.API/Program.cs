@@ -67,11 +67,12 @@ async Task TestAsync(DbConnection connection)
 
     buser.Email = "stohanzlp@gmail.com";
     buser.Username = username;
+    buser.Visibility = UserVisibility.CirclesOnly;
 
     await buser.Update()
         .WithConnection(connection)
         //.WithAllFields()
-        .WithFields(x => new object?[] { x.Email, x.Username })
+        .WithFields(x => new object?[] { x.Email, x.Username, x.Visibility })
         //.ExceptFields(x => new object?[] { x.Email, x.Username })
         .ExecuteAsync();
 

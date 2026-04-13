@@ -192,8 +192,11 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             var sb = new StringBuilder();
             bool first = true;
 
-            foreach (var (propName, info) in allColumns)
+            foreach (var kv in allColumns)
             {
+                var propName = kv.Key;
+                var info = kv.Value;
+
                 if (excluded != null && excluded.Contains(propName))
                     continue;
 
@@ -202,16 +205,20 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                 first = false;
 
-                string colName = <#= ClassName #>.GetColumnDbName(propName) ?? throw new InvalidDataException("Invalid propName was provided to <#= ClassName #> update postgresql command builder");
+                string colName = <#= ClassName #>.GetColumnDbName(propName)
+                    ?? throw new InvalidDataException("Invalid propName was provided to <#= ClassName #> update postgresql command builder");
+
                 string paramName = $"@p{command.Parameters.Count}";
 
                 var p = command.CreateParameter()
-                        ?? throw new InvalidOperationException("Expected NpgsqlCommand.");
+                    ?? throw new InvalidOperationException("Expected NpgsqlCommand.");
+
+                object? dbValue = NormalizeDbValue(info.Type, info.Value);
 
                 p.ParameterName = paramName;
-                p.Value = info.Value ?? DBNull.Value;
+                p.Value = dbValue ?? DBNull.Value;
 
-                if (info.Value is null or DBNull)
+                if (dbValue == null || dbValue == DBNull.Value || IsEnumType(info.Type))
                     p.NpgsqlDbType = GetDbType(info.Type);
 
                 command.Parameters.Add(p);
@@ -255,22 +262,26 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 where = GetWhereVisitor(_WhereClause.Parameters[0], <#= ClassName #>.GetColumnDbName, command).Parse(_WhereClause);
             else
             {
-                StringBuilder whereBuilder = new("WHERE ");
+                var predicates = new List<string>();
 
                 Dictionary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();
                 foreach (var col in columns)
                 {
-                    whereBuilder.Append($"{<#= ClassName #>.GetColumnDbName(col.Key)} = @{command.Parameters.Count} AND ");
+                    string paramName = $"@p{command.Parameters.Count}";
+                    string colName = col.Key;
 
-                    NpgsqlParameter param = new($"@p{command.Parameters.Count}", GetDbType(col.Value.Type))
-                    {
-                        Value = col.Value.Value ?? DBNull.Value
-                    };
+                    object? dbValue = NormalizeDbValue(col.Value.Type, col.Value.Value);
+
+                    var param = new NpgsqlParameter(paramName, dbValue ?? DBNull.Value);
+
+                    if (dbValue == null || dbValue == DBNull.Value || IsEnumType(col.Value.Type))
+                        param.NpgsqlDbType = GetDbType(col.Value.Type);
 
                     command.Parameters.Add(param);
+                    predicates.Add($"{colName} = {paramName}");
                 }
 
-                where = whereBuilder.ToString();
+                where = "WHERE " + string.Join(" AND ", predicates);
             }
 
             command.CommandText = $@"
@@ -286,10 +297,23 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         {
             type = Nullable.GetUnderlyingType(type) ?? type;
 
+            if (type.IsEnum)
+                type = Enum.GetUnderlyingType(type);
+
             return type switch
             {
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,
+
                 Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(ushort) => NpgsqlDbType.Integer,
+
                 Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,
+
+                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,
+
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
@@ -298,11 +322,28 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
                 Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
                 Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
-                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
                 Type t when t == typeof(char) => NpgsqlDbType.Char,
-                // Fallback or specific handling for JSON, Arrays, etc.
                 _ => NpgsqlDbType.Text
             };
+        }
+
+        private static bool IsEnumType(Type type)
+        {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+            return type.IsEnum;
+        }
+
+        private static object? NormalizeDbValue(Type type, object? value)
+        {
+            if (value == null || value == DBNull.Value)
+                return value;
+
+            var actualType = Nullable.GetUnderlyingType(type) ?? type;
+            if (!actualType.IsEnum)
+                return value;
+
+            var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
+            return Convert.ChangeType(value, enumUnderlyingType);
         }
     }
     <#= CustomPostClass #>

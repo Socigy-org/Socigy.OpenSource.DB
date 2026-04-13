@@ -31,13 +31,20 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
-        private void AddParameter(object? value)
+        private static object? NormalizeParameterValue(object? value)
         {
             if (value is Enum e)
             {
-                // Convert to the underlying type (int, short, byte, etc.)
-                value = Convert.ChangeType(e, e.GetTypeCode());
+                var underlying = Enum.GetUnderlyingType(e.GetType());
+                return Convert.ChangeType(e, underlying);
             }
+
+            return value;
+        }
+
+        private void AddParameter(object? value)
+        {
+            value = NormalizeParameterValue(value);
 
             string paramName = $"@p{_Command.Parameters.Count}";
             var p = _Command.CreateParameter();

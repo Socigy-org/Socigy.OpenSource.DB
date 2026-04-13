@@ -154,6 +154,14 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 object? value = row.Value.Value;
                 Type type = row.Value.Type;
 
+                var actualType = Nullable.GetUnderlyingType(type) ?? type;
+                if (actualType.IsEnum)
+                {
+                    var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
+                    if (value != null && value != DBNull.Value)
+                        value = Convert.ChangeType(value, enumUnderlyingType);
+                }
+
                 columnNames.Add($"\"{colName}\"");
 
                 string paramName = $"@{colName}";
@@ -161,9 +169,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                 var param = new NpgsqlParameter(paramName, value ?? DBNull.Value);
 
-                // If the value is null, we MUST specify the type explicitly
-                // If the value exists, Npgsql can usually infer it, but being explicit doesn't hurt.
-                if (value == null || value == DBNull.Value)
+                if (value == null || value == DBNull.Value || actualType.IsEnum)
                 {
                     param.NpgsqlDbType = GetDbType(type);
                 }
@@ -185,10 +191,23 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         {
             type = Nullable.GetUnderlyingType(type) ?? type;
 
+            if (type.IsEnum)
+                type = Enum.GetUnderlyingType(type);
+
             return type switch
             {
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,
+
                 Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(ushort) => NpgsqlDbType.Integer,
+
                 Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,
+
+                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,
+
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
@@ -197,9 +216,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
                 Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
                 Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
-                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
                 Type t when t == typeof(char) => NpgsqlDbType.Char,
-                // Fallback or specific handling for JSON, Arrays, etc.
                 _ => NpgsqlDbType.Text
             };
         }

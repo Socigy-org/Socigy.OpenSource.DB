@@ -108,13 +108,27 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return node;
         }
 
+        private static object? NormalizeDbValue(object? value)
+        {
+            if (value == null || value == DBNull.Value)
+                return value;
+
+            if (value is Enum enumValue)
+            {
+                var underlyingType = Enum.GetUnderlyingType(enumValue.GetType());
+                return Convert.ChangeType(enumValue, underlyingType);
+            }
+
+            return value;
+        }
+
         private void EmitAssignment(string memberName)
         {
             if (!_firstAssignment) _Sql.Append(", ");
             _firstAssignment = false;
 
             string column = _GetColumnName(memberName);
-            object? value = ReadEntityValue(memberName);
+            object? value = NormalizeDbValue(ReadEntityValue(memberName));
             string paramName = $"@p{_Command.Parameters.Count}";
 
             var p = _Command.CreateParameter();

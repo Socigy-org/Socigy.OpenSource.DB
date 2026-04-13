@@ -3,20 +3,20 @@ using System.CodeDom.Compiler;
 using Socigy.OpenSource.DB.Migrations;
 
 /*
-    This code was generated using Socigy.OpenSource.DB generation tool at 01/06/2026 13:54:52 by WAILEARDOS\user1
+    This code was generated using Socigy.OpenSource.DB generation tool at 04/13/2026 00:18:30 by Patrik Stohanzl - 71410855+WailedParsley36@users.noreply.github.com
 */
 
 namespace Example.Auth.DB.Socigy.Migrations
 {
-    [GeneratedCode("Socigy.OpenSource.DB", "1.0.0+88f6256107c0fee72d0d906e044e190c689b4f4f")]
-    public class M_Initial_Migration : ILocalMigration
+    [GeneratedCode("Socigy.OpenSource.DB", "1.0.0+0667527cba3994d44d9239afaead59fee8a94c37")]
+    public class M_Initial_migration : ILocalMigration
     {
         public string Id => _Id;
 
         public string UpSql => _UpSql;
         public string DownSql => _DownSql;
 
-        public const string _Id = "Initial Migration";
+        public const string _Id = "Initial migration";
         #nullable enable
         public string? PreviousId => null;
         #nullable disable
