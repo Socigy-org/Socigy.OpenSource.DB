@@ -125,7 +125,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                     isFirst = false;
 
-                    string colDbName = <#= ClassName #>.GetColumnDbName(col.Key) ?? throw new InvalidDataException($"Invalid column mapping for key: {col.Key}");
+                    string colDbName = col.Key;
                     string paramName = $"@p{command.Parameters.Count}";
 
                     whereBuilder.Append($"\"{colDbName}\" = {paramName}");

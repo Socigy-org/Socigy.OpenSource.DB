@@ -56,7 +56,8 @@
           "sourceName": "Id",
           "dotnetType": "System.Int64",
           "databaseType": "bigint",
-          "isPrimaryKey": true
+          "isPrimaryKey": true,
+          "isAutoIncrement": true
         },
         {
           "name": "human_id",

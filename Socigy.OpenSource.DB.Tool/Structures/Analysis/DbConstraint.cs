@@ -26,19 +26,25 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
                 if (_Name != null)
                     return _Name;
 
-                StringBuilder builder = new();
-                foreach (var col in Columns)
-                {
-                    builder.Append($"{col}_");
-                }
-
-                _Name = $"{Type switch
+                var prefix = Type switch
                 {
                     Types.Unique => "UQ",
                     Types.Check => "CHCK",
                     Types.ForeignKey => "FK",
                     _ => "UNKNW"
-                }}_{builder.ToString().TrimEnd('_')}";
+                };
+
+                if (Columns != null)
+                {
+                    StringBuilder builder = new();
+                    foreach (var col in Columns)
+                        builder.Append($"{col}_");
+                    _Name = $"{prefix}_{builder.ToString().TrimEnd('_')}";
+                }
+                else
+                {
+                    _Name = $"{prefix}_{Guid.NewGuid():N}";
+                }
 
                 return _Name;
             }

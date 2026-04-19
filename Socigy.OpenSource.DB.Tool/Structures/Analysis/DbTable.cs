@@ -18,6 +18,8 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
 
         public bool? IsEnum { get; set; }
         public bool? IsBitfield { get; set; }
+        /// <summary>True for tables generated from <c>[FlagTable]</c> or auto-generated junction tables.</summary>
+        public bool? IsFlagTable { get; set; }
         public IList<Dictionary<string, object?>>? InstantiatedValues { get; set; }
 
         public IList<DbColumn> Columns { get; set; }

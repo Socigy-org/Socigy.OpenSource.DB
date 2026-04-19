@@ -25,6 +25,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         public ImmutableArray<ClassDeclarationSyntax> LocalMigrations { get; set; }
 
         public static readonly string TableAttributeFullName = typeof(TableAttribute).FullName;
+        public static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName;
         public static readonly string ILocalMigrationFullName = typeof(ILocalMigration).FullName;
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -48,6 +49,26 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
                                  var tableAttribute = ctx.SemanticModel.Compilation.GetTypeByMetadataName(TableAttributeFullName);
                                  return semantics.GetAttributes().Any(x => SymbolEqualityComparer.Default.Equals(x.AttributeClass, tableAttribute))
+                                    ? classSyntax
+                                    : null;
+                             })
+                     .Where(x => x != null)!;
+
+            IncrementalValuesProvider<ClassDeclarationSyntax> flagTableClasses =
+                 context.SyntaxProvider
+                         .ForAttributeWithMetadataName(
+                             FlagTableAttributeFullName,
+                             static (node, _) => node is ClassDeclarationSyntax,
+                             static (ctx, _) =>
+                             {
+                                 if (ctx.TargetNode is not ClassDeclarationSyntax classSyntax)
+                                     return null;
+
+                                 if (ctx.SemanticModel.GetDeclaredSymbol(classSyntax) is not INamedTypeSymbol semantics)
+                                     return null;
+
+                                 var flagTableAttribute = ctx.SemanticModel.Compilation.GetTypeByMetadataName(FlagTableAttributeFullName);
+                                 return semantics.GetAttributes().Any(x => SymbolEqualityComparer.Default.Equals(x.AttributeClass, flagTableAttribute))
                                     ? classSyntax
                                     : null;
                              })
@@ -95,7 +116,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 LocalMigrations = migrations;
             });
 
-            context.RegisterSourceOutput(context.CompilationProvider.Combine(tableClasses.Collect()), Execute);
+            var allTableClasses = tableClasses.Collect().Combine(flagTableClasses.Collect())
+                .Select((pair, _) => pair.Left.AddRange(pair.Right));
+
+            context.RegisterSourceOutput(context.CompilationProvider.Combine(allTableClasses), Execute);
         }
 
         public void Execute(SourceProductionContext ctx, (Compilation, ImmutableArray<ClassDeclarationSyntax>) tuple)

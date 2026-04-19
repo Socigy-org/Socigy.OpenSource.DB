@@ -179,14 +179,7 @@ using ");
 
                     isFirst = false;
 
-                    string colDbName = ");
-            
-            #line 128 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\CommandBuilders\PostgresqlDeleteCommandBuilder.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
-            
-            #line default
-            #line hidden
-            this.Write(@".GetColumnDbName(col.Key) ?? throw new InvalidDataException($""Invalid column mapping for key: {col.Key}"");
+                    string colDbName = col.Key;
                     string paramName = $""@p{command.Parameters.Count}"";
 
                     whereBuilder.Append($""\""{colDbName}\"" = {paramName}"");

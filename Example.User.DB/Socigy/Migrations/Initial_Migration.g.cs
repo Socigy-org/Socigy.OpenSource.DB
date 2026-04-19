@@ -3,12 +3,12 @@ using System.CodeDom.Compiler;
 using Socigy.OpenSource.DB.Migrations;
 
 /*
-    This code was generated using Socigy.OpenSource.DB generation tool at 01/06/2026 13:54:41 by WAILEARDOS\user1
+    This code was generated using Socigy.OpenSource.DB generation tool at 04/18/2026 21:13:16 by Patrik Stohanzl - 71410855+WailedParsley36@users.noreply.github.com
 */
 
 namespace Example.User.DB.Socigy.Migrations
 {
-    [GeneratedCode("Socigy.OpenSource.DB", "1.0.0+88f6256107c0fee72d0d906e044e190c689b4f4f")]
+    [GeneratedCode("Socigy.OpenSource.DB", "1.0.0+4b4b7b3e3a73a041a25ed198cd7123f647456229")]
     public class M_Initial_Migration : ILocalMigration
     {
         public string Id => _Id;
@@ -31,8 +31,9 @@ CREATE TABLE "user_login" (
     CONSTRAINT "UQ_Email" UNIQUE ("email"),
     CONSTRAINT "PK_user_login" PRIMARY KEY ("id")
 );
+CREATE SEQUENCE IF NOT EXISTS "_scg_migrations_id_seq" AS BIGINT;
 CREATE TABLE "_scg_migrations" (
-    "id" bigint,
+    "id" bigint DEFAULT nextval('_scg_migrations_id_seq'),
     "human_id" text,
     "applied_at" timestamp without time zone,
     "is_rollback" boolean DEFAULT false,
@@ -42,6 +43,7 @@ CREATE TABLE "_scg_migrations" (
 """;
         
 public const string _DownSql = """
+DROP SEQUENCE IF EXISTS "_scg_migrations_id_seq";
 DROP TABLE IF EXISTS "_scg_migrations" CASCADE;
 DROP TABLE IF EXISTS "user_login" CASCADE;
 """;

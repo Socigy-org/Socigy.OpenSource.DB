@@ -260,18 +260,22 @@ namespace Socigy.OpenSource.DB.Tool
             if (oldCol.Nullable != newCol.Nullable) changes.Add("Nullable");
             if (oldCol.DefaultValue != newCol.DefaultValue) changes.Add("Default");
             if (oldCol.IsPrimaryKey != newCol.IsPrimaryKey) changes.Add("PrimaryKey");
+            if ((oldCol.IsAutoIncrement == true) != (newCol.IsAutoIncrement == true)) changes.Add("AutoIncrement");
             return changes;
         }
 
         private static bool AreConstraintsFunctionallyEqual(DbConstraint a, DbConstraint b)
         {
             if (a.Type != b.Type) return false;
-            if (!a.Columns.SequenceEqual(b.Columns)) return false;
+
+            var aCols = a.Columns ?? Enumerable.Empty<string>();
+            var bCols = b.Columns ?? Enumerable.Empty<string>();
+            if (!aCols.SequenceEqual(bCols)) return false;
 
             if (a.Type == "foreign_key")
             {
                 if (a.TargetTable != b.TargetTable) return false;
-                if (!a.TargetColumns.SequenceEqual(b.TargetColumns)) return false;
+                if (!(a.TargetColumns ?? Enumerable.Empty<string>()).SequenceEqual(b.TargetColumns ?? Enumerable.Empty<string>())) return false;
                 if (a.OnDelete != b.OnDelete) return false;
                 if (a.OnUpdate != b.OnUpdate) return false;
             }

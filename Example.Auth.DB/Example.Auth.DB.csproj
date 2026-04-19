@@ -9,15 +9,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.58" />
+		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.70" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Example.Shared.DB\Example.Shared.DB.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Socigy\Migrations\" />
 	</ItemGroup>
 
 </Project>

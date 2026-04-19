@@ -1,5 +1,6 @@
 {
-  "id": "Initial migration",
+  "id": "Changes",
+  "previousId": "Changed User and Added a new Enum",
   "tables": [
     {
       "name": "user_visibility",
@@ -44,6 +45,103 @@
       ]
     },
     {
+      "name": "user_role",
+      "sourceName": "Example.Auth.DB.UserRole",
+      "isEnum": true,
+      "isBitfield": true,
+      "instantiatedValues": [
+        {
+          "id": 1,
+          "value": "User",
+          "description": null
+        },
+        {
+          "id": 2,
+          "value": "Admin",
+          "description": null
+        },
+        {
+          "id": 4,
+          "value": "Developer",
+          "description": null
+        },
+        {
+          "id": 8,
+          "value": "Reviewer",
+          "description": null
+        }
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "sourceName": "Id",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint",
+          "isPrimaryKey": true,
+          "valueConvertor": "EnumConvertor\u003CExample.Auth.DB.UserRole\u003E"
+        },
+        {
+          "name": "value",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        },
+        {
+          "name": "description",
+          "dotnetType": "System.String",
+          "databaseType": "text"
+        }
+      ]
+    },
+    {
+      "name": "users_user_role",
+      "sourceName": "users_user_role",
+      "isFlagTable": true,
+      "columns": [
+        {
+          "name": "users_id",
+          "sourceName": "users_id",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "nullable": false,
+          "isPrimaryKey": true
+        },
+        {
+          "name": "user_role_id",
+          "sourceName": "user_role_id",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint",
+          "nullable": false,
+          "isPrimaryKey": true
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_users_id",
+          "columns": [
+            "users_id"
+          ],
+          "targetTable": "Example.Auth.DB.User",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "CASCADE"
+        },
+        {
+          "type": "foreign_key",
+          "name": "FK_user_role_id",
+          "columns": [
+            "user_role_id"
+          ],
+          "targetTable": "Example.Auth.DB.UserRole",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    {
       "name": "users",
       "sourceName": "Example.Auth.DB.User",
       "columns": [
@@ -52,7 +150,8 @@
           "sourceName": "ID",
           "dotnetType": "System.Guid",
           "databaseType": "uuid",
-          "isPrimaryKey": true
+          "isPrimaryKey": true,
+          "defaultValue": "$socigy$guid.random"
         },
         {
           "name": "username",
@@ -77,7 +176,8 @@
           "name": "email",
           "sourceName": "Email",
           "dotnetType": "System.String",
-          "databaseType": "text"
+          "databaseType": "character varying(10)",
+          "maxLength": 10
         },
         {
           "name": "email_verified",
@@ -139,6 +239,11 @@
       ],
       "constraints": [
         {
+          "type": "check",
+          "name": "CHCK_e25a3182691e403087a693558d2e9fc9",
+          "value": "LEN(email) \u003C 25"
+        },
+        {
           "type": "foreign_key",
           "name": "FK_Visibility",
           "columns": [
@@ -148,6 +253,60 @@
           "targetColumns": [
             "Id"
           ]
+        }
+      ]
+    },
+    {
+      "name": "users_parent_role",
+      "sourceName": "Example.Auth.DB.UserParentRole",
+      "isFlagTable": true,
+      "columns": [
+        {
+          "name": "user_id",
+          "sourceName": "UserId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "user_role_id",
+          "sourceName": "UserRoleId",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint",
+          "isPrimaryKey": true
+        },
+        {
+          "name": "assigned_at",
+          "sourceName": "AssignedAt",
+          "dotnetType": "System.DateTime",
+          "databaseType": "timestamp without time zone",
+          "defaultValue": "$socigy$time.now"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_UserId",
+          "columns": [
+            "UserId"
+          ],
+          "targetTable": "Example.Auth.DB.User",
+          "targetColumns": [
+            "ID"
+          ],
+          "onDelete": "$socigy$val$fk.cascade"
+        },
+        {
+          "type": "foreign_key",
+          "name": "FK_UserRoleId",
+          "columns": [
+            "UserRoleId"
+          ],
+          "targetTable": "Example.Auth.DB.UserRole",
+          "targetColumns": [
+            "Id"
+          ],
+          "onDelete": "$socigy$val$fk.cascade"
         }
       ]
     },
@@ -166,14 +325,15 @@
           "name": "name",
           "sourceName": "Name",
           "dotnetType": "System.String",
-          "databaseType": "text"
+          "databaseType": "text",
+          "defaultValue": "\u0027DEFAULT NAME\u0027"
         },
         {
           "name": "created_at",
           "sourceName": "CreatedAt",
           "dotnetType": "System.DateTime",
           "databaseType": "timestamp without time zone",
-          "defaultValue": "timezone(\u0027utc\u0027, now())"
+          "defaultValue": "$socigy$time.now"
         }
       ]
     },
@@ -275,7 +435,8 @@
           "name": "username",
           "sourceName": "Username",
           "dotnetType": "System.String",
-          "databaseType": "text"
+          "databaseType": "text",
+          "defaultValue": "\u0027Tvoje m\u00E1ma\u0027"
         },
         {
           "name": "password_hash",
@@ -295,7 +456,8 @@
           "sourceName": "Id",
           "dotnetType": "System.Int64",
           "databaseType": "bigint",
-          "isPrimaryKey": true
+          "isPrimaryKey": true,
+          "isAutoIncrement": true
         },
         {
           "name": "human_id",

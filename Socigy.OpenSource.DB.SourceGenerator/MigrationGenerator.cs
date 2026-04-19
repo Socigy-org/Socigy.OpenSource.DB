@@ -32,7 +32,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 CustomPreClass = $"public static partial class {dbName}\n{{",
                 CustomPostClass = "}",
                 Columns = [
-                    new TableColumnNameClassTemplate.ColumnInfo() { Name = "Id", DatabaseName = "id", Type = typeof(long).FullName, IsPrimaryKey = true },
+                    new TableColumnNameClassTemplate.ColumnInfo() { Name = "Id", DatabaseName = "id", Type = typeof(long).FullName, IsPrimaryKey = true, IsAutoIncrement = true, SequenceName = "_scg_migrations_id_seq" },
                     new TableColumnNameClassTemplate.ColumnInfo() { Name = "HumanId", DatabaseName = "human_id",  Type = typeof(string).FullName },
                     new TableColumnNameClassTemplate.ColumnInfo() { Name = "IsRollback", DatabaseName = "is_rollback",  Type = typeof(bool).FullName },
                     new TableColumnNameClassTemplate.ColumnInfo() { Name = "AppliedAt", DatabaseName = "applied_at" , Type = typeof(DateTime).FullName },
@@ -48,11 +48,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 CustomPostClass = "}",
                 Columns =
                 [
-                    ("Id", typeof(long).FullName, true, null),
-                    ("HumanId", typeof(string).FullName, false, null),
-                    ("IsRollback", typeof(bool).FullName, false, null),
-                    ("AppliedAt", typeof(DateTime).FullName, false, null),
-                    ("ExecutedBy", typeof(string).FullName, false, null),
+                    ("Id", typeof(long).FullName, true, null, true, "_scg_migrations_id_seq"),
+                    ("HumanId", typeof(string).FullName, false, null, false, null),
+                    ("IsRollback", typeof(bool).FullName, false, null, false, null),
+                    ("AppliedAt", typeof(DateTime).FullName, false, null, false, null),
+                    ("ExecutedBy", typeof(string).FullName, false, null, false, null),
                 ],
             }.TransformText());
 
