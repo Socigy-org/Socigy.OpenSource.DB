@@ -49,6 +49,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         public partial class Migration : IMigration
         {
             [PrimaryKey]
+            [AutoIncrement]
             public long Id { get; set; }
 
             public string HumanId { get; set; }

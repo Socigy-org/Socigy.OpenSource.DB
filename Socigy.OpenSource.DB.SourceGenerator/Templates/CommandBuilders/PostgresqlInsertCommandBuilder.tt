@@ -1,4 +1,4 @@
-﻿<#@ template language="C#" #>
+<#@ template language="C#" #>
 <#@ assembly name="System.Core" #>
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
@@ -8,9 +8,12 @@ using System.Text;
 using System.Data.Common;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using Socigy.OpenSource.DB.Core;
 using Socigy.OpenSource.DB.Core.CommandBuilders;
 using Socigy.OpenSource.DB.Core.Interfaces;
+using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Parsers.Postgresql;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -89,6 +92,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         private readonly T _TableRow;
         private Dictionary<string, ColumnInfo>? _ColumnInfo;
 
+        private HashSet<string>? _SelectedDbColumns;
+        private HashSet<string>? _ExcludedDbColumns;
+        private bool _ForceAllFields;
+        private bool _PropagateValues;
+        private bool _ExcludeAutoFields;
+
         public PostgresqlInsertCommandBuilder(T rowInstance, Dictionary<string, ColumnInfo>? columnInfo = null)
         {
             _TableRow = rowInstance;
@@ -106,23 +115,144 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             return this;
         }
 
-        // TODO: Implement ExecuteReturningAsync
-        public async Task<TReturning?> ExecuteReturningAsync<TReturning>()
+        /// <summary>
+        /// Forces ALL columns (including auto-increment ones) to be included in the INSERT statement.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> WithAllFields()
         {
-            // TODO: Automatic Sequence value insertion
-            throw new NotImplementedException();
-            return default;
+            if (_SelectedDbColumns != null)
+                throw new InvalidOperationException("Cannot combine WithAllFields() with WithFields().");
+            if (_ExcludeAutoFields)
+                throw new InvalidOperationException("Cannot combine WithAllFields() with ExcludeAutoFields().");
+
+            _ForceAllFields = true;
+            return this;
         }
 
-        // TODO: Automatic Sequence value insertion
+        /// <summary>
+        /// Specifies which fields to include in the INSERT statement.
+        /// Auto-increment columns not listed here are excluded.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> WithFields(Expression<Func<T, object?[]>> select)
+        {
+            if (_ForceAllFields)
+                throw new InvalidOperationException("Cannot combine WithFields() with WithAllFields().");
+            if (_ExcludedDbColumns != null)
+                throw new InvalidOperationException("Cannot combine WithFields() with ExcludeFields().");
+
+            _SelectedDbColumns = ExtractDbColumnNames(select);
+            return this;
+        }
+
+        /// <summary>
+        /// Excludes the specified fields from the INSERT statement.
+        /// Auto-increment columns are also excluded unless <see cref="WithAllFields"/> is called.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeFields(Expression<Func<T, object?[]>> except)
+        {
+            if (_SelectedDbColumns != null)
+                throw new InvalidOperationException("Cannot combine ExcludeFields() with WithFields().");
+
+            _ExcludedDbColumns = ExtractDbColumnNames(except);
+            return this;
+        }
+
+        /// <summary>
+        /// After INSERT, reads back all DB-generated values (auto-increment, defaults) and writes them
+        /// back to the instance's properties via <c>RETURNING *</c>.
+        /// Combine with <see cref="ExcludeAutoFields"/> to let the DB generate those values.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> WithValuePropagation()
+        {
+            _PropagateValues = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Excludes auto-increment columns and DB-default columns from the INSERT statement so the
+        /// database can generate or apply their values.
+        /// Combine with <see cref="WithValuePropagation"/> to read those values back after insert.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFields()
+        {
+            if (_ForceAllFields)
+                throw new InvalidOperationException("Cannot combine ExcludeAutoFields() with WithAllFields().");
+            _ExcludeAutoFields = true;
+            return this;
+        }
+
+        private HashSet<string> ExtractDbColumnNames(Expression<Func<T, object?[]>> expr)
+        {
+            var visitor = new PostgresqlUpdateVisitor(
+                expr.Parameters[0],
+                _TableRow.GetDbColumnName!,
+                null!);
+
+            var memberNames = visitor.ExtractColumnNames(expr);
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var name in memberNames)
+            {
+                var dbName = _TableRow.GetDbColumnName(name);
+                if (!string.IsNullOrEmpty(dbName))
+                    result.Add(dbName!);
+            }
+            return result;
+        }
+
+        private bool ShouldIncludeColumn(string dbColName, ColumnInfo info)
+        {
+            if (_SelectedDbColumns != null)
+                return _SelectedDbColumns.Contains(dbColName);
+
+            if (_ExcludedDbColumns != null && _ExcludedDbColumns.Contains(dbColName))
+                return false;
+
+            if (info.IsAutoIncrement && !_ForceAllFields)
+                return false;
+
+            if (_ExcludeAutoFields && info.HasDbDefault)
+                return false;
+
+            return true;
+        }
+
+        public async Task<TReturning?> ExecuteReturningAsync<TReturning>(string returningColumn)
+        {
+            if (_Connection == null)
+                throw new InvalidOperationException("No DbConnection provided.");
+
+            if (_Connection.State != System.Data.ConnectionState.Open)
+                await _Connection.OpenAsync();
+
+            await using var command = _Connection.CreateCommand() as NpgsqlCommand;
+            if (command == null) return default;
+
+            if (_Transaction != null)
+                command.Transaction = _Transaction as NpgsqlTransaction;
+
+            _ColumnInfo ??= _TableRow.GetColumns();
+
+            var columnNames = new List<string>();
+            var paramNames = new List<string>();
+            BuildParameters(command, columnNames, paramNames);
+
+            command.CommandText = $@"
+        INSERT INTO ""{_TableRow.GetTableName()}""
+        ({string.Join(", ", columnNames)})
+        VALUES
+        ({string.Join(", ", paramNames)})
+        RETURNING ""{returningColumn}""";
+
+            var result = await command.ExecuteScalarAsync();
+            if (result == null || result == DBNull.Value) return default;
+            return (TReturning)Convert.ChangeType(result, typeof(TReturning));
+        }
+
         /// <summary>
         /// Executes the configured INSERT command asynchronously against the database connection.
+        /// Auto-increment columns are skipped unless <see cref="WithAllFields"/> or <see cref="WithFields"/> is used.
         /// </summary>
-        /// <remarks>The method requires a valid and open database connection. If a transaction is
-        /// configured, the command will execute within that transaction. Ensure that the connection and table row are
-        /// properly set up before calling this method.</remarks>
-        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if one or more
-        /// rows were inserted; otherwise, <see langword="false"/>.</returns>
+        /// <returns>A task whose result is <see langword="true"/> if one or more rows were inserted.</returns>
         /// <exception cref="InvalidOperationException">Thrown if a batch operation is configured or if no database connection has been provided.</exception>
         public async Task<bool> ExecuteAsync()
         {
@@ -147,12 +277,64 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
             var columnNames = new List<string>();
             var paramNames = new List<string>();
+            BuildParameters(command, columnNames, paramNames);
 
-            foreach (var row in _ColumnInfo)
+            if (columnNames.Count == 0) return false;
+
+            if (_PropagateValues)
+            {
+                command.CommandText = $@"
+        INSERT INTO ""{_TableRow.GetTableName()}""
+        ({string.Join(", ", columnNames)})
+        VALUES
+        ({string.Join(", ", paramNames)})
+        RETURNING *";
+
+                await using var reader = await command.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    foreach (var kvp in _ColumnInfo!)
+                    {
+                        if (kvp.Value.SetValue == null) continue;
+                        int ordinal;
+                        try { ordinal = reader.GetOrdinal(kvp.Key); } catch { continue; }
+                        var dbVal = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal);
+                        kvp.Value.SetValue(dbVal);
+                    }
+                }
+                return true;
+            }
+
+            command.CommandText = $@"
+        INSERT INTO ""{_TableRow.GetTableName()}""
+        ({string.Join(", ", columnNames)})
+        VALUES
+        ({string.Join(", ", paramNames)})";
+
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+            return rowsAffected > 0;
+        }
+
+        private void BuildParameters(NpgsqlCommand command, List<string> columnNames, List<string> paramNames)
+        {
+            foreach (var row in _ColumnInfo!)
             {
                 string colName = row.Key;
-                object? value = row.Value.Value;
-                Type type = row.Value.Type;
+                ColumnInfo info = row.Value;
+
+                if (!ShouldIncludeColumn(colName, info))
+                    continue;
+
+                object? value = info.Value;
+                Type type = info.Type;
+
+                var actualType = Nullable.GetUnderlyingType(type) ?? type;
+                if (actualType.IsEnum)
+                {
+                    var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
+                    if (value != null && value != DBNull.Value)
+                        value = Convert.ChangeType(value, enumUnderlyingType);
+                }
 
                 columnNames.Add($"\"{colName}\"");
 
@@ -161,34 +343,36 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                 var param = new NpgsqlParameter(paramName, value ?? DBNull.Value);
 
-                // If the value is null, we MUST specify the type explicitly
-                // If the value exists, Npgsql can usually infer it, but being explicit doesn't hurt.
-                if (value == null || value == DBNull.Value)
+                if (value == null || value == DBNull.Value || actualType.IsEnum)
                 {
                     param.NpgsqlDbType = GetDbType(type);
                 }
 
                 command.Parameters.Add(param);
             }
-
-            command.CommandText = $@"
-        INSERT INTO ""{_TableRow.GetTableName()}"" 
-        ({string.Join(", ", columnNames)}) 
-        VALUES 
-        ({string.Join(", ", paramNames)})";
-
-            int rowsAffected = await command.ExecuteNonQueryAsync();
-            return rowsAffected > 0;
         }
 
         public NpgsqlDbType GetDbType(Type type)
         {
             type = Nullable.GetUnderlyingType(type) ?? type;
 
+            if (type.IsEnum)
+                type = Enum.GetUnderlyingType(type);
+
             return type switch
             {
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,
+
                 Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(ushort) => NpgsqlDbType.Integer,
+
                 Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,
+
+                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,
+
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
@@ -197,9 +381,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
                 Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
                 Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
-                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
                 Type t when t == typeof(char) => NpgsqlDbType.Char,
-                // Fallback or specific handling for JSON, Arrays, etc.
                 _ => NpgsqlDbType.Text
             };
         }

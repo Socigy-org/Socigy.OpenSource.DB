@@ -1,14 +1,29 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 	</PropertyGroup>
 
+	<!-- Wire socigy.json so the source generator knows the DB platform -->
 	<ItemGroup>
-		<PackageReference Include="Npgsql" Version="10.0.1" />
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.33" />
+		<AdditionalFiles Include="socigy.json" Condition="Exists('socigy.json')" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Npgsql" Version="10.0.2" />
+
+		<!-- Core runtime types (IDbTable, ColumnInfo, SqlCommandBuilder, …) -->
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
+
+		<!-- Source generator — applied as an Analyzer, not linked into the output -->
+		<ProjectReference Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+			<OutputItemType>Analyzer</OutputItemType>
+		</ProjectReference>
 	</ItemGroup>
 
 </Project>

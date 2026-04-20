@@ -31,8 +31,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
             this.Write(@"
 // Auto-generated code. Do not modify manually. Socigy.OpenSource.DB Source Generator
 
+using System;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 using Socigy.OpenSource.DB.Core;
@@ -267,7 +269,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line default
             #line hidden
-            this.Write(" instance, DbConnection connection) \r\n        {\r\n            return await new ");
+            this.Write(" instance, DbConnection connection)\r\n        {\r\n            return await new ");
             
             #line 99 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
@@ -281,64 +283,535 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line default
             #line hidden
-            this.Write(@">(instance)
-                .WithConnection(connection)
-                .ExecuteAsync();
-        }
-
-        public static UpdateCommandBuilder Update()
-        {
-            return new UpdateCommandBuilder();
-        }
-
-        public static DeleteCommandBuilder Delete()
-        {
-            return new DeleteCommandBuilder();
-        }
-        
-        public class DeleteCommandBuilder : SqlCommandBuilder<DeleteCommandBuilder>
-        {
-            public DeleteCommandBuilder()
-            {
-            }
-
-            public async Task<int> ExecuteAsync()
-            {
-                return 0;
-            }
-        }
-
-        public class UpdateCommandBuilder : SqlCommandBuilder<UpdateCommandBuilder>
-        {
-            public UpdateCommandBuilder()
-            {
-            }
-
-            public async Task<int> ExecuteAsync()
-            {
-                return 0;
-            }
-        }
-
-        public class TableQueryBuilder : SqlCommandBuilder<TableQueryBuilder>
-        {
-            private Expression<Func<");
+            this.Write(">(instance)\r\n                .WithConnection(connection)\r\n                .Execut" +
+                    "eAsync();\r\n        }\r\n\r\n        public ");
             
-            #line 140 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 104 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 104 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("UpdateCommandBuilder<");
+            
+            #line 104 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("> Update()\r\n        {\r\n            return new ");
+            
+            #line 106 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 106 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("UpdateCommandBuilder<");
+            
+            #line 106 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(">(this);\r\n        }\r\n\r\n        public static async Task<int> UpdateAsync(");
+            
+            #line 109 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(" instance, DbConnection connection)\r\n        {\r\n            return await new ");
+            
+            #line 111 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 111 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("UpdateCommandBuilder<");
+            
+            #line 111 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(">(instance)\r\n                .WithConnection(connection)\r\n                .WithAl" +
+                    "lFields()\r\n                .ExecuteAsync();\r\n        }\r\n\r\n        public static " +
+                    "");
+            
+            #line 117 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 117 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("DeleteCommandBuilder<");
+            
+            #line 117 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("> DeleteNonInstance()\r\n        {\r\n            return new ");
+            
+            #line 119 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 119 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("DeleteCommandBuilder<");
+            
+            #line 119 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(">();\r\n        }\r\n\r\n        public ");
+            
+            #line 122 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 122 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("DeleteCommandBuilder<");
+            
+            #line 122 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("> Delete()\r\n        {\r\n            return new ");
+            
+            #line 124 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
+            
+            #line default
+            #line hidden
+            
+            #line 124 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write("DeleteCommandBuilder<");
+            
+            #line 124 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+            
+            #line default
+            #line hidden
+            this.Write(">(this);\r\n        }\r\n\r\n");
+
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+
+        foreach(var column in Columns.Where(c => c.IsAutoIncrement))
+        {
+
+            #line default
+            #line hidden
+            this.Write("        public static class ");
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
+            #line default
+            #line hidden
+            this.Write("Sequence\r\n        {\r\n            private const string _Name = \"");
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.SequenceName));
+            #line default
+            #line hidden
+            this.Write("\";\r\n\r\n            public static async Task<long> GetNextValueAsync(DbConnection co" +
+                    "nnection)\r\n            {\r\n                bool shouldClose = connection.State != " +
+                    "System.Data.ConnectionState.Open;\r\n                if (shouldClose) await connect" +
+                    "ion.OpenAsync();\r\n                try\r\n                {\r\n                    awai" +
+                    "t using var cmd = connection.CreateCommand();\r\n                    cmd.CommandText" +
+                    " = $\"SELECT nextval('{_Name}')\";\r\n                    var result = await cmd.Exec" +
+                    "uteScalarAsync();\r\n                    return Convert.ToInt64(result);\r\n          " +
+                    "      }\r\n                finally\r\n                {\r\n                    if (shou" +
+                    "ldClose) await connection.CloseAsync();\r\n                }\r\n            }\r\n\r\n    " +
+                    "        public static async Task<long> PeekCurrentValueAsync(DbConnection connect" +
+                    "ion)\r\n            {\r\n                bool shouldClose = connection.State != Syste" +
+                    "m.Data.ConnectionState.Open;\r\n                if (shouldClose) await connection.O" +
+                    "penAsync();\r\n                try\r\n                {\r\n                    await us" +
+                    "ing var cmd = connection.CreateCommand();\r\n                    cmd.CommandText = $" +
+                    "\"SELECT last_value FROM \\\"{_Name}\\\"\";\r\n                    var result = await cmd" +
+                    ".ExecuteScalarAsync();\r\n                    return Convert.ToInt64(result);\r\n     " +
+                    "           }\r\n                finally\r\n                {\r\n                    if " +
+                    "(shouldClose) await connection.CloseAsync();\r\n                }\r\n            }\r\n " +
+                    "       }\r\n");
+
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+
+        }
+
+            #line default
+            #line hidden
+            if (FlaggedEnumProperties.Count > 0)
+            {
+                this.Write("\r\n        // ---------------------------------------------------------------\r\n        // Flagged-enum junction table join info (for WHERE visitor)\r\n        // ---------------------------------------------------------------\r\n        private static readonly Dictionary<string, global::Socigy.OpenSource.DB.Core.Parsers.FlaggedEnumJoinInfo> _FlaggedEnumJoinInfos = new()\r\n        {\r\n");
+                foreach (var __fe in FlaggedEnumProperties)
+                {
+                    this.Write("            [\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("\"] = new global::Socigy.OpenSource.DB.Core.Parsers.FlaggedEnumJoinInfo\r\n            {\r\n                JunctionTable = \"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("\",\r\n                MainTable = \"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.MainTable));
+                    this.Write("\",\r\n                PkMappings = [");
+                    for (int __i2 = 0; __i2 < __fe.PkMappings.Count; __i2++)
+                    {
+                        var __m2 = __fe.PkMappings[__i2];
+                        this.Write("(\"");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.MainPkCol));
+                        this.Write("\", \"");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.JunctionFkCol));
+                        this.Write("\")");
+                        if (__i2 < __fe.PkMappings.Count - 1) this.Write(", ");
+                    }
+                    this.Write("],\r\n                EnumFkColumn = \"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumFkColumn));
+                    this.Write("\"\r\n            },\r\n");
+                }
+                this.Write("        };\r\n\r\n        // ---------------------------------------------------------------\r\n        // Flagged-enum flag management methods\r\n        // ---------------------------------------------------------------\r\n");
+                foreach (var __fe in FlaggedEnumProperties)
+                {
+                    // Insert method
+                    this.Write("\r\n        /// <summary>Inserts a single <paramref name=\"flag\"/> value into the <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> junction table.</summary>\r\n        public static async Task Insert");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance, ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n        {\r\n            bool shouldClose = connection.State != System.Data.ConnectionState.Open;\r\n            if (shouldClose) await connection.OpenAsync();\r\n            try\r\n            {\r\n                await using var cmd = connection.CreateCommand();\r\n                cmd.CommandText = @\"INSERT INTO \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("\"\" (");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(string.Join(", ", __fe.PkMappings.Select(__pm => "\"\"" + __pm.JunctionFkCol + "\"\"").Append("\"\"" + __fe.EnumFkColumn + "\"\""))));
+                    this.Write(") VALUES (");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(string.Join(", ", Enumerable.Range(0, __fe.PkMappings.Count + 1).Select(__pi => "@p" + __pi))));
+                    this.Write(")\";\r\n");
+                    for (int __i2 = 0; __i2 < __fe.PkMappings.Count; __i2++)
+                    {
+                        var __m2 = __fe.PkMappings[__i2];
+                        this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__i2));
+                        this.Write("\"; p.Value = (object?)instance.");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.PropName));
+                        this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
+                    }
+                    this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.PkMappings.Count));
+                    this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("))); cmd.Parameters.Add(p); }\r\n                await cmd.ExecuteNonQueryAsync();\r\n            }\r\n            finally { if (shouldClose) await connection.CloseAsync(); }\r\n        }\r\n");
+
+                    // Delete method
+                    this.Write("\r\n        /// <summary>Removes a single <paramref name=\"flag\"/> value from the <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> junction table.</summary>\r\n        public static async Task Delete");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance, ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n        {\r\n            bool shouldClose = connection.State != System.Data.ConnectionState.Open;\r\n            if (shouldClose) await connection.OpenAsync();\r\n            try\r\n            {\r\n                await using var cmd = connection.CreateCommand();\r\n                cmd.CommandText = @\"DELETE FROM \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("\"\" WHERE ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(string.Join(" AND ", __fe.PkMappings.Select((__pm, __pi) => "\"\"" + __pm.JunctionFkCol + "\"\" = @p" + __pi))));
+                    this.Write(" AND \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumFkColumn));
+                    this.Write("\"\" = @p");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.PkMappings.Count));
+                    this.Write("\";\r\n");
+                    for (int __i2 = 0; __i2 < __fe.PkMappings.Count; __i2++)
+                    {
+                        var __m2 = __fe.PkMappings[__i2];
+                        this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__i2));
+                        this.Write("\"; p.Value = (object?)instance.");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.PropName));
+                        this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
+                    }
+                    this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.PkMappings.Count));
+                    this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("))); cmd.Parameters.Add(p); }\r\n                await cmd.ExecuteNonQueryAsync();\r\n            }\r\n            finally { if (shouldClose) await connection.CloseAsync(); }\r\n        }\r\n");
+
+                    // Get method
+                    this.Write("\r\n        /// <summary>Returns all flag values currently stored in the <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> junction table for this instance.</summary>\r\n        public static async IAsyncEnumerable<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("> Get");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance, DbConnection connection)\r\n        {\r\n            bool shouldClose = connection.State != System.Data.ConnectionState.Open;\r\n            if (shouldClose) await connection.OpenAsync();\r\n            try\r\n            {\r\n                await using var cmd = connection.CreateCommand();\r\n                cmd.CommandText = @\"SELECT \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumFkColumn));
+                    this.Write("\"\" FROM \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("\"\" WHERE ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(string.Join(" AND ", __fe.PkMappings.Select((__pm, __pi) => "\"\"" + __pm.JunctionFkCol + "\"\" = @p" + __pi))));
+                    this.Write("\";\r\n");
+                    for (int __i2 = 0; __i2 < __fe.PkMappings.Count; __i2++)
+                    {
+                        var __m2 = __fe.PkMappings[__i2];
+                        this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__i2));
+                        this.Write("\"; p.Value = (object?)instance.");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.PropName));
+                        this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
+                    }
+                    this.Write("                await using var reader = await cmd.ExecuteReaderAsync();\r\n                while (await reader.ReadAsync())\r\n                    yield return (");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(")Convert.ChangeType(reader.GetValue(0), Enum.GetUnderlyingType(typeof(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(")));\r\n            }\r\n            finally { if (shouldClose) await connection.CloseAsync(); }\r\n        }\r\n");
+
+                    // HasFlag method
+                    this.Write("\r\n        /// <summary>Returns <see langword=\"true\"/> if the given <paramref name=\"flag\"/> is present in the <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> junction table.</summary>\r\n        public static async Task<bool> Has");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("FlagAsync(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance, ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n        {\r\n            bool shouldClose = connection.State != System.Data.ConnectionState.Open;\r\n            if (shouldClose) await connection.OpenAsync();\r\n            try\r\n            {\r\n                await using var cmd = connection.CreateCommand();\r\n                cmd.CommandText = @\"SELECT 1 FROM \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("\"\" WHERE ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(string.Join(" AND ", __fe.PkMappings.Select((__pm, __pi) => "\"\"" + __pm.JunctionFkCol + "\"\" = @p" + __pi))));
+                    this.Write(" AND \"\"");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumFkColumn));
+                    this.Write("\"\" = @p");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.PkMappings.Count));
+                    this.Write(" LIMIT 1\";\r\n");
+                    for (int __i2 = 0; __i2 < __fe.PkMappings.Count; __i2++)
+                    {
+                        var __m2 = __fe.PkMappings[__i2];
+                        this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__i2));
+                        this.Write("\"; p.Value = (object?)instance.");
+                        this.Write(this.ToStringHelper.ToStringWithCulture(__m2.PropName));
+                        this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
+                    }
+                    this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.PkMappings.Count));
+                    this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("))); cmd.Parameters.Add(p); }\r\n                return await cmd.ExecuteScalarAsync() != null;\r\n            }\r\n            finally { if (shouldClose) await connection.CloseAsync(); }\r\n        }\r\n");
+
+                    // Sync method
+                    this.Write("\r\n        /// <summary>\r\n        /// Syncs the <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> junction table so it contains exactly <paramref name=\"newFlags\"/>.\r\n        /// Inserts missing values and removes stale ones.\r\n        /// </summary>\r\n        public static async Task Sync");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance, IEnumerable<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("> newFlags, DbConnection connection)\r\n        {\r\n            var current = new HashSet<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">();\r\n            await foreach (var f in Get");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(instance, connection))\r\n                current.Add(f);\r\n            var desired = new HashSet<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">(newFlags);\r\n            foreach (var add in desired.Except(current))\r\n                await Insert");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(instance, add, connection);\r\n            foreach (var remove in current.Except(desired))\r\n                await Delete");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(instance, remove, connection);\r\n        }\r\n");
+
+                    // Instance-level convenience wrappers
+                    this.Write("\r\n        // --- Instance-level convenience wrappers ---\r\n\r\n");
+
+                    this.Write("        /// <summary>Inserts <paramref name=\"flag\"/> into the junction table for this instance.</summary>\r\n        public Task Insert");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n            => Insert");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(this, flag, connection);\r\n");
+
+                    this.Write("\r\n        /// <summary>Removes <paramref name=\"flag\"/> from the junction table for this instance.</summary>\r\n        public Task Delete");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n            => Delete");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(this, flag, connection);\r\n");
+
+                    this.Write("\r\n        /// <summary>Returns all flags currently stored in the junction table for this instance.</summary>\r\n        public IAsyncEnumerable<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("> Get");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(DbConnection connection)\r\n            => Get");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(this, connection);\r\n");
+
+                    this.Write("\r\n        /// <summary>Returns <see langword=\"true\"/> if this instance has the given <paramref name=\"flag\"/> in the junction table.</summary>\r\n        public Task<bool> Has");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("FlagAsync(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag, DbConnection connection)\r\n            => Has");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("FlagAsync(this, flag, connection);\r\n");
+
+                    // In-memory local cache
+                    this.Write("\r\n        // --- In-memory local cache ---\r\n\r\n");
+
+                    this.Write("        private HashSet<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">? _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache;\r\n");
+
+                    this.Write("\r\n        /// <summary>Adds <paramref name=\"flag\"/> to the local in-memory cache. Call <see cref=\"Commit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync\"/> to persist to the database.</summary>\r\n        public void Add");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Flag(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag)\r\n        {\r\n            _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache ??= new HashSet<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">();\r\n            _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache.Add(flag);\r\n        }\r\n");
+
+                    this.Write("\r\n        /// <summary>Removes <paramref name=\"flag\"/> from the local in-memory cache. Call <see cref=\"Commit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync\"/> to persist to the database.</summary>\r\n        public void Remove");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Flag(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(" flag)\r\n        {\r\n            _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache?.Remove(flag);\r\n        }\r\n");
+
+                    this.Write("\r\n        /// <summary>Downloads the current flags from the database into the local in-memory cache.</summary>\r\n        public async Task Load");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(DbConnection connection)\r\n        {\r\n            _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache = new HashSet<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">();\r\n            await foreach (var f in Get");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(this, connection))\r\n                _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache.Add(f);\r\n        }\r\n");
+
+                    this.Write("\r\n        /// <summary>Persists the local in-memory cache to the database by syncing the full desired set.</summary>\r\n        public Task Commit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(DbConnection connection)\r\n            => _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache != null\r\n                ? Sync");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("sAsync(this, _");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Cache, connection)\r\n                : Task.CompletedTask;\r\n");
+
+                    // EditCommandBuilder factory method and class
+                    this.Write("\r\n        /// <summary>Returns a fluent builder for batching flag additions and removals in a single call.</summary>\r\n        public Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("() => new Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder(this);\r\n");
+
+                    this.Write("\r\n        /// <summary>Fluent builder for batching <c>");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.JunctionTable));
+                    this.Write("</c> flag additions and removals.</summary>\r\n        public class Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder : SqlCommandBuilder<Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder>\r\n        {\r\n            private readonly ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" _instance;\r\n            private readonly List<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("> _toAdd = new List<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">();\r\n            private readonly List<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("> _toRemove = new List<");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write(">();\r\n\r\n            internal Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder(");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(" instance) { _instance = instance; }\r\n\r\n            /// <summary>Schedules <paramref name=\"flags\"/> to be inserted into the junction table on execute.</summary>\r\n            public Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder AddFlags(params ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("[] flags) { _toAdd.AddRange(flags); return this; }\r\n\r\n            /// <summary>Schedules <paramref name=\"flags\"/> to be deleted from the junction table on execute.</summary>\r\n            public Edit");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("CommandBuilder RemoveFlags(params ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.EnumTypeFullName));
+                    this.Write("[] flags) { _toRemove.AddRange(flags); return this; }\r\n\r\n            /// <summary>Executes all scheduled additions and removals against the database.</summary>\r\n            public async Task ExecuteAsync()\r\n            {\r\n                if (_Connection == null)\r\n                    throw new InvalidOperationException(\"Cannot execute: no DbConnection was provided. Call WithConnection() first.\");\r\n                foreach (var flag in _toAdd)\r\n                    await ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(".Insert");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(_instance, flag, _Connection);\r\n                foreach (var flag in _toRemove)\r\n                    await ");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                    this.Write(".Delete");
+                    this.Write(this.ToStringHelper.ToStringWithCulture(__fe.SourceName));
+                    this.Write("Async(_instance, flag, _Connection);\r\n            }\r\n        }\r\n");
+                }
+            }
+            this.Write("\r\n        public class TableQueryBuilder : SqlCommandBuilder" +
+                    "<TableQueryBuilder>\r\n        {\r\n            private Expression<Func<");
+            
+            #line 129 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
             this.Write(", object?[]>> _SelectClause;\r\n            private Expression<Func<");
             
-            #line 141 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 130 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
             this.Write(", bool>> _WhereClause;\r\n\r\n            private Expression<Func<");
             
-            #line 143 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 132 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -403,7 +876,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                     "s>\r\n            /// <param name=\"select\">An expression that defines which proper" +
                     "ties of the <see cref=\"");
             
-            #line 224 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 213 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -413,7 +886,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             /// <returns>The current <see cref=""TableQueryBuilder""/> instance, enabling method chaining.</returns>
             public TableQueryBuilder Select(Expression<Func<");
             
-            #line 227 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 216 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -436,7 +909,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             /// configuration.</returns>
             public TableQueryBuilder Where(Expression<Func<");
             
-            #line 243 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 232 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -480,7 +953,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                     "\n            /// complex queries.</remarks>\r\n            /// <param name=\"clause" +
                     "\">An expression that defines one or more properties of the <see cref=\"");
             
-            #line 297 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 286 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -490,7 +963,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             /// <returns>The current <see cref=""TableQueryBuilder""/> instance with the ordering clause applied.</returns>
             public TableQueryBuilder OrderBy(Expression<Func<");
             
-            #line 300 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 289 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -509,7 +982,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             /// queries.</remarks>
             /// <param name=""clause"">An expression that selects one or more properties of the <see cref=""");
             
-            #line 312 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 301 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -519,7 +992,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             /// <returns>The current <see cref=""TableQueryBuilder""/> instance to allow method chaining.</returns>
             public TableQueryBuilder OrderByDesc(Expression<Func<");
             
-            #line 315 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 304 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -535,7 +1008,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             {
                 return new ");
             
-            #line 324 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 313 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
             
             #line default
@@ -544,17 +1017,29 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                     "ISqlVisitor GetWhereVisitor(ParameterExpression param, GetColumnName getColName," +
                     " DbCommand command)\r\n            {\r\n                return new ");
             
-            #line 329 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 318 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
             
             #line default
             #line hidden
-            this.Write("WhereVisitor(param, getColName, command);\r\n            }\r\n\r\n            private I" +
-                    "SqlVisitor GetOrderByVisitor(ParameterExpression param, GetColumnName getColName" +
-                    ", DbCommand command, bool orderByDesc)\r\n            {\r\n                return ne" +
-                    "w ");
+            if (FlaggedEnumProperties.Count > 0)
+            {
+                this.Write("WhereVisitor(param, getColName, command, ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+                this.Write("._FlaggedEnumJoinInfos);\r\n            }\r\n\r\n            private I" +
+                        "SqlVisitor GetOrderByVisitor(ParameterExpression param, GetColumnName getColName" +
+                        ", DbCommand command, bool orderByDesc)\r\n            {\r\n                return ne" +
+                        "w ");
+            }
+            else
+            {
+                this.Write("WhereVisitor(param, getColName, command);\r\n            }\r\n\r\n            private I" +
+                        "SqlVisitor GetOrderByVisitor(ParameterExpression param, GetColumnName getColName" +
+                        ", DbCommand command, bool orderByDesc)\r\n            {\r\n                return ne" +
+                        "w ");
+            }
             
-            #line 334 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 323 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(DbEnginePrefix));
             
             #line default
@@ -562,7 +1047,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             this.Write("OrderByVisitor(param, getColName, command, orderByDesc);\r\n            }\r\n\r\n      " +
                     "      public async IAsyncEnumerable<");
             
-            #line 337 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 326 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -584,14 +1069,14 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                 Stopwatch watch = Stopwatch.StartNew();
                 var parser = new SqlQueryBuilderExpressionParser<");
             
-            #line 352 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 341 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
             this.Write(">(command, ");
             
-            #line 352 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 341 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -599,7 +1084,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             this.Write(".GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);\r\n       " +
                     "         parser.Process(");
             
-            #line 353 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 342 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
@@ -620,14 +1105,14 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                 {
                     yield return ");
             
-            #line 367 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 356 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
             
             #line default
             #line hidden
             this.Write(".ConvertFrom(reader);\r\n                }\r\n            }\r\n        }\r\n        ");
             
-            #line 371 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            #line 360 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(CustomPostClass));
             
             #line default
@@ -636,7 +1121,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             return this.GenerationEnvironment.ToString();
         }
         
-        #line 377 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+        #line 366 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
 
 	public string Namespace { get; set; }
 	public string ClassName { get; set; }
@@ -646,7 +1131,19 @@ using Socigy.OpenSource.DB.Core.Parsers.");
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, string? Converter)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName)> Columns { get; set; } = [];
+
+    public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
+
+    public class FlaggedEnumPropertyInfo
+    {
+        public string SourceName { get; set; } = "";
+        public string EnumTypeFullName { get; set; } = "";
+        public string JunctionTable { get; set; } = "";
+        public string MainTable { get; set; } = "";
+        public List<(string PropName, string MainPkCol, string JunctionFkCol)> PkMappings { get; set; } = new();
+        public string EnumFkColumn { get; set; } = "";
+    }
     #nullable disable
 
         

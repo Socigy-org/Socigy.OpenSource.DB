@@ -12,12 +12,13 @@
 	<PropertyGroup>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Socigy.OpenSource.DB</Title>
-		<PackageVersion>0.1.33</PackageVersion>
+		<PackageVersion>0.1.70</PackageVersion>
 		<Company>Socigy s.r.o.</Company>
 		<Product>$(PackageTitle)</Product>
 		<Description>Automated cross-DB model generation and automation nuget. Auto-generates and propagates db model across multiple DB</Description>
 		<PackageTags>db;migration;automated</PackageTags>
-		<PackageOutputPath>D:\Packages\Nuget</PackageOutputPath>
+		<PackageOutputPath>/home/wailed/Documents/Dev/Packages/Nuget</PackageOutputPath>
+		<PackageOutputPath>D://Packages/Nuget</PackageOutputPath>
 
 		<AssemblyVersion>$(PackageVersion)</AssemblyVersion>
 		<FileVersion>$(PackageVersion)</FileVersion>
@@ -85,9 +86,9 @@
 	
 	<Target Name="PackCliTool" BeforeTargets="GenerateNuspec">
 		<PropertyGroup>
-			<ToolPublishDir>$(MSBuildProjectDirectory)\obj\ToolPublish\</ToolPublishDir>
-			<ToolPublishDirAny>$(ToolPublishDir)\any\</ToolPublishDirAny>
-			<ToolPublishDirWin>$(ToolPublishDir)\win\</ToolPublishDirWin>
+			<ToolPublishDir>$(MSBuildProjectDirectory)/obj/ToolPublish/</ToolPublishDir>
+			<ToolPublishDirAny>$(ToolPublishDir)any/</ToolPublishDirAny>
+			<ToolPublishDirWin>$(ToolPublishDir)win/</ToolPublishDirWin>
 		</PropertyGroup>
 
 		<RemoveDir Directories="$(ToolPublishDir)" />
@@ -95,12 +96,12 @@
 		<Message Text="[Socigy] Building Portable (Linux) Tool..." Importance="High" />
 		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0;PublishDir=$(ToolPublishDirAny);SelfContained=false" />
 
-		<Message Text="[Socigy] Building Windows Tool..." Importance="High" />
-		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0-windows;PublishDir=$(ToolPublishDirWin);SelfContained=false" />
+		<Message Text="[Socigy] Building Windows Tool (skipped on non-Windows)..." Importance="High" Condition="'$(OS)' == 'Windows_NT'" />
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0-windows;PublishDir=$(ToolPublishDirWin);SelfContained=false" Condition="'$(OS)' == 'Windows_NT'" />
 
 		<ItemGroup>
-			<_ToolFilesAny Include="$(ToolPublishDirAny)**\*" />
-			<_ToolFilesWin Include="$(ToolPublishDirWin)**\*" />
+			<_ToolFilesAny Include="$(ToolPublishDirAny)**/*" />
+			<_ToolFilesWin Include="$(ToolPublishDirWin)**/*" Condition="'$(OS)' == 'Windows_NT'" />
 		</ItemGroup>
 
 		<ItemGroup>
@@ -110,7 +111,7 @@
 				<BuildAction>Content</BuildAction>
 			</_PackageFiles>
 
-			<_PackageFiles Include="@(_ToolFilesWin)">
+			<_PackageFiles Include="@(_ToolFilesWin)" Condition="'$(OS)' == 'Windows_NT'">
 				<PackagePath>tools/win/%(RecursiveDir)</PackagePath>
 				<Visible>false</Visible>
 				<BuildAction>Content</BuildAction>

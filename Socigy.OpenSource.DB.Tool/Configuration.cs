@@ -29,14 +29,14 @@ namespace Socigy.OpenSource.DB.Tool
         public static DbSchema? CurrentSchema { get; set; }
         public static string ProjectDir { get; private set; }
 
-        public static string SocigyProjectFolderPath => $"{ProjectDir}\\Socigy\\";
-        public static string SocigyMigrationsFolderPath => $"{ProjectDir}\\Socigy\\Migrations\\";
-        public static string StructureJsonPath => $"{SocigyProjectFolderPath}structure.json";
-        public static string StructureBackupJsonPath => $"{SocigyProjectFolderPath}structure.backup.json";
-        public static string StructureDiffJsonPath => $"{SocigyProjectFolderPath}diff.json";
-        public static string StructureCurrentJsonPath => $"{SocigyProjectFolderPath}structure.dirty.json";
-        public static string SocigyGitignoreFilePath => $"{SocigyProjectFolderPath}.gitignore";
-        public static string SocigyConfigFilePath => $"{ProjectDir}\\socigy.json";
+        public static string SocigyProjectFolderPath => Path.Combine(ProjectDir, "Socigy") + Path.DirectorySeparatorChar;
+        public static string SocigyMigrationsFolderPath => Path.Combine(ProjectDir, "Socigy", "Migrations") + Path.DirectorySeparatorChar;
+        public static string StructureJsonPath => Path.Combine(SocigyProjectFolderPath, "structure.json");
+        public static string StructureBackupJsonPath => Path.Combine(SocigyProjectFolderPath, "structure.backup.json");
+        public static string StructureDiffJsonPath => Path.Combine(SocigyProjectFolderPath, "diff.json");
+        public static string StructureCurrentJsonPath => Path.Combine(SocigyProjectFolderPath, "structure.dirty.json");
+        public static string SocigyGitignoreFilePath => Path.Combine(SocigyProjectFolderPath, ".gitignore");
+        public static string SocigyConfigFilePath => Path.Combine(ProjectDir, "socigy.json");
 
         public static string BaseNamespace { get; set; }
         public static async Task InitializeAsync(string projectDir, FileInfo assemblyInfo)

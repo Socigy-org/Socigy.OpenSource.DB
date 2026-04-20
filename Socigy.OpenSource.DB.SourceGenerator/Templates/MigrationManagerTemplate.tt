@@ -1,4 +1,4 @@
-﻿<#@ template language="C#" #>
+<#@ template language="C#" #>
 <#@ assembly name="System.Core" #>
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
@@ -17,20 +17,41 @@ namespace <#= BaseNamespace #>
     {
         public class MigrationManager : IMigrationManager
         {
-            private static readonly List<ILocalMigration> _localMigrationsOrderedDesc =
+            // Factories: only instantiate a migration when actually needed.
+            // Migration SQL strings (UpSql/DownSql) can be large; this keeps them
+            // out of memory until a migration is about to be applied, and GC can
+            // collect them immediately after.
+            private static readonly Func<ILocalMigration>[] _factoriesOrderedDesc =
             [
     <#
-                foreach (var migrationName in MigrationClassNames) 
+                foreach (var migrationName in MigrationClassNames.Reverse())
                 {
-    #>          new <#= migrationName #>(),
+    #>          static () => new <#= migrationName #>(),
     <#
                 }
     #>
             ];
 
-            private Dictionary<string, ILocalMigration> _localMigrations = _localMigrationsOrderedDesc.ToDictionary(static x => x.Id, static x => x);
-            public Dictionary<string, ILocalMigration> LocalMigrations => _localMigrations;
+            // IDs and index map built once at class init. Each migration is
+            // instantiated briefly to read its Id, then released.
+            private static readonly string[] _idsOrderedDesc;
+            private static readonly Dictionary<string, int> _idToIndex;
 
+            static MigrationManager()
+            {
+                _idsOrderedDesc = new string[_factoriesOrderedDesc.Length];
+                _idToIndex = new Dictionary<string, int>(_factoriesOrderedDesc.Length);
+                for (int i = 0; i < _factoriesOrderedDesc.Length; i++)
+                {
+                    var id = _factoriesOrderedDesc[i]().Id;
+                    _idsOrderedDesc[i] = id;
+                    _idToIndex[id] = i;
+                }
+            }
+
+            // IMigrationManager.LocalMigrations — materialises on demand (rarely called).
+            public Dictionary<string, ILocalMigration> LocalMigrations =>
+                _idToIndex.ToDictionary(kvp => kvp.Key, kvp => _factoriesOrderedDesc[kvp.Value]());
 
             private readonly ILogger _Logger;
             private readonly IDbConnectionFactory _ConnectionFactory;
@@ -42,37 +63,37 @@ namespace <#= BaseNamespace #>
 
             public Task EnsureLatestVersion()
             {
-                return EnsureMigration(_localMigrationsOrderedDesc.First());
+                if (_idsOrderedDesc.Length == 0) return Task.CompletedTask;
+                if (!_idToIndex.TryGetValue(_idsOrderedDesc[0], out int idx))
+                    throw new InvalidOperationException("Latest migration not found in index.");
+                return EnsureMigration(_factoriesOrderedDesc[idx]());
             }
+
             public Task EnsureMigration(string migrationId)
             {
-                if (!_localMigrations.TryGetValue(migrationId, out ILocalMigration? migration))
-                    throw new MissingMemberException($"Missing local migration with ID {migrationId}"); 
-
-                return EnsureMigration(migration);
+                if (!_idToIndex.TryGetValue(migrationId, out int idx))
+                    throw new MissingMemberException($"Missing local migration with ID {migrationId}");
+                return EnsureMigration(_factoriesOrderedDesc[idx]());
             }
+
             public async Task EnsureMigration(ILocalMigration migration)
             {
                 await _ConnectionFactory.EnsureDbExists();
 
                 var dbVersion = await GetCurrentMigrationVersion();
-                int sourceMigrationIndex = -1;
-                int targetMigrationIndex = -1;
+                int sourceMigrationIndex;
+                int targetMigrationIndex;
 
                 if (dbVersion == null)
-                    sourceMigrationIndex = _localMigrationsOrderedDesc.Count;
-                else 
+                    sourceMigrationIndex = _idsOrderedDesc.Length;
+                else
                 {
-                    sourceMigrationIndex = _localMigrationsOrderedDesc.FindIndex(x => x.Id == dbVersion.HumanId);
-                    if (sourceMigrationIndex < 0)
-                    {
+                    if (!_idToIndex.TryGetValue(dbVersion.HumanId, out sourceMigrationIndex))
                         throw new InvalidDataException($"Unable to find local migration with ID {dbVersion.HumanId} that is in the Database. Aborting!");
-                    }
                 }
 
-                targetMigrationIndex = _localMigrationsOrderedDesc.FindIndex(x => x.Id == migration.Id);
-                if (targetMigrationIndex < 0) throw new InvalidDataException($"Target migration {migration.Id} not found locally.");
-
+                if (!_idToIndex.TryGetValue(migration.Id, out targetMigrationIndex))
+                    throw new InvalidDataException($"Target migration {migration.Id} not found locally.");
 
                 if (sourceMigrationIndex == targetMigrationIndex)
                 {
@@ -87,14 +108,14 @@ namespace <#= BaseNamespace #>
                 {
                     for (int i = sourceMigrationIndex - 1; i >= targetMigrationIndex; i--)
                     {
-                        var migToApply = _localMigrationsOrderedDesc[i];
+                        // Instantiate only for the duration of this loop body
+                        var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($"Applying UP migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
                         using var command = connection.CreateCommand();
                         command.CommandText = migToApply.UpSql;
                         await command.ExecuteNonQueryAsync();
 
-                        // Record the migration
                         await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
                         {
                             HumanId = migToApply.Id,
@@ -102,20 +123,20 @@ namespace <#= BaseNamespace #>
                             ExecutedBy = $"{Environment.UserName} - {Environment.MachineName}",
                             IsRollback = false
                         }, connection);
+                        // migToApply goes out of scope here — SQL strings are GC-eligible
                     }
                 }
                 else
                 {
                     for (int i = sourceMigrationIndex; i < targetMigrationIndex; i++)
                     {
-                        var migToApply = _localMigrationsOrderedDesc[i];
+                        var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($"Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
                         using var command = connection.CreateCommand();
                         command.CommandText = migToApply.DownSql;
                         await command.ExecuteNonQueryAsync();
 
-                        // Record the rollback
                         await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
                         {
                             HumanId = migToApply.Id,
@@ -130,15 +151,14 @@ namespace <#= BaseNamespace #>
             public async Task<ILocalMigration?> GetCurrentLocalMigrationVersion()
             {
                 var latestVersion = await GetCurrentMigrationVersion();
-                if (latestVersion == null || !_localMigrations.TryGetValue(latestVersion.HumanId, out var result))
+                if (latestVersion == null || !_idToIndex.TryGetValue(latestVersion.HumanId, out int idx))
                     return null;
-
-                return result;
+                return _factoriesOrderedDesc[idx]();
             }
 
             public async Task<IMigration?> GetCurrentMigrationVersion()
             {
-                try 
+                try
                 {
                     using var connection = _ConnectionFactory.Create();
 
@@ -149,7 +169,7 @@ namespace <#= BaseNamespace #>
 
                     return await versions.FirstAsync();
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     return null;
                 }

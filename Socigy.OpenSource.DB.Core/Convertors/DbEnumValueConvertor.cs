@@ -14,7 +14,7 @@ namespace Socigy.OpenSource.DB.Core.Convertors
         public DbEnumValueConvertor()
         {
             var enumType = typeof(T);
-            if (enumType.IsEnum)
+            if (!enumType.IsEnum)
             {
                 throw new InvalidOperationException($"Type {typeof(T).FullName} is not an Enum type.");
             }
@@ -53,7 +53,10 @@ namespace Socigy.OpenSource.DB.Core.Convertors
 
         public object? ConvertToDbValue(T? value)
         {
-            return value?.ToString();
+            if (value == null)
+                return null;
+
+            return Convert.ChangeType(value, _UnderlayingType);
         }
     }
 #nullable disable

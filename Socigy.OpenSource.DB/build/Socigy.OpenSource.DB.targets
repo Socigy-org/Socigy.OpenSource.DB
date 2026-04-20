@@ -1,7 +1,7 @@
 <Project>
 	<ItemGroup>
-		<AdditionalFiles Include="$(MSBuildProjectDirectory)\socigy.json"
-						 Condition="Exists('$(MSBuildProjectDirectory)\socigy.json')" />
+		<AdditionalFiles Include="$(MSBuildProjectDirectory)/socigy.json"
+						 Condition="Exists('$(MSBuildProjectDirectory)/socigy.json')" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
@@ -21,20 +21,21 @@
 		</When>
 		<Otherwise>
 			<PropertyGroup>
-				<MigratorToolSubPath>tools\any\Socigy.OpenSource.DB.Tool.dll</MigratorToolSubPath>
+				<MigratorToolSubPath>tools/any/Socigy.OpenSource.DB.Tool.dll</MigratorToolSubPath>
 			</PropertyGroup>
 		</Otherwise>
 	</Choose>
 
 	<Target Name="SocigyModelBuild" AfterTargets="Build" Condition="'$(IsSecondPass)' != 'true'">
 		<PropertyGroup>
-			<MigratorToolPath>$(MSBuildThisFileDirectory)..\$(MigratorToolSubPath)</MigratorToolPath>
+			<MigratorToolPath>$(MSBuildThisFileDirectory)../$(MigratorToolSubPath)</MigratorToolPath>
+			<ProjectDirNoTrailingSeparator>$(ProjectDir.TrimEnd('\').TrimEnd('/'))</ProjectDirNoTrailingSeparator>
 		</PropertyGroup>
 
 		<Message Text="[Socigy.OpenSource.DB.Tool] Selected Tool Path: $(MigratorToolPath)" Importance="normal" />
 		<Message Text="[Socigy.OpenSource.DB.Tool] Generating DB Model ..." Importance="high" />
 
-		<Exec Command="dotnet &quot;$(MigratorToolPath)&quot; generate --target-assembly &quot;$(TargetPath)&quot; $(SocigyMigrateArg) --project-dir &quot;$(ProjectDir)\&quot;" />
+		<Exec Command="dotnet &quot;$(MigratorToolPath)&quot; generate --target-assembly &quot;$(TargetPath)&quot; $(SocigyMigrateArg) --project-dir &quot;$(ProjectDirNoTrailingSeparator)&quot;" />
 
 		<Message Text="[Socigy.OpenSource.DB.Tool] Migration generated. Starting rebuild with source generators..."
              Importance="high"

@@ -1,0 +1,184 @@
+﻿<#@ template language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+using System;
+using System.Text;
+using System.Data.Common;
+using System.Threading.Tasks;
+using System.Linq.Expressions;
+using System.Collections.Generic;
+using Socigy.OpenSource.DB.Core;
+using Socigy.OpenSource.DB.Core.CommandBuilders;
+using Socigy.OpenSource.DB.Core.Interfaces;
+using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Parsers;
+using Socigy.OpenSource.DB.Core.Parsers.Postgresql;
+using Npgsql;
+using NpgsqlTypes;
+using <#= Namespace #>;
+
+namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
+{
+    <#= CustomPreClass #>
+    public class Postgresql<#= ClassName #>DeleteCommandBuilder<T> : SqlCommandBuilder<Postgresql<#= ClassName #>DeleteCommandBuilder<T>>
+        where T : IDbTable
+    {
+#if NET6_0_OR_GREATER
+        protected System.Data.Common.DbBatch? _Batch;
+
+        public Postgresql<#= ClassName #>DeleteCommandBuilder<T> WithBatch(DbBatch? batch)
+        {
+            if (batch == null)
+            {
+                if (_Connection == null && _Transaction == null)
+                    throw new ArgumentNullException(nameof(batch), "If batch is null, either connection or transaction must be specified!");
+
+                _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.CreateBatch() ?? throw new InvalidOperationException("The provided transaction has no DbConnection from which a DbBatch could be created");
+                _Batch.Transaction = _Transaction;
+            }
+            else
+                _Batch = batch;
+
+            return this;
+        }
+
+        public void AddToBatch()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException("Cannot add to batch when no DbBatch was provided. Please call WithBatch() first.");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+
+        public async Task AddToBatchAsync()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException("Cannot add to batch when no DbBatch was provided. Please call WithBatch() first.");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+#endif
+
+        private readonly T? _TableRow;
+        private Expression<Func<T, bool>>? _WhereClause;
+
+        public Postgresql<#= ClassName #>DeleteCommandBuilder() { }
+        public Postgresql<#= ClassName #>DeleteCommandBuilder(T rowInstance)
+        {
+            _TableRow = rowInstance;
+        }
+
+
+        public Postgresql<#= ClassName #>DeleteCommandBuilder<T> Where(Expression<Func<T, bool>> where)
+        {
+            _WhereClause = where;
+            return this;
+        }
+
+        private ISqlVisitor GetWhereVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
+        {
+            return new PostgresqlWhereVisitor(param, getColName, command);
+        }
+
+        public async Task<int> ExecuteAsync()
+        {
+#if NET6_0_OR_GREATER
+            if (_Batch != null)
+                throw new InvalidOperationException("Cannot execute command when DbBatch was provided.");
+#endif
+
+            if (_Connection == null)
+                throw new InvalidOperationException("No DbConnection provided.");
+
+            if (_Connection.State != System.Data.ConnectionState.Open)
+                await _Connection.OpenAsync();
+
+            await using var command = _Connection.CreateCommand() as NpgsqlCommand;
+            if (command == null) return 0;
+
+            if (_Transaction != null)
+                command.Transaction = _Transaction as NpgsqlTransaction;
+
+            string where = string.Empty;
+            if (_WhereClause != null)
+            {
+                where = GetWhereVisitor(_WhereClause.Parameters[0], <#= ClassName #>.GetColumnDbName, command).Parse(_WhereClause);
+            }
+            else if (_TableRow != null)
+            {
+                Dictionary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();
+
+                if (columns.Count == 0)
+                    throw new InvalidOperationException("No WHERE clause provided and the entity has no primary keys. Execution aborted to prevent deleting all rows in the table.");
+
+                StringBuilder whereBuilder = new("WHERE ");
+                bool isFirst = true;
+
+                foreach (var col in columns)
+                {
+                    if (!isFirst)
+                        whereBuilder.Append(" AND ");
+
+                    isFirst = false;
+
+                    string colDbName = col.Key;
+                    string paramName = $"@p{command.Parameters.Count}";
+
+                    whereBuilder.Append($"\"{colDbName}\" = {paramName}");
+
+                    NpgsqlParameter param = new(paramName, GetDbType(col.Value.Type))
+                    {
+                        Value = col.Value.Value ?? DBNull.Value
+                    };
+
+                    command.Parameters.Add(param);
+                }
+
+                where = whereBuilder.ToString();
+            }
+
+            command.CommandText = $@"
+        DELETE FROM ""{<#= ClassName #>.TableName}""
+        {where}";
+
+            return await command.ExecuteNonQueryAsync();
+        }
+
+        public NpgsqlDbType GetDbType(Type type)
+        {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+
+            return type switch
+            {
+                Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(string) => NpgsqlDbType.Text,
+                Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
+                Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
+                Type t when t == typeof(float) => NpgsqlDbType.Real,
+                Type t when t == typeof(double) => NpgsqlDbType.Double,
+                Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
+                Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
+                Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(char) => NpgsqlDbType.Char,
+                _ => NpgsqlDbType.Text
+            };
+        }
+    }
+    <#= CustomPostClass #>
+}
+
+#nullable disable
+
+<#+
+	public string ClassName { get; set; }
+	public string Namespace { get; set; }
+
+    public string CustomPreClass { get; set; } = "";
+    public string CustomPostClass { get; set; } = "";
+#>

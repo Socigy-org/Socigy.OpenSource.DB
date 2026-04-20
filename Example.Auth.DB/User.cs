@@ -1,7 +1,6 @@
 ﻿using Socigy.OpenSource.DB.Attributes;
 using System;
 using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 
 namespace Example.Auth.DB
 {
@@ -14,19 +13,36 @@ namespace Example.Auth.DB
         CustomCircles
     }
 
+    [Flags]
+    [Table("user_role")]
+    public enum UserRole : short
+    {
+        User = 1,
+        Admin = 2,
+        Developer = 4,
+        Reviewer = 8
+    }
+
     [Table("users")]
     [Check("LEN(email) < 25")]
     public partial class User
     {
-        [PrimaryKey]
+        [PrimaryKey, Default(DbDefaults.Guid.Random)]
         public Guid ID { get; set; }
 
         public string Username { get; set; }
+
         public short Tag { get; set; }
 
         public string? IconUrl { get; set; }
 
-        [StringLength(10)] // TOOD: Implement this
+        [FlaggedEnum]
+        public UserRole Role { get; set; }
+
+        [FlaggedEnumTable(typeof(UserParentRole))]
+        public UserRole ParentRole { get; set; }
+
+        [StringLength(10)]
         public string Email { get; set; }
         public bool EmailVerified { get; set; }
         public bool RegistrationComplete { get; set; }
@@ -44,6 +60,18 @@ namespace Example.Auth.DB
         public UserVisibility Visibility { get; set; }
     }
 
+    [FlagTable("users_parent_role")]
+    public partial class UserParentRole
+    {
+        [PrimaryKey, ForeignKey(typeof(User), OnDelete = DbValues.ForeignKey.Cascade)]
+        public Guid UserId { get; set; }
+
+        [PrimaryKey, ForeignKey(typeof(UserRole), OnDelete = DbValues.ForeignKey.Cascade)]
+        public short UserRoleId { get; set; }
+
+        [Default(DbDefaults.Time.Now)]
+        public DateTime AssignedAt { get; set; }
+    }
 
     [Table("courses")]
     public partial class Course
@@ -53,7 +81,7 @@ namespace Example.Auth.DB
 
         public string Name { get; set; } = "DEFAULT NAME";
 
-        [Default("timezone('utc', now())")]
+        [Default(DbDefaults.Time.Now)]
         public DateTime CreatedAt { get; set; }
     }
 

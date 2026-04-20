@@ -208,16 +208,26 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return node;
         }
 
+        private static object? NormalizeParameterValue(object? value)
+        {
+            if (value is Enum e)
+            {
+                var underlying = Enum.GetUnderlyingType(e.GetType());
+                return Convert.ChangeType(e, underlying);
+            }
+
+            return value;
+        }
+
         // Adds value to Command.Parameters and appends @pX to SQL
         private void AddParameter(object? value)
         {
-            // Generate a unique parameter name based on current count
-            // This ensures if you use this visitor for Where/OrderBy later, indices don't clash
-            string paramName = $"@p{_Command.Parameters.Count}";
+            value = NormalizeParameterValue(value);
 
+            string paramName = $"@p{_Command.Parameters.Count}";
             var p = _Command.CreateParameter();
             p.ParameterName = paramName;
-            p.Value = value ?? DBNull.Value; // Handle nulls safely for SQL
+            p.Value = value ?? DBNull.Value;
             _Command.Parameters.Add(p);
 
             _Sql.Append(paramName);

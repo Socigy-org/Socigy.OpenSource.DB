@@ -1,4 +1,4 @@
-﻿using Socigy.OpenSource.DB.Attributes;
+using Socigy.OpenSource.DB.Attributes;
 using Socigy.OpenSource.DB.Tool.Generators;
 using Socigy.OpenSource.DB.Tool.Structures.Analysis;
 using System;
@@ -6,12 +6,11 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Runtime.Loader;
 using System.Text.Json;
-using System.Xml.Linq;
 
 // TODO: Make the code more readable, clearer
 
@@ -21,6 +20,40 @@ namespace Socigy.OpenSource.DB.Tool
     {
         private static DbSchema GeneratedSchema { get; set; }
         private static ISqlGenerator DbGenerator { get; set; }
+
+        // Loaded in a collectible AssemblyLoadContext so that IDbCheckExpression.Build() can be invoked.
+        private static AssemblyLoadContext? _checkContext;
+        private static Assembly? _checkAssembly;
+
+        /// <summary>
+        /// Attempts to invoke <c>IDbCheckExpression.Build(columnName)</c> on a type loaded
+        /// from the user's assembly using reflection (no cast — avoids type-identity issues).
+        /// Returns <see langword="null"/> when the type is not found or not an IDbCheckExpression.
+        /// </summary>
+        private static string? InvokeCheckExpression(string typeFullName, string? columnName)
+        {
+            if (_checkAssembly == null) return null;
+            try
+            {
+                var type = _checkAssembly.GetType(typeFullName);
+                if (type == null) return null;
+
+                var instance = Activator.CreateInstance(type);
+                var method = type.GetMethod("Build", new[] { typeof(string) });
+                if (method == null) return null;
+
+                var result = method.Invoke(instance, new object?[] { columnName });
+                if (result == null) return null;
+
+                var sqlProp = result.GetType().GetProperty("Sql");
+                return sqlProp?.GetValue(result) as string;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to invoke IDbCheckExpression '{typeFullName}': {ex.Message}");
+                return null;
+            }
+        }
 
         public static DbSchema LoadAndAnalyze(FileInfo assemblyPath)
         {
@@ -39,11 +72,19 @@ namespace Socigy.OpenSource.DB.Tool
 
             var distinctPaths = paths.Distinct().ToList();
 
-            // --- DEBUG CHECK --- 
             if (!distinctPaths.Any(p => Path.GetFileName(p).Equals("System.Private.CoreLib.dll", StringComparison.OrdinalIgnoreCase)))
-            {
                 Logger.Error("CRITICAL WARNING: System.Private.CoreLib.dll was not found in search paths!");
-            }
+
+            // Load assembly in a collectible execution context so IDbCheckExpression.Build() can be invoked.
+            _checkContext = new AssemblyLoadContext("DbCheckBuilders", isCollectible: true);
+            _checkContext.Resolving += (ctx, name) =>
+            {
+                var match = distinctPaths.FirstOrDefault(p =>
+                    Path.GetFileNameWithoutExtension(p).Equals(name.Name, StringComparison.OrdinalIgnoreCase));
+                return match != null ? ctx.LoadFromAssemblyPath(match) : null;
+            };
+            try { _checkAssembly = _checkContext.LoadFromAssemblyPath(assemblyPath.FullName); }
+            catch (Exception ex) { Logger.Error($"Could not load assembly for check-expression execution: {ex.Message}"); }
 
             var resolver = new PathAssemblyResolver(paths);
 
@@ -51,10 +92,13 @@ namespace Socigy.OpenSource.DB.Tool
             var assembly = context.LoadFromAssemblyPath(assemblyPath.FullName);
 
             var tableAttributeFullName = typeof(TableAttribute).FullName;
+            var flagTableAttributeFullName = typeof(FlagTableAttribute).FullName;
+
             var tables = assembly.GetTypes()
                 .Where(t => (t.IsClass && !t.IsAbstract) || t.IsEnum)
                 .Where(t => t.GetCustomAttributesData()
-                             .Any(a => a.AttributeType.FullName == tableAttributeFullName))
+                             .Any(a => a.AttributeType.FullName == tableAttributeFullName
+                                    || a.AttributeType.FullName == flagTableAttributeFullName))
                 .OrderByDescending(x => x.IsEnum ? 1 : -1)
                 .ToList();
 
@@ -96,13 +140,46 @@ namespace Socigy.OpenSource.DB.Tool
                 {
                     Logger.Error($"Unexpected error: {ex}");
                 }
-                //Logger.Log($"Done processing {table}");
             }
+
+            _checkAssembly = null;
+            _checkContext?.Unload();
+            _checkContext = null;
 
             return GeneratedSchema;
         }
 
+        /// <summary>
+        /// Resolves the SQL string for a <c>[Check]</c> attribute argument —
+        /// either a raw SQL <see cref="string"/> or a <see cref="Type"/> reference
+        /// to an <c>IDbCheckExpression</c> implementation.
+        /// <paramref name="columnDbName"/> is passed to <c>Build()</c> for property-level checks;
+        /// pass <see langword="null"/> for class-level checks.
+        /// </summary>
+        private static string? ResolveCheckSql(CustomAttributeData attribute, string? columnDbName)
+        {
+            if (attribute.ConstructorArguments.Count == 0) return null;
+
+            var arg = attribute.ConstructorArguments[0];
+
+            // [Check(string sql)]
+            if (arg.ArgumentType.FullName == typeof(string).FullName)
+                return arg.Value as string;
+
+            // [Check(typeof(T))]
+            if (arg.ArgumentType.FullName == typeof(Type).FullName || arg.Value is Type)
+            {
+                // MetadataLoadContext returns the type-handle as a string or as a Type
+                var typeName = (arg.Value as Type)?.FullName ?? arg.Value?.ToString();
+                if (typeName != null)
+                    return InvokeCheckExpression(typeName, columnDbName);
+            }
+
+            return null;
+        }
+
         private static readonly string TableAttributeFullName = typeof(TableAttribute).FullName!;
+        private static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName!;
         private static readonly string RenamedAttributeFullName = typeof(RenamedAttribute).FullName!;
         private static readonly string ForeignKeyAttributeFullName = typeof(ForeignKeyAttribute).FullName!;
         private static readonly string CheckAttributeFullName = typeof(CheckAttribute).FullName!;
@@ -111,9 +188,20 @@ namespace Socigy.OpenSource.DB.Tool
         private static readonly string UniqueAttributeFullName = typeof(UniqueAttribute).FullName!;
         private static readonly string ColumnAttributeFullName = typeof(ColumnAttribute).FullName!;
         private static readonly string DefaultAttributeFullName = typeof(DefaultAttribute).FullName!;
-
+        private static readonly string AutoIncrementAttributeFullName = typeof(AutoIncrementAttribute).FullName!;
+        private static readonly string StringLengthAttributeFullName = typeof(StringLengthAttribute).FullName!;
+        private static readonly string MinAttributeFullName = typeof(MinAttribute).FullName!;
+        private static readonly string MaxAttributeFullName = typeof(MaxAttribute).FullName!;
+        private static readonly string LowerAttributeFullName = typeof(LowerAttribute).FullName!;
+        private static readonly string BiggerAttributeFullName = typeof(BiggerAttribute).FullName!;
+        private static readonly string EqualAttributeFullName = typeof(EqualAttribute).FullName!;
+        private static readonly string LowerOrEqualAttributeFullName = typeof(LowerOrEqualAttribute).FullName!;
+        private static readonly string BiggerOrEqualAttributeFullName = typeof(BiggerOrEqualAttribute).FullName!;
+        private static readonly string FlaggedEnumAttributeFullName = typeof(FlaggedEnumAttribute).FullName!;
+        private static readonly string FlaggedEnumTableAttributeFullName = typeof(FlaggedEnumTableAttribute).FullName!;
         private static readonly string FlagsAttributeFullName = typeof(FlagsAttribute).FullName!;
         private static readonly string DescriptionAttributeFullName = typeof(DescriptionAttribute).FullName!;
+
         private static DbTable? ProcessEnumTable(Type enumTableType)
         {
             var resultTable = new DbTable()
@@ -125,17 +213,11 @@ namespace Socigy.OpenSource.DB.Tool
             foreach (var attribute in enumTableType.CustomAttributes)
             {
                 if (attribute.AttributeType.FullName == TableAttributeFullName)
-                {
                     resultTable.Name = GetFirstAttributeArgumentValue(attribute)!;
-                }
                 else if (attribute.AttributeType.FullName == RenamedAttributeFullName)
-                {
                     resultTable.RenamedFrom = (attribute.ConstructorArguments.First().Value as string)!;
-                }
                 else if (attribute.AttributeType.FullName == FlagsAttributeFullName)
-                {
                     resultTable.IsBitfield = true;
-                }
             }
 
             resultTable.InstantiatedValues = [];
@@ -192,16 +274,20 @@ namespace Socigy.OpenSource.DB.Tool
                 SourceName = tableType.FullName!,
             };
 
+            // Check for [FlagTable] (junction table class)
+            var flagTableAttr = tableType.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == FlagTableAttributeFullName);
+            if (flagTableAttr != null)
+            {
+                table.Name = GetFirstAttributeArgumentValue(flagTableAttr)!;
+                table.IsFlagTable = true;
+            }
+
             foreach (var attribute in tableType.CustomAttributes)
             {
                 if (attribute.AttributeType.FullName == TableAttributeFullName)
-                {
                     table.Name = GetFirstAttributeArgumentValue(attribute)!;
-                }
                 else if (attribute.AttributeType.FullName == RenamedAttributeFullName)
-                {
                     table.RenamedFrom = (attribute.ConstructorArguments.First().Value as string)!;
-                }
                 else if (attribute.AttributeType.FullName == ForeignKeyAttributeFullName)
                 {
                     var foreign = new DbConstraint()
@@ -210,8 +296,6 @@ namespace Socigy.OpenSource.DB.Tool
                         Type = DbConstraint.Types.ForeignKey
                     };
 
-                    // TODO: Add column checks, if they really exists on the target table...
-
                     foreach (var namedArg in attribute.NamedArguments)
                     {
                         switch (namedArg.MemberName)
@@ -219,13 +303,17 @@ namespace Socigy.OpenSource.DB.Tool
                             case nameof(ForeignKeyAttribute.Keys):
                                 foreign.Columns = (namedArg.TypedValue.Value as ReadOnlyCollection<CustomAttributeTypedArgument>).Select(x => x.Value as string);
                                 break;
-
                             case nameof(ForeignKeyAttribute.TargetKeys):
                                 foreign.TargetColumns = (namedArg.TypedValue.Value as ReadOnlyCollection<CustomAttributeTypedArgument>).Select(x => x.Value as string);
                                 break;
-
                             case nameof(ForeignKeyAttribute.Name):
                                 foreign.Name = namedArg.TypedValue.Value as string;
+                                break;
+                            case nameof(ForeignKeyAttribute.OnDelete):
+                                foreign.OnDelete = namedArg.TypedValue.Value as string;
+                                break;
+                            case nameof(ForeignKeyAttribute.OnUpdate):
+                                foreign.OnUpdate = namedArg.TypedValue.Value as string;
                                 break;
                         }
                     }
@@ -246,35 +334,51 @@ namespace Socigy.OpenSource.DB.Tool
                 }
                 else if (attribute.AttributeType.FullName == CheckAttributeFullName)
                 {
-                    // FIXME: [Check] is broken on class level... prob. create something to be able to define the checks normally without this...
-                    continue;
-
-                    string name = null!;
-                    foreach (var namedArg in attribute.NamedArguments)
+                    var sql = ResolveCheckSql(attribute, null);
+                    if (string.IsNullOrWhiteSpace(sql))
                     {
-                        switch (namedArg.MemberName)
-                        {
-                            case nameof(CheckAttribute.Name):
-                                name = namedArg.TypedValue.Value as string;
-                                break;
-                        }
+                        Logger.Error($"[Check] on class '{tableType.FullName}' produced an empty SQL expression. Skipping.");
+                        continue;
                     }
 
+                    string? name = null;
+                    foreach (var namedArg in attribute.NamedArguments)
+                        if (namedArg.MemberName == nameof(CheckAttribute.Name))
+                            name = namedArg.TypedValue.Value as string;
+
                     table.Constraints ??= [];
-                    table.Constraints.Add(new DbConstraint()
+                    table.Constraints.Add(new DbConstraint
                     {
-                        Name = name!,
-                        Value = GetFirstAttributeArgumentValue(attribute)!,
+                        Name = name,
+                        Value = sql,
                         Type = DbConstraint.Types.Check,
                     });
                 }
             }
 
+            // Two-pass: first collect regular columns, then handle flagged-enum properties
+            var flaggedEnumProperties = new List<(PropertyInfo Property, CustomAttributeData Attr, bool IsExplicit)>();
+
             foreach (var member in tableType.GetProperties())
             {
                 try
                 {
-                    var (column, constraints) = ProcessColumn(member);
+                    // Detect FlaggedEnum properties — exclude from columns, handle separately
+                    var flaggedAttr = member.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == FlaggedEnumAttributeFullName);
+                    var flaggedTableAttr = member.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == FlaggedEnumTableAttributeFullName);
+
+                    if (flaggedAttr != null)
+                    {
+                        flaggedEnumProperties.Add((member, flaggedAttr, false));
+                        continue;
+                    }
+                    if (flaggedTableAttr != null)
+                    {
+                        flaggedEnumProperties.Add((member, flaggedTableAttr, true));
+                        continue;
+                    }
+
+                    var (column, constraints) = ProcessColumn(member, table.Name);
 
                     if (column == null)
                         continue;
@@ -284,7 +388,7 @@ namespace Socigy.OpenSource.DB.Tool
                     if (constraints.Any())
                     {
                         table.Constraints ??= [];
-                        (table.Constraints as List<DbConstraint>).AddRange(constraints); // FIXME: Maybe... :shrugging_man:
+                        (table.Constraints as List<DbConstraint>).AddRange(constraints);
                     }
                 }
                 catch (Exception ex)
@@ -293,7 +397,135 @@ namespace Socigy.OpenSource.DB.Tool
                 }
             }
 
+            // Now generate junction tables for flagged-enum properties
+            foreach (var (property, attr, isExplicit) in flaggedEnumProperties)
+            {
+                try
+                {
+                    var junctionTable = isExplicit
+                        ? ProcessExplicitFlaggedEnumTable(table, property, attr)
+                        : ProcessAutoFlaggedEnumTable(table, property, attr);
+
+                    if (junctionTable != null)
+                        GeneratedSchema.Tables.Add(junctionTable);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Failed to generate junction table for {table.SourceName}.{property.Name}: {ex}");
+                }
+            }
+
             return table;
+        }
+
+        private static DbTable? ProcessAutoFlaggedEnumTable(DbTable mainTable, PropertyInfo property, CustomAttributeData flaggedAttr)
+        {
+            var enumType = property.PropertyType;
+            EnsureEnumIsTable(enumType);
+
+            var enumTableAttr = enumType.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == TableAttributeFullName);
+            var enumTableName = GetFirstAttributeArgumentValue(enumTableAttr)!;
+
+            // Custom table name from attribute or auto-derive
+            string? customTableName = null;
+            foreach (var namedArg in flaggedAttr.NamedArguments)
+            {
+                if (namedArg.MemberName == nameof(FlaggedEnumAttribute.TableName))
+                    customTableName = namedArg.TypedValue.Value as string;
+            }
+            var junctionTableName = customTableName ?? $"{mainTable.Name}_{enumTableName}";
+
+            // Key mappings from params string[] (alternating localPropName, junctionColName)
+            var keyMappings = (flaggedAttr.ConstructorArguments.FirstOrDefault().Value
+                as ReadOnlyCollection<CustomAttributeTypedArgument>)
+                ?.Select(x => x.Value?.ToString())
+                .ToList() ?? new List<string?>();
+
+            // Build main-table PK → junction FK mappings
+            var mainPks = mainTable.Columns?.Where(c => c.IsPrimaryKey == true).ToList() ?? [];
+            var junctionColumns = new List<DbColumn>();
+            var junctionConstraints = new List<DbConstraint>();
+
+            for (int i = 0; i < mainPks.Count; i++)
+            {
+                var pk = mainPks[i];
+                // Check if explicit mapping provided for this PK
+                string? junctionColName = null;
+                for (int k = 0; k + 1 < keyMappings.Count; k += 2)
+                {
+                    if (keyMappings[k] == pk.SourceName)
+                    {
+                        junctionColName = keyMappings[k + 1];
+                        break;
+                    }
+                }
+                junctionColName ??= $"{mainTable.Name}_{pk.Name}";
+
+                junctionColumns.Add(new DbColumn
+                {
+                    Name = junctionColName,
+                    SourceName = junctionColName,
+                    DotnetType = pk.DotnetType,
+                    DatabaseType = pk.DatabaseType,
+                    IsPrimaryKey = true,
+                    Nullable = false
+                });
+                junctionConstraints.Add(new DbConstraint
+                {
+                    Type = DbConstraint.Types.ForeignKey,
+                    Columns = [junctionColName],
+                    TargetTable = mainTable.SourceName,
+                    TargetColumns = [pk.Name],
+                    OnDelete = "CASCADE"
+                });
+            }
+
+            // Enum FK column
+            var enumPkType = FindEnumTableValueType(enumType);
+            string enumJunctionColName = $"{enumTableName}_id";
+            // Check if explicit mapping given for enum
+            for (int k = 0; k + 1 < keyMappings.Count; k += 2)
+            {
+                if (keyMappings[k] == enumType.Name)
+                {
+                    enumJunctionColName = keyMappings[k + 1]!;
+                    break;
+                }
+            }
+
+            junctionColumns.Add(new DbColumn
+            {
+                Name = enumJunctionColName,
+                SourceName = enumJunctionColName,
+                DotnetType = enumPkType?.FullName ?? typeof(int).FullName!,
+                DatabaseType = DbGenerator.GetDatabaseType(enumPkType?.FullName ?? typeof(int).FullName!),
+                IsPrimaryKey = true,
+                Nullable = false
+            });
+            junctionConstraints.Add(new DbConstraint
+            {
+                Type = DbConstraint.Types.ForeignKey,
+                Columns = [enumJunctionColName],
+                TargetTable = enumType.FullName!,
+                TargetColumns = ["id"],
+                OnDelete = "CASCADE"
+            });
+
+            return new DbTable
+            {
+                Name = junctionTableName,
+                SourceName = junctionTableName,
+                IsFlagTable = true,
+                Columns = junctionColumns,
+                Constraints = junctionConstraints
+            };
+        }
+
+        private static DbTable? ProcessExplicitFlaggedEnumTable(DbTable mainTable, PropertyInfo property, CustomAttributeData flaggedTableAttr)
+        {
+            // The junction table class is user-defined with [FlagTable]; it will be picked up by LoadAndAnalyze
+            // as a separate table via the FlagTableAttribute scan. Nothing to auto-generate here.
+            return null;
         }
 
         private static readonly string NullableTypeFullName = typeof(Nullable).FullName!;
@@ -302,10 +534,7 @@ namespace Socigy.OpenSource.DB.Tool
             NullabilityInfoContext nullabilityInfoContext = new NullabilityInfoContext();
             var info = nullabilityInfoContext.Create(property);
             if (info.WriteState == NullabilityState.Nullable || info.ReadState == NullabilityState.Nullable || property.PropertyType.FullName?.StartsWith(NullableTypeFullName) == true)
-            {
                 return true;
-            }
-
             return false;
         }
 
@@ -314,14 +543,23 @@ namespace Socigy.OpenSource.DB.Tool
             return attribute?.ConstructorArguments.FirstOrDefault().Value?.ToString();
         }
 
+        private static string GetAttributeNumericOrStringValue(CustomAttributeData attribute)
+        {
+            var val = attribute.ConstructorArguments.FirstOrDefault().Value;
+            if (val is double d) return d.ToString(CultureInfo.InvariantCulture);
+            if (val is float f) return f.ToString(CultureInfo.InvariantCulture);
+            return val?.ToString() ?? "";
+        }
+
         private static void EnsureEnumIsTable(Type enumType, Type? parentType = null)
         {
             if (enumType.CustomAttributes.FirstOrDefault(x => x.AttributeType.FullName == TableAttributeFullName) != null)
                 return;
 
-            Logger.Error($"Enum {enumType.FullName} needs to be be marked with [Table] attribute");
+            Logger.Error($"Enum {enumType.FullName} needs to be marked with [Table] attribute");
             Environment.Exit(-1);
         }
+
         private static Type? FindEnumTableValueType(Type enumType, Type? parentType = null)
         {
             EnsureEnumIsTable(enumType, parentType);
@@ -335,7 +573,7 @@ namespace Socigy.OpenSource.DB.Tool
             return null;
         }
 
-        private static (DbColumn, IEnumerable<DbConstraint>) ProcessColumn(PropertyInfo property)
+        private static (DbColumn, IEnumerable<DbConstraint>) ProcessColumn(PropertyInfo property, string? tableName = null)
         {
             // [Ignore] attribute
             if (property.CustomAttributes.FirstOrDefault(x => x.AttributeType.FullName == IgnoreAttributeFullName) != null)
@@ -347,11 +585,9 @@ namespace Socigy.OpenSource.DB.Tool
             {
                 Name = JsonNamingPolicy.SnakeCaseLower.ConvertName(property.Name),
                 SourceName = property.Name,
-
                 Nullable = IsNullable(property) ? true : null
             };
 
-            // Nullable<System.DateTime>
             bool isEnum = false;
             if (column.Nullable == true && property.PropertyType.FullName!.StartsWith(NullableTypeFullName))
             {
@@ -372,7 +608,6 @@ namespace Socigy.OpenSource.DB.Tool
                 {
                     Type = DbConstraint.Types.ForeignKey,
                     TargetTable = column.DotnetType,
-
                     Columns = [property.Name],
                     TargetColumns = ["Id"],
                 });
@@ -380,7 +615,7 @@ namespace Socigy.OpenSource.DB.Tool
                 column.DotnetType = FindEnumTableValueType(property.PropertyType, property.DeclaringType!)?.FullName!;
             }
 
-            column.DatabaseType = DbGenerator.GetDatabaseType(column.DotnetType) ?? "INVALID"; // FIXME: There's probably a better way to handle this...
+            column.DatabaseType = DbGenerator.GetDatabaseType(column.DotnetType) ?? "INVALID";
 
             foreach (var attribute in property.CustomAttributes)
             {
@@ -398,7 +633,6 @@ namespace Socigy.OpenSource.DB.Tool
                             case nameof(ColumnAttribute.Type):
                                 column.DatabaseType = namedArg.TypedValue.Value!.ToString();
                                 break;
-
                             case nameof(ColumnAttribute.ValueConvertor):
                                 column.ValueConvertor = namedArg.TypedValue.Value!.ToString();
                                 break;
@@ -407,34 +641,73 @@ namespace Socigy.OpenSource.DB.Tool
                 }
                 // [PrimaryKey]
                 else if (attribute.AttributeType.FullName == PrimaryKeyAttributeFullName)
-                {
                     column.IsPrimaryKey = true;
-                }
                 // [Renamed]
                 else if (attribute.AttributeType.FullName == RenamedAttributeFullName)
-                {
                     column.RenamedFrom = GetFirstAttributeArgumentValue(attribute);
-                }
                 // [Default]
                 else if (attribute.AttributeType.FullName == DefaultAttributeFullName)
-                {
-                    // TODO: Make an API for this to be able to have it cross-platform "timezone('utc', now())" for example..
                     column.DefaultValue = GetFirstAttributeArgumentValue(attribute);
+                // [AutoIncrement]
+                else if (attribute.AttributeType.FullName == AutoIncrementAttributeFullName)
+                {
+                    column.IsAutoIncrement = true;
+                    var customName = GetFirstAttributeArgumentValue(attribute);
+                    column.SequenceName = !string.IsNullOrEmpty(customName) ? customName : null;
                 }
+                // [StringLength]
+                else if (attribute.AttributeType.FullName == StringLengthAttributeFullName)
+                {
+                    var args = attribute.ConstructorArguments;
+                    if (args.Count == 1)
+                    {
+                        column.MaxLength = (int)args[0].Value!;
+                    }
+                    else if (args.Count == 2)
+                    {
+                        column.MinLength = (int)args[0].Value!;
+                        column.MaxLength = (int)args[1].Value!;
+                    }
+
+                    // Override database type to VARCHAR(n)
+                    if (column.MaxLength.HasValue)
+                        column.DatabaseType = $"character varying({column.MaxLength})";
+
+                    // Emit CHECK for minimum length
+                    if (column.MinLength > 0)
+                    {
+                        constraints.Add(new DbConstraint
+                        {
+                            Type = DbConstraint.Types.Check,
+                            Value = $"length(\"{column.Name}\") >= {column.MinLength}",
+                            Columns = [property.Name]
+                        });
+                    }
+                }
+                // Comparison constraints
+                else if (attribute.AttributeType.FullName == MinAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, ">=", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == MaxAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, "<=", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == LowerAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, "<", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == BiggerAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, ">", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == EqualAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, "=", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == LowerOrEqualAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, "<=", GetAttributeNumericOrStringValue(attribute), property.Name));
+                else if (attribute.AttributeType.FullName == BiggerOrEqualAttributeFullName)
+                    constraints.Add(MakeCheckConstraint(column.Name, ">=", GetAttributeNumericOrStringValue(attribute), property.Name));
                 // [Unique]
                 else if (attribute.AttributeType.FullName == UniqueAttributeFullName)
                 {
                     string name = null;
                     foreach (var namedArg in attribute.NamedArguments)
                     {
-                        switch (namedArg.MemberName)
-                        {
-                            case nameof(UniqueAttribute.Name):
-                                name = namedArg.TypedValue.Value as string;
-                                break;
-                        }
+                        if (namedArg.MemberName == nameof(UniqueAttribute.Name))
+                            name = namedArg.TypedValue.Value as string;
                     }
-
                     constraints.Add(new DbConstraint()
                     {
                         Name = name,
@@ -445,22 +718,22 @@ namespace Socigy.OpenSource.DB.Tool
                 // [Check]
                 else if (attribute.AttributeType.FullName == CheckAttributeFullName)
                 {
-                    string name = null;
-                    foreach (var namedArg in attribute.NamedArguments)
+                    var sql = ResolveCheckSql(attribute, column.Name);
+                    if (string.IsNullOrWhiteSpace(sql))
                     {
-                        switch (namedArg.MemberName)
-                        {
-                            case nameof(CheckAttribute.Name):
-                                name = namedArg.TypedValue.Value as string;
-                                break;
-                        }
+                        Logger.Error($"[Check] on property '{property.DeclaringType?.FullName}.{property.Name}' produced an empty SQL expression. Skipping.");
+                        continue;
                     }
 
-                    constraints.Add(new DbConstraint()
+                    string? name = null;
+                    foreach (var namedArg in attribute.NamedArguments)
+                        if (namedArg.MemberName == nameof(CheckAttribute.Name))
+                            name = namedArg.TypedValue.Value as string;
+
+                    constraints.Add(new DbConstraint
                     {
                         Name = name,
-                        Value = GetFirstAttributeArgumentValue(attribute),
-
+                        Value = sql,
                         Columns = [property.Name],
                         Type = DbConstraint.Types.Check,
                     });
@@ -475,7 +748,6 @@ namespace Socigy.OpenSource.DB.Tool
                         Type = DbConstraint.Types.ForeignKey
                     };
 
-                    // TODO: Add column checks, if they really exists on the target table...
                     foreach (var namedArg in attribute.NamedArguments)
                     {
                         switch (namedArg.MemberName)
@@ -483,9 +755,14 @@ namespace Socigy.OpenSource.DB.Tool
                             case nameof(ForeignKeyAttribute.TargetKeys):
                                 foreign.TargetColumns = (namedArg.TypedValue.Value as IEnumerable<string>);
                                 break;
-
                             case nameof(ForeignKeyAttribute.Name):
                                 foreign.Name = namedArg.TypedValue.Value as string;
+                                break;
+                            case nameof(ForeignKeyAttribute.OnDelete):
+                                foreign.OnDelete = namedArg.TypedValue.Value as string;
+                                break;
+                            case nameof(ForeignKeyAttribute.OnUpdate):
+                                foreign.OnUpdate = namedArg.TypedValue.Value as string;
                                 break;
                         }
                     }
@@ -521,7 +798,69 @@ namespace Socigy.OpenSource.DB.Tool
                 }
             }
 
+            // If no [Default] attribute was found, check for a C# property initializer (e.g. = "DEFAULT NAME").
+            // We instantiate the class via the execution-context assembly and read the value.
+            if (column.DefaultValue == null && column.IsAutoIncrement != true)
+                column.DefaultValue = ReadInitializerDefault(property);
+
             return (column, constraints);
+        }
+
+        private static string? ReadInitializerDefault(PropertyInfo metadataProperty)
+        {
+            if (_checkAssembly == null) return null;
+            try
+            {
+                var runtimeType = _checkAssembly.GetType(metadataProperty.DeclaringType!.FullName!);
+                if (runtimeType == null) return null;
+
+                var instance = Activator.CreateInstance(runtimeType);
+                if (instance == null) return null;
+
+                var runtimeProp = runtimeType.GetProperty(metadataProperty.Name);
+                if (runtimeProp == null || !runtimeProp.CanRead) return null;
+
+                var value = runtimeProp.GetValue(instance);
+
+                // Treat "type zero" as no initializer (null for reference types, 0/false/Guid.Empty etc. for value types)
+                var propType = runtimeProp.PropertyType;
+                var typeDefault = propType.IsValueType ? Activator.CreateInstance(propType) : null;
+                if (Equals(value, typeDefault)) return null;
+
+                return FormatInitializerAsSql(value);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? FormatInitializerAsSql(object? value)
+        {
+            if (value == null) return null;
+            return value switch
+            {
+                string s  => $"'{s.Replace("'", "''")}'",
+                bool b    => b ? "TRUE" : "FALSE",
+                Guid g    => $"'{g}'",
+                DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
+                _         => Convert.ToString(value, CultureInfo.InvariantCulture)
+            };
+        }
+
+        private static DbConstraint MakeCheckConstraint(string colName, string op, string value, string propertyName)
+        {
+            // Auto-quote non-numeric values (e.g. date strings)
+            string sqlValue = double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _)
+                ? value
+                : $"'{value.Replace("'", "''")}'";
+
+            return new DbConstraint
+            {
+                Type = DbConstraint.Types.Check,
+                Value = $"\"{colName}\" {op} {sqlValue}",
+                Columns = [propertyName]
+            };
         }
     }
 }

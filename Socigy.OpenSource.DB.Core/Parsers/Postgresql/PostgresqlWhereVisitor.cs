@@ -1,4 +1,4 @@
-﻿using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Delegates;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -14,31 +14,47 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private readonly DbCommand _Command;
         private readonly GetColumnName _GetColumnName;
         private readonly ParameterExpression _rowParam;
+        private readonly Dictionary<string, FlaggedEnumJoinInfo>? _flaggedEnums;
 
+        /// <summary>Creates a visitor without flagged-enum join support.</summary>
         public PostgresqlWhereVisitor(ParameterExpression rowParam, GetColumnName getColumnName, DbCommand command)
+            : this(rowParam, getColumnName, command, null) { }
+
+        /// <summary>
+        /// Creates a visitor with optional flagged-enum join info so that
+        /// <c>x.Property.HasFlag(value)</c> expressions translate to
+        /// <c>EXISTS (SELECT 1 FROM junction WHERE fk = main.pk AND enum_fk = @v)</c>.
+        /// </summary>
+        public PostgresqlWhereVisitor(ParameterExpression rowParam, GetColumnName getColumnName, DbCommand command,
+            Dictionary<string, FlaggedEnumJoinInfo>? flaggedEnums)
         {
             _rowParam = rowParam;
             _GetColumnName = getColumnName;
             _Command = command;
+            _flaggedEnums = flaggedEnums;
         }
 
         public string Parse(Expression expression)
         {
             _Sql.Clear();
-
             _Sql.Append(" WHERE ");
             Visit(expression);
             return _Sql.ToString();
         }
 
-        private void AddParameter(object? value)
+        private static object? NormalizeParameterValue(object? value)
         {
             if (value is Enum e)
             {
-                // Convert to the underlying type (int, short, byte, etc.)
-                value = Convert.ChangeType(e, e.GetTypeCode());
+                var underlying = Enum.GetUnderlyingType(e.GetType());
+                return Convert.ChangeType(e, underlying);
             }
+            return value;
+        }
 
+        private void AddParameter(object? value)
+        {
+            value = NormalizeParameterValue(value);
             string paramName = $"@p{_Command.Parameters.Count}";
             var p = _Command.CreateParameter();
             p.ParameterName = paramName;
@@ -48,19 +64,12 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         }
 
         // ---------------------------------------------------------
-        // 1. Method Calls - The Core Logic Change
+        // 1. Unary Expressions
         // ---------------------------------------------------------
         protected override Expression VisitUnary(UnaryExpression node)
         {
-            // A. Partial Evaluation: e.g. (int)UserVisibility.Public
-            // If this entire cast can be run locally, do it now.
-            if (TryEvaluate(node, out var value))
-            {
-                AddParameter(value);
-                return node;
-            }
+            if (TryEvaluate(node, out var value)) { AddParameter(value); return node; }
 
-            // B. Logic: NOT
             if (node.NodeType == ExpressionType.Not)
             {
                 _Sql.Append(" NOT (");
@@ -69,9 +78,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
-            // C. SQL-side Conversions
-            // If we have (int)x.Column, we usually just ignore the cast in SQL 
-            // or let the DB handle the type promotion.
             if (node.NodeType == ExpressionType.Convert || node.NodeType == ExpressionType.ConvertChecked)
             {
                 Visit(node.Operand);
@@ -82,20 +88,12 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         }
 
         // -------------------------------------------------------------------------
-        // 2. Binary Expressions (Logic & Comparisons)
+        // 2. Binary Expressions
         // -------------------------------------------------------------------------
         protected override Expression VisitBinary(BinaryExpression node)
         {
-            // A. Partial Evaluation (Calculated values)
-            // Check if the WHOLE binary node can be evaluated (e.g. 1 + 2)
-            // This is rare in a WHERE clause top-level, but good for nested math.
-            if (TryEvaluate(node, out var value))
-            {
-                AddParameter(value);
-                return node;
-            }
+            if (TryEvaluate(node, out var value)) { AddParameter(value); return node; }
 
-            // B. Null Checks
             if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
             if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
 
@@ -125,37 +123,67 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         // -------------------------------------------------------------------------
         protected override Expression VisitMember(MemberExpression node)
         {
-            // If it's the DB Row (x.Visibility)
             if (node.Expression == _rowParam)
             {
                 _Sql.Append(_GetColumnName(node.Member.Name));
                 return node;
             }
 
-            // If it's a local variable, static property, or Enum
             if (TryEvaluate(node, out var value))
             {
                 AddParameter(value);
                 return node;
             }
 
-            // If we reach here, it's a MemberAccess we couldn't evaluate and isn't the row.
-            // This usually implies a complex chain we failed to parse.
-            // We fall back to base, which does NOTHING to _Sql, causing the empty string bug.
-            // To be safe, we can try to throw or debug, but usually TryEvaluate covers 99% of cases.
             return base.VisitMember(node);
         }
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            // A. Skip Evaluation for SQL Markers
+            // HasFlag on a flagged-enum property: x.Role.HasFlag(UserRole.Admin)
+            if (node.Method.Name == "HasFlag"
+                && node.Object is MemberExpression memberExpr
+                && memberExpr.Expression == _rowParam
+                && _flaggedEnums != null
+                && _flaggedEnums.TryGetValue(memberExpr.Member.Name, out var joinInfo))
+            {
+                if (TryEvaluate(node.Arguments[0], out var enumVal))
+                {
+                    enumVal = NormalizeParameterValue(enumVal);
+
+                    var sb = new StringBuilder();
+                    sb.Append($"EXISTS (SELECT 1 FROM \"{joinInfo.JunctionTable}\" WHERE ");
+
+                    bool first = true;
+                    foreach (var (mainPk, junctionFk) in joinInfo.PkMappings)
+                    {
+                        if (!first) sb.Append(" AND ");
+                        sb.Append($"\"{joinInfo.JunctionTable}\".\"{junctionFk}\" = \"{joinInfo.MainTable}\".\"{mainPk}\"");
+                        first = false;
+                    }
+
+                    string paramName = $"@p{_Command.Parameters.Count}";
+                    var p = _Command.CreateParameter();
+                    p.ParameterName = paramName;
+                    p.Value = enumVal ?? DBNull.Value;
+                    _Command.Parameters.Add(p);
+
+                    if (!first) sb.Append(" AND ");
+                    sb.Append($"\"{joinInfo.JunctionTable}\".\"{joinInfo.EnumFkColumn}\" = {paramName})");
+
+                    _Sql.Append(sb);
+                    return node;
+                }
+            }
+
+            // SQL Markers
             if (IsSqlMarker(node)) return VisitSqlMarkers(node);
 
-            // B. String SQL Methods
+            // String methods
             if (IsDependentOnParam(node) && node.Method.DeclaringType == typeof(string))
                 return HandleStringMethods(node);
 
-            // C. Partial Evaluation (Guid.NewGuid())
+            // Partial evaluation
             if (TryEvaluate(node, out var value))
             {
                 AddParameter(value);
@@ -224,22 +252,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private bool TryEvaluate(Expression e, out object? result)
         {
-            // Optimization: Don't try to compile/invoke if it obviously touches 'x'
-            if (IsDependentOnParam(e))
-            {
-                result = null;
-                return false;
-            }
-            try
-            {
-                result = Evaluate(e);
-                return true;
-            }
-            catch
-            {
-                result = null;
-                return false;
-            }
+            if (IsDependentOnParam(e)) { result = null; return false; }
+            try { result = Evaluate(e); return true; }
+            catch { result = null; return false; }
         }
 
         private bool IsDependentOnParam(Expression e)
@@ -261,5 +276,4 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             }
         }
     }
-
 }

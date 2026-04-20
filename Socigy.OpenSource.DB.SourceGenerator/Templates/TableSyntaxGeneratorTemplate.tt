@@ -1,4 +1,4 @@
-﻿<#@ template language="C#" #>
+<#@ template language="C#" #>
 <#@ assembly name="System.Core" #>
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
@@ -6,8 +6,10 @@
 
 // Auto-generated code. Do not modify manually. Socigy.OpenSource.DB Source Generator
 
+using System;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 using Socigy.OpenSource.DB.Core;
@@ -24,11 +26,13 @@ namespace <#= Namespace #>
     <#= CustomPreClass #>
 	public partial class <#= ClassName #>
 	{
+        /// <summary>Returns a new query builder pre-filtered by the given predicate.</summary>
         public static TableQueryBuilder Query(Expression<Func<<#= ClassName #>, bool>> where)
         {
             return new TableQueryBuilder().Where(where);
         }
 
+        /// <summary>Returns a new query builder for this table.</summary>
         public static TableQueryBuilder Query()
         {
             return new TableQueryBuilder();
@@ -66,11 +70,10 @@ namespace <#= Namespace #>
         public <#= ClassName #>(DbDataReader reader, Dictionary<string, string>? columnOverrides = null)
         {
         <#
-            foreach(var column in Columns) 
+            foreach(var column in Columns)
             {
                 if (string.IsNullOrEmpty(column.Converter))
                 {
-
 #>          <#= column.SourceName #> = ReadValue<<#= column.TypeName #>>(reader, <#= column.SourceName #>ColumnName, columnOverrides);
 <#
                 }
@@ -89,51 +92,287 @@ namespace <#= Namespace #>
         }
         #endregion
 
+        /// <summary>Returns a new insert command builder for this instance.</summary>
         public <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>> Insert()
         {
             return new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(this);
         }
 
-        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection) 
+        /// <summary>Inserts the given instance into the database using the provided connection.</summary>
+        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection)
         {
             return await new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(instance)
                 .WithConnection(connection)
                 .ExecuteAsync();
         }
 
-        public static UpdateCommandBuilder Update()
+        /// <summary>Returns a new update command builder for this instance.</summary>
+        public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()
         {
-            return new UpdateCommandBuilder();
+            return new <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>>(this);
         }
 
-        public static DeleteCommandBuilder Delete()
+        /// <summary>Updates all fields of the given instance in the database.</summary>
+        public static async Task<int> UpdateAsync(<#= ClassName #> instance, DbConnection connection)
         {
-            return new DeleteCommandBuilder();
-        }
-        
-        public class DeleteCommandBuilder : SqlCommandBuilder<DeleteCommandBuilder>
-        {
-            public DeleteCommandBuilder()
-            {
-            }
-
-            public async Task<int> ExecuteAsync()
-            {
-                return 0;
-            }
+            return await new <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>>(instance)
+                .WithConnection(connection)
+                .WithAllFields()
+                .ExecuteAsync();
         }
 
-        public class UpdateCommandBuilder : SqlCommandBuilder<UpdateCommandBuilder>
+        /// <summary>Returns a new delete command builder (no instance — use Where to filter).</summary>
+        public static <#= DbEnginePrefix #><#= ClassName #>DeleteCommandBuilder<<#= ClassName #>> DeleteNonInstance()
         {
-            public UpdateCommandBuilder()
+            return new <#= DbEnginePrefix #><#= ClassName #>DeleteCommandBuilder<<#= ClassName #>>();
+        }
+
+        /// <summary>Returns a new delete command builder scoped to this instance's primary key.</summary>
+        public <#= DbEnginePrefix #><#= ClassName #>DeleteCommandBuilder<<#= ClassName #>> Delete()
+        {
+            return new <#= DbEnginePrefix #><#= ClassName #>DeleteCommandBuilder<<#= ClassName #>>(this);
+        }
+
+<#
+        foreach(var column in Columns.Where(c => c.IsAutoIncrement))
+        {
+#>
+        /// <summary>Sequence accessor for the auto-increment column <c><#= column.SourceName #></c>.</summary>
+        public static class <#= column.SourceName #>Sequence
+        {
+            private const string _Name = "<#= column.SequenceName #>";
+
+            /// <summary>Advances the sequence and returns the next value.</summary>
+            public static async Task<long> GetNextValueAsync(DbConnection connection)
             {
+                bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+                if (shouldClose) await connection.OpenAsync();
+                try
+                {
+                    await using var cmd = connection.CreateCommand();
+                    cmd.CommandText = $"SELECT nextval('{_Name}')";
+                    var result = await cmd.ExecuteScalarAsync();
+                    return Convert.ToInt64(result);
+                }
+                finally
+                {
+                    if (shouldClose) await connection.CloseAsync();
+                }
             }
 
-            public async Task<int> ExecuteAsync()
+            /// <summary>Returns the most recently generated value without advancing the sequence.</summary>
+            public static async Task<long> PeekCurrentValueAsync(DbConnection connection)
             {
-                return 0;
+                bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+                if (shouldClose) await connection.OpenAsync();
+                try
+                {
+                    await using var cmd = connection.CreateCommand();
+                    cmd.CommandText = $"SELECT last_value FROM \"{_Name}\"";
+                    var result = await cmd.ExecuteScalarAsync();
+                    return Convert.ToInt64(result);
+                }
+                finally
+                {
+                    if (shouldClose) await connection.CloseAsync();
+                }
             }
         }
+<#
+        }
+#>
+
+<# if (FlaggedEnumProperties.Count > 0) { #>
+        // ---------------------------------------------------------------
+        // Flagged-enum junction table join info (for WHERE visitor)
+        // ---------------------------------------------------------------
+        private static readonly Dictionary<string, global::Socigy.OpenSource.DB.Core.Parsers.FlaggedEnumJoinInfo> _FlaggedEnumJoinInfos = new()
+        {
+<# foreach (var fe in FlaggedEnumProperties) { #>
+            ["<#= fe.SourceName #>"] = new global::Socigy.OpenSource.DB.Core.Parsers.FlaggedEnumJoinInfo
+            {
+                JunctionTable = "<#= fe.JunctionTable #>",
+                MainTable = "<#= fe.MainTable #>",
+                PkMappings = [<# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>("<#= __m.MainPkCol #>", "<#= __m.JunctionFkCol #>")<# if (__i < fe.PkMappings.Count - 1) Write(", "); } #>],
+                EnumFkColumn = "<#= fe.EnumFkColumn #>"
+            },
+<# } #>
+        };
+
+        // ---------------------------------------------------------------
+        // Flagged-enum flag management methods
+        // ---------------------------------------------------------------
+<# foreach (var fe in FlaggedEnumProperties) { #>
+
+        /// <summary>Inserts a single <paramref name="flag"/> value into the <c><#= fe.JunctionTable #></c> junction table.</summary>
+        public static async Task Insert<#= fe.SourceName #>Async(<#= ClassName #> instance, <#= fe.EnumTypeFullName #> flag, DbConnection connection)
+        {
+            bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+            if (shouldClose) await connection.OpenAsync();
+            try
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"INSERT INTO ""<#= fe.JunctionTable #>"" (<# Write(string.Join(", ", fe.PkMappings.Select(m => $"\"\"{m.JunctionFkCol}\"\"").Append($"\"\"{fe.EnumFkColumn}\"\""))); #>) VALUES (<# Write(string.Join(", ", Enumerable.Range(0, fe.PkMappings.Count + 1).Select(i => $"@p{i}"))); #>)";
+<# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
+<# } #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
+                await cmd.ExecuteNonQueryAsync();
+            }
+            finally { if (shouldClose) await connection.CloseAsync(); }
+        }
+
+        /// <summary>Removes a single <paramref name="flag"/> value from the <c><#= fe.JunctionTable #></c> junction table.</summary>
+        public static async Task Delete<#= fe.SourceName #>Async(<#= ClassName #> instance, <#= fe.EnumTypeFullName #> flag, DbConnection connection)
+        {
+            bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+            if (shouldClose) await connection.OpenAsync();
+            try
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"DELETE FROM ""<#= fe.JunctionTable #>"" WHERE <# Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); #> AND ""<#= fe.EnumFkColumn #>"" = @p<#= fe.PkMappings.Count #>";
+<# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
+<# } #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
+                await cmd.ExecuteNonQueryAsync();
+            }
+            finally { if (shouldClose) await connection.CloseAsync(); }
+        }
+
+        /// <summary>Returns all flag values currently stored in the <c><#= fe.JunctionTable #></c> junction table for this instance.</summary>
+        public static async IAsyncEnumerable<#= "<" + fe.EnumTypeFullName + ">" #> Get<#= fe.SourceName #>sAsync(<#= ClassName #> instance, DbConnection connection)
+        {
+            bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+            if (shouldClose) await connection.OpenAsync();
+            try
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"SELECT ""<#= fe.EnumFkColumn #>"" FROM ""<#= fe.JunctionTable #>"" WHERE <# Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); #>";
+<# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
+<# } #>
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    yield return (<#= fe.EnumTypeFullName #>)Convert.ChangeType(reader.GetValue(0), Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>)));
+            }
+            finally { if (shouldClose) await connection.CloseAsync(); }
+        }
+
+        /// <summary>Returns <see langword="true"/> if the given <paramref name="flag"/> is present in the <c><#= fe.JunctionTable #></c> junction table.</summary>
+        public static async Task<bool> Has<#= fe.SourceName #>FlagAsync(<#= ClassName #> instance, <#= fe.EnumTypeFullName #> flag, DbConnection connection)
+        {
+            bool shouldClose = connection.State != System.Data.ConnectionState.Open;
+            if (shouldClose) await connection.OpenAsync();
+            try
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"SELECT 1 FROM ""<#= fe.JunctionTable #>"" WHERE <# Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); #> AND ""<#= fe.EnumFkColumn #>"" = @p<#= fe.PkMappings.Count #> LIMIT 1";
+<# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
+<# } #>
+                { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
+                return await cmd.ExecuteScalarAsync() != null;
+            }
+            finally { if (shouldClose) await connection.CloseAsync(); }
+        }
+
+        /// <summary>
+        /// Syncs the <c><#= fe.JunctionTable #></c> junction table so it contains exactly <paramref name="newFlags"/>.
+        /// Inserts missing values and removes stale ones.
+        /// </summary>
+        public static async Task Sync<#= fe.SourceName #>sAsync(<#= ClassName #> instance, IEnumerable<<#= fe.EnumTypeFullName #>> newFlags, DbConnection connection)
+        {
+            var current = new HashSet<<#= fe.EnumTypeFullName #>>();
+            await foreach (var f in Get<#= fe.SourceName #>sAsync(instance, connection))
+                current.Add(f);
+            var desired = new HashSet<<#= fe.EnumTypeFullName #>>(newFlags);
+            foreach (var add in desired.Except(current))
+                await Insert<#= fe.SourceName #>Async(instance, add, connection);
+            foreach (var remove in current.Except(desired))
+                await Delete<#= fe.SourceName #>Async(instance, remove, connection);
+        }
+
+        // --- Instance-level convenience wrappers ---
+
+        /// <summary>Inserts <paramref name="flag"/> into the junction table for this instance.</summary>
+        public Task Insert<#= fe.SourceName #>Async(<#= fe.EnumTypeFullName #> flag, DbConnection connection)
+            => Insert<#= fe.SourceName #>Async(this, flag, connection);
+
+        /// <summary>Removes <paramref name="flag"/> from the junction table for this instance.</summary>
+        public Task Delete<#= fe.SourceName #>Async(<#= fe.EnumTypeFullName #> flag, DbConnection connection)
+            => Delete<#= fe.SourceName #>Async(this, flag, connection);
+
+        /// <summary>Returns all flags currently stored in the junction table for this instance.</summary>
+        public IAsyncEnumerable<<#= fe.EnumTypeFullName #>> Get<#= fe.SourceName #>sAsync(DbConnection connection)
+            => Get<#= fe.SourceName #>sAsync(this, connection);
+
+        /// <summary>Returns <see langword="true"/> if this instance has the given <paramref name="flag"/> in the junction table.</summary>
+        public Task<bool> Has<#= fe.SourceName #>FlagAsync(<#= fe.EnumTypeFullName #> flag, DbConnection connection)
+            => Has<#= fe.SourceName #>FlagAsync(this, flag, connection);
+
+        // --- In-memory local cache ---
+
+        private HashSet<<#= fe.EnumTypeFullName #>>? _<#= fe.SourceName #>Cache;
+
+        /// <summary>Adds <paramref name="flag"/> to the local in-memory cache. Call <see cref="Commit<#= fe.SourceName #>sAsync"/> to persist to the database.</summary>
+        public void Add<#= fe.SourceName #>Flag(<#= fe.EnumTypeFullName #> flag)
+        {
+            _<#= fe.SourceName #>Cache ??= new HashSet<<#= fe.EnumTypeFullName #>>();
+            _<#= fe.SourceName #>Cache.Add(flag);
+        }
+
+        /// <summary>Removes <paramref name="flag"/> from the local in-memory cache. Call <see cref="Commit<#= fe.SourceName #>sAsync"/> to persist to the database.</summary>
+        public void Remove<#= fe.SourceName #>Flag(<#= fe.EnumTypeFullName #> flag)
+        {
+            _<#= fe.SourceName #>Cache?.Remove(flag);
+        }
+
+        /// <summary>Downloads the current flags from the database into the local in-memory cache.</summary>
+        public async Task Load<#= fe.SourceName #>sAsync(DbConnection connection)
+        {
+            _<#= fe.SourceName #>Cache = new HashSet<<#= fe.EnumTypeFullName #>>();
+            await foreach (var f in Get<#= fe.SourceName #>sAsync(this, connection))
+                _<#= fe.SourceName #>Cache.Add(f);
+        }
+
+        /// <summary>Persists the local in-memory cache to the database by syncing the full desired set.</summary>
+        public Task Commit<#= fe.SourceName #>sAsync(DbConnection connection)
+            => _<#= fe.SourceName #>Cache != null
+                ? Sync<#= fe.SourceName #>sAsync(this, _<#= fe.SourceName #>Cache, connection)
+                : Task.CompletedTask;
+
+        /// <summary>Returns a fluent builder for batching flag additions and removals in a single call.</summary>
+        public Edit<#= fe.SourceName #>CommandBuilder Edit<#= fe.SourceName #>() => new Edit<#= fe.SourceName #>CommandBuilder(this);
+
+        /// <summary>Fluent builder for batching <c><#= fe.JunctionTable #></c> flag additions and removals.</summary>
+        public class Edit<#= fe.SourceName #>CommandBuilder : SqlCommandBuilder<Edit<#= fe.SourceName #>CommandBuilder>
+        {
+            private readonly <#= ClassName #> _instance;
+            private readonly List<<#= fe.EnumTypeFullName #>> _toAdd = new List<<#= fe.EnumTypeFullName #>>();
+            private readonly List<<#= fe.EnumTypeFullName #>> _toRemove = new List<<#= fe.EnumTypeFullName #>>();
+
+            internal Edit<#= fe.SourceName #>CommandBuilder(<#= ClassName #> instance) { _instance = instance; }
+
+            /// <summary>Schedules <paramref name="flags"/> to be inserted into the junction table on execute.</summary>
+            public Edit<#= fe.SourceName #>CommandBuilder AddFlags(params <#= fe.EnumTypeFullName #>[] flags) { _toAdd.AddRange(flags); return this; }
+
+            /// <summary>Schedules <paramref name="flags"/> to be deleted from the junction table on execute.</summary>
+            public Edit<#= fe.SourceName #>CommandBuilder RemoveFlags(params <#= fe.EnumTypeFullName #>[] flags) { _toRemove.AddRange(flags); return this; }
+
+            /// <summary>Executes all scheduled additions and removals against the database.</summary>
+            public async Task ExecuteAsync()
+            {
+                if (_Connection == null)
+                    throw new InvalidOperationException("Cannot execute: no DbConnection was provided. Call WithConnection() first.");
+                foreach (var flag in _toAdd)
+                    await <#= ClassName #>.Insert<#= fe.SourceName #>Async(_instance, flag, _Connection);
+                foreach (var flag in _toRemove)
+                    await <#= ClassName #>.Delete<#= fe.SourceName #>Async(_instance, flag, _Connection);
+            }
+        }
+<# } #>
+<# } #>
 
         public class TableQueryBuilder : SqlCommandBuilder<TableQueryBuilder>
         {
@@ -153,19 +392,7 @@ namespace <#= Namespace #>
 #if NET6_0_OR_GREATER
             protected System.Data.Common.DbBatch? _Batch;
 
-            /// <summary>
-            /// Specifies the batch to use for subsequent database operations.
-            /// </summary>
-            /// <remarks>If <paramref name="batch"/> is <see langword="null"/>, the method attempts to create a new
-            /// batch from the current connection or transaction. The batch is used to group multiple database commands for
-            /// execution as a single unit.</remarks>
-            /// <param name="batch">The <see cref="DbBatch"/> instance to associate with the operation, or <see langword="null"/> to create a new
-            /// batch from the current connection or transaction.</param>
-            /// <returns>The current instance with the specified batch applied.</returns>
-            /// <exception cref="ArgumentNullException">Thrown if <paramref name="batch"/> is <see langword="null"/> and neither a connection nor a transaction is
-            /// specified.</exception>
-            /// <exception cref="InvalidOperationException">Thrown if <paramref name="batch"/> is <see langword="null"/> and the provided transaction does not have an
-            /// associated <see cref="DbConnection"/>.</exception>
+            /// <summary>Associates a batch with this builder; pass <see langword="null"/> to auto-create from connection/transaction.</summary>
             public TableQueryBuilder WithBatch(DbBatch? batch)
             {
                 if (batch == null)
@@ -182,12 +409,7 @@ namespace <#= Namespace #>
                 return this;
             }
 
-            /// <summary>
-            /// Adds a new command to the current batch operation.
-            /// </summary>
-            /// <remarks>This method should be called only after a batch has been initialized using
-            /// WithBatch(). Attempting to add to a batch without initialization will result in an exception.</remarks>
-            /// <exception cref="InvalidOperationException">Thrown if no batch has been provided. Call WithBatch() before invoking this method.</exception>
+            /// <summary>Adds the built command to the batch (must call <see cref="WithBatch"/> first).</summary>
             public void AddToBatch()
             {
                 if (_Batch == null)
@@ -197,14 +419,7 @@ namespace <#= Namespace #>
                 _Batch.BatchCommands.Add(batchCommand);
             }
 
-            /// <summary>
-            /// Adds a new command to the current database batch asynchronously.
-            /// </summary>
-            /// <remarks>This method should be called only after a batch has been initialized using
-            /// WithBatch(). It is typically used to accumulate multiple commands for execution as a single batch
-            /// operation.</remarks>
-            /// <returns>A task that represents the asynchronous operation.</returns>
-            /// <exception cref="InvalidOperationException">Thrown if no database batch has been provided. Call WithBatch() before invoking this method.</exception>
+            /// <summary>Adds the built command to the batch asynchronously (must call <see cref="WithBatch"/> first).</summary>
             public async Task AddToBatchAsync()
             {
                 if (_Batch == null)
@@ -215,103 +430,47 @@ namespace <#= Namespace #>
             }
 #endif
 
-            /// <summary>
-            /// Specifies the columns to select when querying the user table.
-            /// </summary>
-            /// <remarks>If not called, all columns will be selected by default. This method allows for
-            /// projection of only the desired columns, which can improve query performance and reduce data
-            /// transfer.</remarks>
-            /// <param name="select">An expression that defines which properties of the <see cref="<#= ClassName #>"/> entity to include in the result set.
-            /// The expression should return an array of selected property values.</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance, enabling method chaining.</returns>
+            /// <summary>Selects only the specified columns in the query result.</summary>
             public TableQueryBuilder Select(Expression<Func<<#= ClassName #>, object?[]>> select)
             {
                 _SelectClause = select;
                 return this;
             }
 
-            /// <summary>
-            /// Adds a filter condition to the query that determines which users are included based on the specified
-            /// predicate.
-            /// </summary>
-            /// <remarks>Only one filter condition can be set per query builder instance; subsequent calls to
-            /// <c>Where</c> will overwrite the previous condition.</remarks>
-            /// <param name="where">An expression that defines the criteria used to select users. The predicate should return <see
-            /// langword="true"/> for users to include in the results.</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance, enabling method chaining for additional query
-            /// configuration.</returns>
+            /// <summary>Filters results to rows matching the predicate.</summary>
             public TableQueryBuilder Where(Expression<Func<<#= ClassName #>, bool>> where)
             {
                 _WhereClause = where;
                 return this;
             }
 
-            /// <summary>
-            /// Sets the maximum number of user records to return in the query results.
-            /// </summary>
-            /// <param name="limit">The maximum number of user records to include in the result set. Must be zero or a positive integer.</param>
-            /// <exception cref="ArgumentOutOfRangeException">Thrown if the provided <paramref name="limit"/> is negative.</exception>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance with the limit applied.</returns>
+            /// <summary>Limits the number of rows returned.</summary>
             public TableQueryBuilder Limit(int limit)
             {
                 ArgumentOutOfRangeException.ThrowIfNegative(limit);
-
                 _Limit = limit;
                 return this;
             }
 
-            /// <summary>
-            /// Sets the number of rows to skip before starting to return results from the query.
-            /// </summary>
-            /// <remarks>Use this method to implement paging in query results. Calling this method overwrites
-            /// any previously set offset value.</remarks>
-            /// <exception cref="ArgumentOutOfRangeException">Thrown if the provided <paramref name="offset"/> is negative.</exception>
-            /// <param name="offset">The number of rows to skip. Must be zero or greater.</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance with the offset applied.</returns>
+            /// <summary>Skips the first <paramref name="offset"/> rows.</summary>
             public TableQueryBuilder Offset(int offset)
             {
                 ArgumentOutOfRangeException.ThrowIfNegative(offset);
-
                 _Offset = offset;
                 return this;
             }
 
-            /// <summary>
-            /// Limits the number of rows returned by the query to the specified maximum.
-            /// </summary>
-            /// <remarks>Use this method to restrict the result set to a specific number of rows, similar to
-            /// the SQL TOP clause. Calling this method overrides any previous row limit set on the query.</remarks>
-            /// <param name="top">The maximum number of rows to return. Must be greater than zero.</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance with the row limit applied.</returns>
-            public TableQueryBuilder Top(int top)
-            {
-                return Limit(top);
-            }
+            /// <summary>Alias for <see cref="Limit"/>.</summary>
+            public TableQueryBuilder Top(int top) => Limit(top);
 
-            /// <summary>
-            /// Specifies the ordering of results for the query using the provided expression.
-            /// </summary>
-            /// <remarks>If multiple properties are specified in the array, results will be ordered by each
-            /// property in the order they appear. This method can be chained with other query builder methods to construct
-            /// complex queries.</remarks>
-            /// <param name="clause">An expression that defines one or more properties of the <see cref="<#= ClassName #>"/> entity to order the results by.
-            /// The array elements determine the order of precedence. You can use <see cref="DB.OrderBy"/> for complex ordering (default will be ASC)</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance with the ordering clause applied.</returns>
+            /// <summary>Orders results by the specified columns (ascending).</summary>
             public TableQueryBuilder OrderBy(Expression<Func<<#= ClassName #>, object?[]>> clause)
             {
                 _OrderByClause = clause;
                 return this;
             }
 
-            /// <summary>
-            /// Specifies a descending order for the query results based on the provided user properties.
-            /// </summary>
-            /// <remarks>Call this method to order the query results by one or more user properties in
-            /// descending order. This method can be chained with other query builder methods to construct complex
-            /// queries.</remarks>
-            /// <param name="clause">An expression that selects one or more properties of the <see cref="<#= ClassName #>"/> entity to use for ordering the
-            /// results in descending order. You can use <see cref="DB.OrderBy"/> for complex ordering (default will be DESC)</param>
-            /// <returns>The current <see cref="TableQueryBuilder"/> instance to allow method chaining.</returns>
+            /// <summary>Orders results by the specified columns (descending).</summary>
             public TableQueryBuilder OrderByDesc(Expression<Func<<#= ClassName #>, object?[]>> clause)
             {
                 _OrderByClause = clause;
@@ -326,7 +485,11 @@ namespace <#= Namespace #>
 
             private ISqlVisitor GetWhereVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
             {
+<# if (FlaggedEnumProperties.Count > 0) { #>
+                return new <#= DbEnginePrefix #>WhereVisitor(param, getColName, command, <#= ClassName #>._FlaggedEnumJoinInfos);
+<# } else { #>
                 return new <#= DbEnginePrefix #>WhereVisitor(param, getColName, command);
+<# } #>
             }
 
             private ISqlVisitor GetOrderByVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command, bool orderByDesc)
@@ -334,6 +497,7 @@ namespace <#= Namespace #>
                 return new <#= DbEnginePrefix #>OrderByVisitor(param, getColName, command, orderByDesc);
             }
 
+            /// <summary>Executes the query and returns results as an async stream.</summary>
             public async IAsyncEnumerable<<#= ClassName #>> ExecuteAsync()
             {
                 if (_Batch != null)
@@ -348,7 +512,7 @@ namespace <#= Namespace #>
                 if (_Transaction != null)
                     command.Transaction = _Transaction;
 
-                Stopwatch watch = Stopwatch.StartNew();
+                System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
                 parser.Process(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
                 if (_Limit > 0)
@@ -357,8 +521,6 @@ namespace <#= Namespace #>
                     parser.AddOffset(_Offset);
 
                 command.CommandText = parser.ToString();
-
-                // TODO: Move to ILogger loggin rather than Console.WriteLine
                 Console.WriteLine($"[TableQueryBuilder] Executing SQL Query: {command.CommandText} (Prepared in {watch.ElapsedMilliseconds} ms)");
 
                 using var reader = await command.ExecuteReaderAsync();
@@ -383,6 +545,18 @@ namespace <#= Namespace #>
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, string? Converter)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName)> Columns { get; set; } = [];
+
+    public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
+
+    public class FlaggedEnumPropertyInfo
+    {
+        public string SourceName { get; set; } = "";
+        public string EnumTypeFullName { get; set; } = "";
+        public string JunctionTable { get; set; } = "";
+        public string MainTable { get; set; } = "";
+        public List<(string PropName, string MainPkCol, string JunctionFkCol)> PkMappings { get; set; } = new();
+        public string EnumFkColumn { get; set; } = "";
+    }
     #nullable disable
 #>

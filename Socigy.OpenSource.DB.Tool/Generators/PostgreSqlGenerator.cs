@@ -1,4 +1,5 @@
-﻿using Socigy.OpenSource.DB.Tool.Structures.Analysis;
+﻿using Socigy.OpenSource.DB.Attributes;
+using Socigy.OpenSource.DB.Tool.Structures.Analysis;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -44,6 +45,10 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             // --- DOWN: 3. Drop New Tables ---
             foreach (var table in diff.AddedTables)
             {
+                // Sequences must be created before the table that references them
+                foreach (var seqUp in GenerateCreateSequences(table))
+                    upCommands.Add(seqUp);
+
                 upCommands.Add(GenerateCreateTable(table));
 
                 // Up: Insert Initial Data
@@ -56,6 +61,10 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 }
 
                 downCommands.Insert(0, $"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
+
+                // Drop sequences after table is gone
+                foreach (var seqDown in GenerateDropSequences(table))
+                    downCommands.Insert(0, seqDown);
             }
 
             // --- UP: 4. Alter Tables (Schema & Data) ---
@@ -108,7 +117,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             // A. Columns
             foreach (var col in table.Columns)
             {
-                lines.Add("    " + GenerateColumnDefinition(col));
+                lines.Add("    " + GenerateColumnDefinitionForTable(table, col));
             }
 
             // B. Constraints (Check, Unique) - Exclude FKs (deferred)
@@ -154,9 +163,15 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 down.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c)};");
             }
 
-            // 3. Added Columns
+            // 3. Added Columns (create sequences for new auto-increment columns first)
             foreach (var c in alteration.AddedColumns)
             {
+                if (c.IsAutoIncrement == true)
+                {
+                    var seqName = GetSequenceName(alteration.Table.Name, c);
+                    up.Add($"CREATE SEQUENCE IF NOT EXISTS {Quote(seqName)};");
+                    down.Add($"DROP SEQUENCE IF EXISTS {Quote(seqName)};");
+                }
                 up.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c)};");
                 down.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
             }
@@ -203,6 +218,29 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                                 down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} DROP DEFAULT;");
                             else
                                 down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT {mod.OldColumn.DefaultValue};");
+                            break;
+
+                        case "AutoIncrement":
+                            if (mod.NewColumn.IsAutoIncrement == true)
+                            {
+                                // Adding AutoIncrement: create sequence then set DEFAULT
+                                var addSeqName = GetSequenceName(alteration.Table.Name, mod.NewColumn);
+                                var addSeqType = GetSequenceType(mod.NewColumn) ?? "INTEGER";
+                                up.Add($"CREATE SEQUENCE IF NOT EXISTS {Quote(addSeqName)} AS {addSeqType};");
+                                up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT nextval('{addSeqName}');");
+                                down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} DROP DEFAULT;");
+                                down.Add($"DROP SEQUENCE IF EXISTS {Quote(addSeqName)};");
+                            }
+                            else
+                            {
+                                // Removing AutoIncrement: drop DEFAULT then drop sequence
+                                var dropSeqName = GetSequenceName(alteration.Table.Name, mod.OldColumn);
+                                up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} DROP DEFAULT;");
+                                up.Add($"DROP SEQUENCE IF EXISTS {Quote(dropSeqName)};");
+                                var dropSeqType = GetSequenceType(mod.OldColumn) ?? "INTEGER";
+                                down.Add($"CREATE SEQUENCE IF NOT EXISTS {Quote(dropSeqName)} AS {dropSeqType};");
+                                down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT nextval('{dropSeqName}');");
+                            }
                             break;
                     }
                 }
@@ -366,8 +404,115 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             var sb = new StringBuilder();
             sb.Append($"{Quote(col.Name)} {col.DatabaseType}");
             if (col.Nullable == false) sb.Append(" NOT NULL");
-            if (!string.IsNullOrEmpty(col.DefaultValue)) sb.Append($" DEFAULT {col.DefaultValue}");
+
+            if (col.IsAutoIncrement == true)
+            {
+                var seqName = GetSequenceName(null, col);
+                sb.Append($" DEFAULT nextval('{seqName}')");
+            }
+            else if (!string.IsNullOrEmpty(col.DefaultValue))
+            {
+                sb.Append($" DEFAULT {TranslateDefault(col.DefaultValue)}");
+            }
+
             return sb.ToString();
+        }
+
+        private string GenerateColumnDefinitionForTable(DbTable table, DbColumn col)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"{Quote(col.Name)} {col.DatabaseType}");
+            if (col.Nullable == false) sb.Append(" NOT NULL");
+
+            if (col.IsAutoIncrement == true)
+            {
+                var seqName = GetSequenceName(table.Name, col);
+                sb.Append($" DEFAULT nextval('{seqName}')");
+            }
+            else if (!string.IsNullOrEmpty(col.DefaultValue))
+            {
+                sb.Append($" DEFAULT {TranslateDefault(col.DefaultValue)}");
+            }
+
+            return sb.ToString();
+        }
+
+        private string GetSequenceName(string? tableName, DbColumn col)
+        {
+            if (!string.IsNullOrEmpty(col.SequenceName))
+                return col.SequenceName;
+            return $"{tableName}_{col.Name}_seq";
+        }
+
+        private IEnumerable<string> GenerateCreateSequences(DbTable table)
+        {
+            foreach (var col in table.Columns.Where(c => c.IsAutoIncrement == true))
+            {
+                var seqType = GetSequenceType(col);
+                if (seqType == null)
+                {
+                    Logger.Error($"[AutoIncrement] on column '{col.Name}' of table '{table.Name}' uses type '{col.DotnetType}' which is not a supported sequence type. Use short, int, or long.");
+                    continue;
+                }
+                yield return $"CREATE SEQUENCE IF NOT EXISTS {Quote(GetSequenceName(table.Name, col))} AS {seqType};";
+            }
+        }
+
+        private IEnumerable<string> GenerateDropSequences(DbTable table)
+        {
+            foreach (var col in table.Columns.Where(c => c.IsAutoIncrement == true))
+            {
+                yield return $"DROP SEQUENCE IF EXISTS {Quote(GetSequenceName(table.Name, col))};";
+            }
+        }
+
+        private static string? GetSequenceType(DbColumn col)
+        {
+            var typeName = col.DotnetType?.Split('.').Last().ToLowerInvariant() ?? "";
+            return typeName switch
+            {
+                "int16" or "short" => "SMALLINT",
+                "int32" or "int"   => "INTEGER",
+                "int64" or "long"  => "BIGINT",
+                _                  => null
+            };
+        }
+
+        private static string TranslateForeignKeyAction(string token)
+        {
+            if (string.IsNullOrEmpty(token) || !token.StartsWith("$socigy$val$"))
+                return token;
+
+            return token switch
+            {
+                DbValues.ForeignKey.Cascade    => "CASCADE",
+                DbValues.ForeignKey.SetNull    => "SET NULL",
+                DbValues.ForeignKey.SetDefault => "SET DEFAULT",
+                DbValues.ForeignKey.Restrict   => "RESTRICT",
+                DbValues.ForeignKey.NoAction   => "NO ACTION",
+                _                              => token
+            };
+        }
+
+        private static string TranslateDefault(string token)
+        {
+            if (string.IsNullOrEmpty(token) || !token.StartsWith("$socigy$"))
+                return token;
+
+            return token switch
+            {
+                DbDefaults.Guid.Random     => "gen_random_uuid()",
+                DbDefaults.Guid.Sequential => "uuid_generate_v1mc()",
+                DbDefaults.Time.Now        => "timezone('utc', now())",
+                DbDefaults.Time.NowLocal   => "now()",
+                DbDefaults.Time.Date       => "current_date",
+                DbDefaults.Bool.True       => "TRUE",
+                DbDefaults.Bool.False      => "FALSE",
+                DbDefaults.Number.Zero     => "0",
+                DbDefaults.Number.One      => "1",
+                DbDefaults.Text.Empty      => "''",
+                _                          => token
+            };
         }
 
         private string GenerateConstraintDefinition(DbConstraint con, DbTable sourceTable)
@@ -376,27 +521,24 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             var name = !string.IsNullOrEmpty(con.Name) ? con.Name : GuessConstraintName(con);
             sb.Append($"CONSTRAINT {Quote(name)} ");
 
-            var cols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
-
             switch (con.Type.ToLower())
             {
                 case "unique":
-                    sb.Append($"UNIQUE ({cols})");
+                    var uniqueCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
+                    sb.Append($"UNIQUE ({uniqueCols})");
                     break;
                 case "check":
                     sb.Append($"CHECK ({con.Value})");
                     break;
                 case "foreign_key":
+                    var fkCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
                     var targetTable = Configuration.CurrentSchema.Tables.FirstOrDefault(x => x.SourceName == con.TargetTable);
-                    // Safe guard if target table not found (e.g. cross-schema)
                     var targetTableName = targetTable?.Name ?? con.TargetTable;
-
                     var targetCols = string.Join(", ", con.TargetColumns.Select(x =>
                         Quote(targetTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
-
-                    sb.Append($"FOREIGN KEY ({cols}) REFERENCES {Quote(targetTableName)} ({targetCols})");
-                    if (!string.IsNullOrEmpty(con.OnDelete)) sb.Append($" ON DELETE {con.OnDelete}");
-                    if (!string.IsNullOrEmpty(con.OnUpdate)) sb.Append($" ON UPDATE {con.OnUpdate}");
+                    sb.Append($"FOREIGN KEY ({fkCols}) REFERENCES {Quote(targetTableName)} ({targetCols})");
+                    if (!string.IsNullOrEmpty(con.OnDelete)) sb.Append($" ON DELETE {TranslateForeignKeyAction(con.OnDelete)}");
+                    if (!string.IsNullOrEmpty(con.OnUpdate)) sb.Append($" ON UPDATE {TranslateForeignKeyAction(con.OnUpdate)}");
                     break;
             }
             return sb.ToString();

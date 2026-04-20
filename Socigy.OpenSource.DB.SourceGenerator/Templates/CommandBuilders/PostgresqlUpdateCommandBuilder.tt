@@ -1,0 +1,382 @@
+﻿<#@ template language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+using System;
+using System.Text;
+using System.Data.Common;
+using System.Threading.Tasks;
+using System.Linq.Expressions;
+using System.Collections.Generic;
+using Socigy.OpenSource.DB.Core;
+using Socigy.OpenSource.DB.Core.CommandBuilders;
+using Socigy.OpenSource.DB.Core.Interfaces;
+using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Parsers;
+using Socigy.OpenSource.DB.Core.Parsers.Postgresql;
+using Npgsql;
+using NpgsqlTypes;
+using <#= Namespace #>;
+
+#nullable enable
+
+namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
+{
+    <#= CustomPreClass #>
+    public class Postgresql<#= ClassName #>UpdateCommandBuilder<T> : SqlCommandBuilder<Postgresql<#= ClassName #>UpdateCommandBuilder<T>>
+        where T : IDbTable
+    {
+#if NET6_0_OR_GREATER
+        protected System.Data.Common.DbBatch? _Batch;
+
+        /// <summary>
+        /// Specifies the batch to use for subsequent database operations.
+        /// </summary>
+        /// <remarks>If <paramref name="batch"/> is <see langword="null"/>, the method attempts to create a new
+        /// batch from the current connection or transaction. The batch is used to group multiple database commands for
+        /// execution as a single unit.</remarks>
+        /// <param name="batch">The <see cref="DbBatch"/> instance to associate with the operation, or <see langword="null"/> to create a new
+        /// batch from the current connection or transaction.</param>
+        /// <returns>The current instance with the specified batch applied.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="batch"/> is <see langword="null"/> and neither a connection nor a transaction is
+        /// specified.</exception>
+        /// <exception cref="InvalidOperationException">Thrown if <paramref name="batch"/> is <see langword="null"/> and the provided transaction does not have an
+        /// associated <see cref="DbConnection"/>.</exception>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithBatch(DbBatch? batch)
+        {
+            if (batch == null)
+            {
+                if (_Connection == null && _Transaction == null)
+                    throw new ArgumentNullException(nameof(batch), "If batch is null, either connection or transaction must be specified!");
+
+                _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.CreateBatch() ?? throw new InvalidOperationException("The provided transaction has no DbConnection from which a DbBatch could be created");
+                _Batch.Transaction = _Transaction;
+            }
+            else
+                _Batch = batch;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a new command to the current batch operation.
+        /// </summary>
+        /// <remarks>This method should be called only after a batch has been initialized using
+        /// WithBatch(). Attempting to add to a batch without initialization will result in an exception.</remarks>
+        /// <exception cref="InvalidOperationException">Thrown if no batch has been provided. Call WithBatch() before invoking this method.</exception>
+        public void AddToBatch()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException("Cannot add to batch when no DbBatch was provided. Please call WithBatch() first.");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+
+        /// <summary>
+        /// Adds a new command to the current database batch asynchronously.
+        /// </summary>
+        /// <remarks>This method should be called only after a batch has been initialized using
+        /// WithBatch(). It is typically used to accumulate multiple commands for execution as a single batch
+        /// operation.</remarks>
+        /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if no database batch has been provided. Call WithBatch() before invoking this method.</exception>
+        public async Task AddToBatchAsync()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException("Cannot add to batch when no DbBatch was provided. Please call WithBatch() first.");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+#endif
+
+        private readonly T _TableRow;
+        private Expression<Func<T, bool>> _WhereClause;
+
+        private bool AllFieldsSet = false;
+        private Expression<Func<T, object?[]>> _UpdateClause;
+        private Expression<Func<T, object?[]>> _UpdateExceptClause;
+
+        public Postgresql<#= ClassName #>UpdateCommandBuilder(T rowInstance)
+        {
+            _TableRow = rowInstance;
+        }
+
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> Where(Expression<Func<T, bool>> where)
+        {
+            _WhereClause = where;
+            return this;
+        }
+
+        private ISqlVisitor GetWhereVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
+        {
+            return new PostgresqlWhereVisitor(param, getColName, command);
+        }
+        private ISqlVisitor GetUpdateSetVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
+        {
+            return new PostgresqlUpdateVisitor(param, getColName, command, _TableRow);
+        }
+
+        /// <summary>
+        /// Configures the builder to include all fields of the entity in the update operation.
+        /// </summary>
+        /// <remarks>After calling this method, all fields of the entity type <typeparamref name="T"/>
+        /// will be included in the generated update command, overriding any previous field selections. This method is
+        /// typically used in fluent configuration scenarios.</remarks>
+        /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance for method chaining.</returns>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithAllFields()
+        {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException("Cannot combine WithAllFields() with WithFields().");
+
+            AllFieldsSet = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Specifies the fields to include in the update operation using a selection expression.
+        /// </summary>
+        /// <remarks>This method cannot be used in combination with <see cref="WithAllFields"/>. Call this
+        /// method to limit the update to specific fields rather than updating all fields.</remarks>
+        /// <param name="select">An expression that selects the fields of the T entity to be updated. The expression should return an
+        /// array of properties to include in the update.</param>
+        /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance with the specified fields configured.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if all fields have already been specified using <see cref="WithAllFields"/>.</exception>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithFields(Expression<Func<T, object?[]>> select)
+        {
+            if (AllFieldsSet)
+                throw new InvalidOperationException("Cannot specify individual fields when WithAllFields() is set.");
+
+            if (_UpdateExceptClause != null)
+                throw new InvalidOperationException("Cannot combine WithFields() with ExceptFields().");
+
+            _UpdateClause = select;
+            return this;
+        }
+
+        /// <summary>
+        /// Excludes the specified fields from being updated in the command builder.
+        /// </summary>
+        /// <remarks>Use this method to prevent certain fields from being included in the generated update
+        /// statement. This is useful when you want to update only a subset of an entity's properties.</remarks>
+        /// <param name="except">An expression that selects the properties of the <see cref="T"/> entity to exclude from the update
+        /// operation. The expression should return an array of properties to be omitted.</param>
+        /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance with the specified fields excluded from updates.</returns>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> ExceptFields(Expression<Func<T, object?[]>> except)
+        {
+            if (_UpdateClause != null)
+                throw new InvalidOperationException("Cannot combine ExceptFields() with WithFields().");
+
+            _UpdateExceptClause = except;
+            return this;
+        }
+
+        private HashSet<string>? BuildExcludedDbColumns(NpgsqlCommand command)
+        {
+            if (_UpdateExceptClause == null)
+                return null;
+
+            var extractor = new PostgresqlUpdateVisitor(
+                _UpdateExceptClause.Parameters[0],
+                <#= ClassName #>.GetColumnDbName,
+                command);
+
+            // Extracted values are C# member names.
+            var extractedMemberNames = extractor.ExtractColumnNames(_UpdateExceptClause);
+
+            // Convert to DB column names so they match _TableRow.GetColumns() keys.
+            var excludedDbColumns = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var memberName in extractedMemberNames)
+            {
+                var dbName = <#= ClassName #>.GetColumnDbName(memberName);
+                if (!string.IsNullOrEmpty(dbName))
+                    excludedDbColumns.Add(dbName);
+            }
+
+            return excludedDbColumns;
+        }
+
+        private string BuildSetClause(NpgsqlCommand command)
+        {
+            var updateVisitor = GetUpdateSetVisitor(
+                _UpdateClause?.Parameters[0]
+                    ?? _UpdateExceptClause?.Parameters[0]
+                    ?? Expression.Parameter(typeof(T), "x"),
+                <#= ClassName #>.GetColumnDbName,
+                command);
+
+            // IMPORTANT: only use explicit WithFields() when not in AllFields mode
+            if (_UpdateClause != null && !AllFieldsSet)
+                return updateVisitor.Parse(_UpdateClause);
+
+            HashSet<string>? excludedDbColumns = BuildExcludedDbColumns(command);
+
+            Dictionary<string, ColumnInfo> allColumns = _TableRow.GetColumns();
+            var sb = new StringBuilder();
+            bool first = true;
+
+            foreach (var kv in allColumns)
+            {
+                var dbColumnName = kv.Key;
+                var info = kv.Value;
+
+                if (excludedDbColumns != null && excludedDbColumns.Contains(dbColumnName))
+                    continue;
+
+                if (!first)
+                    sb.Append(", ");
+
+                first = false;
+
+                string paramName = $"@p{command.Parameters.Count}";
+
+                var p = command.CreateParameter()
+                    ?? throw new InvalidOperationException("Expected NpgsqlCommand.");
+
+                object? dbValue = NormalizeDbValue(info.Type, info.Value);
+
+                p.ParameterName = paramName;
+                p.Value = dbValue ?? DBNull.Value;
+
+                if (dbValue == null || dbValue == DBNull.Value || IsEnumType(info.Type))
+                    p.NpgsqlDbType = GetDbType(info.Type);
+
+                command.Parameters.Add(p);
+                sb.Append($"\"{dbColumnName}\" = {paramName}");
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Executes the update command asynchronously against the database connection and returns the number of rows
+        /// affected.
+        /// </summary>
+        /// <remarks>If the database connection is not already open, this method opens it before executing
+        /// the command. The update is performed using either the specified WHERE clause or the primary key columns of
+        /// the table row.</remarks>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the number of rows affected by
+        /// the update command. Returns 0 if the command could not be created.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if a DbBatch was provided, or if no DbConnection is available.</exception>
+        public async Task<int> ExecuteAsync()
+        {
+#if NET6_0_OR_GREATER
+            if (_Batch != null)
+                throw new InvalidOperationException("Cannot execute command when DbBatch was provided.");
+#endif
+
+            if (_Connection == null)
+                throw new InvalidOperationException("No DbConnection provided.");
+
+            if (_Connection.State != System.Data.ConnectionState.Open)
+                await _Connection.OpenAsync();
+
+            await using var command = _Connection.CreateCommand() as NpgsqlCommand;
+            if (command == null) return 0;
+
+            if (_Transaction != null)
+                command.Transaction = _Transaction as NpgsqlTransaction;
+
+            string? where = null;
+            if (_WhereClause != null)
+                where = GetWhereVisitor(_WhereClause.Parameters[0], <#= ClassName #>.GetColumnDbName, command).Parse(_WhereClause);
+            else
+            {
+                var predicates = new List<string>();
+
+                Dictionary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();
+                foreach (var col in columns)
+                {
+                    string paramName = $"@p{command.Parameters.Count}";
+                    string colName = col.Key;
+
+                    object? dbValue = NormalizeDbValue(col.Value.Type, col.Value.Value);
+
+                    var param = new NpgsqlParameter(paramName, dbValue ?? DBNull.Value);
+
+                    if (dbValue == null || dbValue == DBNull.Value || IsEnumType(col.Value.Type))
+                        param.NpgsqlDbType = GetDbType(col.Value.Type);
+
+                    command.Parameters.Add(param);
+                    predicates.Add($"{colName} = {paramName}");
+                }
+
+                where = "WHERE " + string.Join(" AND ", predicates);
+            }
+
+            command.CommandText = $@"
+        UPDATE ""{_TableRow.GetTableName()}""
+        SET {BuildSetClause(command)}
+        {where}";
+
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+            return rowsAffected;
+        }
+
+        public NpgsqlDbType GetDbType(Type type)
+        {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+
+            if (type.IsEnum)
+                type = Enum.GetUnderlyingType(type);
+
+            return type switch
+            {
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,
+
+                Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(ushort) => NpgsqlDbType.Integer,
+
+                Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,
+
+                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,
+
+                Type t when t == typeof(string) => NpgsqlDbType.Text,
+                Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
+                Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
+                Type t when t == typeof(float) => NpgsqlDbType.Real,
+                Type t when t == typeof(double) => NpgsqlDbType.Double,
+                Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
+                Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
+                Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
+                Type t when t == typeof(char) => NpgsqlDbType.Char,
+                _ => NpgsqlDbType.Text
+            };
+        }
+
+        private static bool IsEnumType(Type type)
+        {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+            return type.IsEnum;
+        }
+
+        private static object? NormalizeDbValue(Type type, object? value)
+        {
+            if (value == null || value == DBNull.Value)
+                return value;
+
+            var actualType = Nullable.GetUnderlyingType(type) ?? type;
+            if (!actualType.IsEnum)
+                return value;
+
+            var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
+            return Convert.ChangeType(value, enumUnderlyingType);
+        }
+    }
+    <#= CustomPostClass #>
+}
+
+#nullable disable
+
+<#+
+	public string ClassName { get; set; }
+	public string Namespace { get; set; }
+
+    public string CustomPreClass { get; set; } = "";
+    public string CustomPostClass { get; set; } = "";
+#>

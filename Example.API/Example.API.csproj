@@ -8,6 +8,7 @@
 		<PublishAot>true</PublishAot>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<Configurations>Debug;Release;DB_Migration</Configurations>
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -1,4 +1,4 @@
-﻿<#@ template language="C#" #>
+<#@ template language="C#" #>
 <#@ assembly name="System.Core" #>
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
@@ -9,37 +9,37 @@ using Socigy.OpenSource.DB.Core.CommandBuilders;
 
 #nullable enable
 
-namespace <#= Namespace #> 
+namespace <#= Namespace #>
 {
-    
+
     <#= CustomPreClass #>
     public partial class <#= ClassName #> : IDbTable
     {
         protected Dictionary<string, object?> _CustomValues { get; set; }
-        public object? GetCustomValue(string key) 
+        public object? GetCustomValue(string key)
         {
             if (_CustomValues == null)
                 return null;
-            
+
             return _CustomValues.ContainsKey(key) ? _CustomValues[key] : null;
         }
-        public T? GetCustomValue<T>(string key) 
+        public T? GetCustomValue<T>(string key)
         {
             if (_CustomValues == null)
                 return default(T);
-            
+
             return _CustomValues.ContainsKey(key) ? (T?)_CustomValues[key] : default;
         }
 
         public const string TableName = "<#= TableName #>";
         public string GetTableName() => TableName;
 
-        public static string? GetColumnDbName(string column) 
+        public static string? GetColumnDbName(string column)
         {
-            return column switch 
+            return column switch
             {
 <#
-            foreach(var col in Columns) 
+            foreach(var col in Columns)
             {
 #>
                 "<#= col.Name #>" => <#= col.Name #>ColumnName,
@@ -50,20 +50,25 @@ namespace <#= Namespace #>
             };
         }
 
+        string? IDbTable.GetDbColumnName(string memberName) => GetColumnDbName(memberName);
+
         public Dictionary<string, ColumnInfo> GetColumns()
         {
             return new Dictionary<string, ColumnInfo>()
             {
-                // TODO: Optimalize the typeof(), or remove if not needed!
 <#
-                foreach(var col in Columns) 
+                foreach(var col in Columns)
                 {
 #>              {
                     <#= col.Name #>ColumnName,
                     new ColumnInfo()
                     {
                         Type = typeof(<#= col.Type.Replace("?", " ") #>),
-                        Value = <#= col.Name #>
+                        Value = <#= col.Name #>,
+                        IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
+                        IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
+                        HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
+                        SetValue = v => <#= col.Name #> = ColumnInfo.ApplyDbValue<<#= col.Type #>>(v)
                     }
                 },
 <#
@@ -72,8 +77,61 @@ namespace <#= Namespace #>
             };
         }
 
+        public Dictionary<string, ColumnInfo> GetPrimaryColumns()
+        {
+            return new Dictionary<string, ColumnInfo>()
+            {
 <#
-        foreach(var col in Columns) 
+             foreach(var col in Columns.Where(x => x.IsPrimaryKey))
+             {
+#>              {
+                    <#= col.Name #>ColumnName,
+                    new ColumnInfo()
+                    {
+                        Type = typeof(<#= col.Type.Replace("?", " ") #>),
+                        Value = <#= col.Name #>,
+                        IsPrimaryKey = true,
+                        IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
+                        HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
+                        SetValue = v => <#= col.Name #> = ColumnInfo.ApplyDbValue<<#= col.Type #>>(v)
+                    }
+                },
+<#
+                }
+#>
+            };
+        }
+
+        public (string Name, ColumnInfo Info)? GetColumn(string name)
+        {
+            switch(name)
+            {
+<#
+               foreach (var col in Columns)
+               {
+#>
+                case <#= col.Name #>ColumnName:
+                    return (
+                        <#= col.Name #>ColumnName,
+                        new ColumnInfo()
+                        {
+                            Type = typeof(<#= col.Type.Replace("?", " ") #>),
+                            Value = <#= col.Name #>,
+                            IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
+                            IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
+                            HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
+                            SetValue = v => <#= col.Name #> = ColumnInfo.ApplyDbValue<<#= col.Type #>>(v)
+                        }
+                    );
+<#
+               }
+#>
+            }
+
+            return null;
+        }
+<#
+        foreach(var col in Columns)
         {
         #>
         public const string <#= col.Name #>ColumnName = "<#= col.DatabaseName #>";
@@ -100,5 +158,9 @@ namespace <#= Namespace #>
         public string Name { get; set; }
         public string Type { get; set; }
         public string DatabaseName { get; set; }
+        public bool IsPrimaryKey { get; set; }
+        public bool IsAutoIncrement { get; set; }
+        public bool HasDbDefault { get; set; }
+        public string SequenceName { get; set; }
     }
 #>
