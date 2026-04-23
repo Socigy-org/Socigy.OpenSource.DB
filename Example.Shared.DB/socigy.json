@@ -1,4 +1,5 @@
 {
+  "shouldShowMessageOnEmptyMigrationGeneration": false,
   "database": {
     "platform": "postgresql",
     "databaseName": "SharedDb"

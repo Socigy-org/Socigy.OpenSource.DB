@@ -24,7 +24,7 @@ namespace <#= BaseNamespace #>
             private static readonly Func<ILocalMigration>[] _factoriesOrderedDesc =
             [
     <#
-                foreach (var migrationName in MigrationClassNames.Reverse())
+                foreach (var migrationName in MigrationClassNames.OrderByDescending(x => x))
                 {
     #>          static () => new <#= migrationName #>(),
     <#
@@ -179,7 +179,6 @@ namespace <#= BaseNamespace #>
 }
 
 #nullable disable
-
 <#+
     public string DatabaseName { get; set; }
     public string BaseNamespace { get; set; }

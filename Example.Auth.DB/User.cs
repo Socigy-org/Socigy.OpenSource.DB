@@ -39,7 +39,7 @@ namespace Example.Auth.DB
         [FlaggedEnum]
         public UserRole Role { get; set; }
 
-        [FlaggedEnumTable(typeof(UserParentRole))]
+        //[FlaggedEnumTable(typeof(UserParentRole))]
         public UserRole ParentRole { get; set; }
 
         [StringLength(10)]

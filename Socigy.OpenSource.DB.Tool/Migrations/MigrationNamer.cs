@@ -36,6 +36,22 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
             }
         }
 
+        /// <summary>
+        /// Generates a short, unique, and deterministic name based on an user defined name
+        /// </summary>
+        /// <param name="name">The user defined name of the migration</param>
+        /// <returns>A unique name in the format: "DescriptiveName_Hash"</returns>
+        public static string GenerateUniqueName(string name)
+        {
+            // Step 3: Hash the canonical string to create a unique identifier.
+            using (var sha256 = SHA256.Create())
+            {
+                byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(name));
+                string hash = ToHexString(hashBytes).Substring(0, 10); // Take the first 10 hex characters
+                return $"{GetMigrationId()}_{name}_{hash}";
+            }
+        }
+
 
         /// <summary>
         /// Converts a byte array to a hexadecimal string.
@@ -75,7 +91,7 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
         public static string GetMigrationId()
         {
             var now = DateTime.UtcNow;
-            return $"{now.Year}{now.Month}{now.Day}{now.Hour}{now.Minute}_";
+            return $"{now.Year}{now.Month:D2}{now.Day:D2}{now.Hour:D2}{now.Minute:D2}";
         }
 
         /// <summary>

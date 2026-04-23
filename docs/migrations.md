@@ -29,9 +29,19 @@ YourDb/
     ├── structure.json                   # Committed schema snapshot
     ├── .gitignore                       # Ignores dirty/diff scratch files
     └── Migrations/
-        ├── Initial_Migration.g.cs       # First migration (you trigger this)
-        └── V2_Add_Email_Index.g.cs      # Subsequent migrations
+        ├── 202604190900_Initial_Migration_a1b2c3d4e5.g.cs       # First migration (you trigger this)
+        └── 202604201015_Add_Email_Index_f6g7h8i9j0.g.cs         # Subsequent migrations
 ```
+
+## Migration Naming and Execution Order
+
+When a new migration is generated, its output file and corresponding class are assigned a deterministic, chronologically sortable name using the format `{yyyyMMddHHmm}_{Name}_{Hash}`:
+
+- `{yyyyMMddHHmm}` ensures chronological order of files via zero-padded times (e.g., `202611252115`).
+- `{Name}` is the user-provided or auto-generated description of the migration.
+- `{Hash}` is a 10-character hex snippet of the SHA-256 hash of the name to guarantee uniqueness.
+
+The generated `MigrationManager` code relies on this naming schema, assembling and inserting migrations in descending chronological order via a linq `OrderByDescending(x => x)` sort on the generated class names. This prevents execution order bugs and ensures a strict chronological rollout.
 
 ## `socigy.json`
 

@@ -16,10 +16,12 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
             if (diff.IsEmpty)
             {
 #if IsWindows
-                RunOnStaThread(() => MessageBox.Show("Current DB Schema is the same as the saved schema, no need to create migration script.\r\n\r\nAborting!", $"{Configuration.BaseNamespace}: Migration script generation was aborted", MessageBoxButtons.OK));
-#else
-                Logger.Warning($"{Configuration.BaseNamespace}: Current DB Schema is the same as the saved schema, no need to create migration script. Aborting!");
+                if (Configuration.Settings.ShouldShowMessageOnEmptyMigrationGeneration)
+                {
+                    RunOnStaThread(() => MessageBox.Show("Current DB Schema is the same as the saved schema, no need to create migration script.\r\n\r\nAborting!", $"{Configuration.BaseNamespace}: Migration script generation was aborted", MessageBoxButtons.OK));
+                }
 #endif
+                Logger.Warning($"{Configuration.BaseNamespace}: Current DB Schema is the same as the saved schema, no need to create migration script. Aborting!");
                 Environment.Exit(0);
             }
 
@@ -51,10 +53,11 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
 #endif
 
             var formattedMigrationName = migrationName.Replace(" ", "_");
-            await File.WriteAllTextAsync($"{Configuration.SocigyMigrationsFolderPath}{formattedMigrationName}.g.cs", new MigrationFileTemplate()
+            migrationName = MigrationNamer.GenerateUniqueName(formattedMigrationName);
+            await File.WriteAllTextAsync($"{Configuration.SocigyMigrationsFolderPath}{migrationName}.g.cs", new MigrationFileTemplate()
             {
                 Id = migrationName,
-                Name = $"M_{formattedMigrationName}",
+                Name = $"M_{migrationName}",
                 BaseNamespace = $"{Configuration.BaseNamespace}.Socigy.Migrations",
 
                 UpSql = String.Join(Environment.NewLine, upScript),

@@ -1,6 +1,6 @@
 {
-  "id": "Changes",
-  "previousId": "Changed User and Added a new Enum",
+  "id": "202604221752__ssdfghgj_3d1c5b8534",
+  "previousId": "202604221342__Changed_Use_23ce5eb7f2",
   "tables": [
     {
       "name": "user_visibility",
@@ -173,6 +173,12 @@
           "nullable": true
         },
         {
+          "name": "parent_role",
+          "sourceName": "ParentRole",
+          "dotnetType": "System.Int16",
+          "databaseType": "smallint"
+        },
+        {
           "name": "email",
           "sourceName": "Email",
           "dotnetType": "System.String",
@@ -240,8 +246,19 @@
       "constraints": [
         {
           "type": "check",
-          "name": "CHCK_e25a3182691e403087a693558d2e9fc9",
+          "name": "CHCK_4606b79cdaef4985a107a190813a1832",
           "value": "LEN(email) \u003C 25"
+        },
+        {
+          "type": "foreign_key",
+          "name": "FK_ParentRole",
+          "columns": [
+            "ParentRole"
+          ],
+          "targetTable": "Example.Auth.DB.UserRole",
+          "targetColumns": [
+            "Id"
+          ]
         },
         {
           "type": "foreign_key",
@@ -360,6 +377,55 @@
           "sourceName": "RegisteredAt",
           "dotnetType": "System.DateTime",
           "databaseType": "timestamp without time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "foreign_key",
+          "name": "FK_UserId",
+          "columns": [
+            "UserId"
+          ],
+          "targetTable": "Example.Auth.DB.User",
+          "targetColumns": [
+            "ID"
+          ]
+        },
+        {
+          "type": "foreign_key",
+          "name": "FK_CourseId",
+          "columns": [
+            "CourseId"
+          ],
+          "targetTable": "Example.Auth.DB.Course",
+          "targetColumns": [
+            "Id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_test",
+      "sourceName": "Example.Auth.DB.UserTest",
+      "columns": [
+        {
+          "name": "user_id",
+          "sourceName": "UserId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid"
+        },
+        {
+          "name": "course_id",
+          "sourceName": "CourseId",
+          "dotnetType": "System.Guid",
+          "databaseType": "uuid"
+        },
+        {
+          "name": "registered_at",
+          "sourceName": "RegisteredAt",
+          "dotnetType": "System.DateTime",
+          "databaseType": "timestamp without time zone",
+          "isPrimaryKey": true
         }
       ],
       "constraints": [
