@@ -78,3 +78,16 @@ dotnet build -c DB_Migration
 On Windows this opens a dialog asking for a migration name. On Linux/macOS the name is auto-generated from the diff content.
 
 Each subsequent build with `DB_Migration` detects schema changes and generates a new migration file if anything has changed.
+
+## Further reading
+
+- [Defining Tables](defining-tables.md) — all column and table attributes
+- [CRUD Operations](crud-operations.md) — INSERT, UPDATE, DELETE builders
+- [Querying](querying.md) — WHERE, ORDER BY, LIMIT / OFFSET
+- [Migrations](migrations.md) — migration lifecycle and detected changes
+- [JSON Columns](json-columns.md) — storing structured JSON in `jsonb` columns
+- [Flagged Enums](flagged-enums.md) — N:M enum flags with junction tables
+- [Sequences](sequences.md) — auto-increment columns
+- [Validation Attributes](validation-attributes.md) — `[StringLength]`, `[Min]`, `[Max]`, `[Unique]`
+- [Check Constraints](check-constraints.md) — custom CHECK expressions
+- [DbDefaults & DbValues](db-constants.md) — built-in default and foreign-key constants

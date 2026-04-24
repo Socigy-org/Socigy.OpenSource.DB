@@ -119,3 +119,9 @@ var results = await User.Query(x => x.IsActive == true && x.CreatedAt > cutoff)
     .ExecuteAsync()
     .ToListAsync();
 ```
+
+## See also
+
+- [JSON Columns](json-columns.md) — notes on querying tables that contain `jsonb` columns
+- [CRUD Operations](crud-operations.md) — INSERT, UPDATE, DELETE
+- [Flagged Enums](flagged-enums.md) — `HasFlag` WHERE translation

@@ -153,3 +153,10 @@ catch
     throw;
 }
 ```
+
+## See also
+
+- [JSON Columns](json-columns.md) — inserting and updating `jsonb` columns with `[RawJsonColumn]` / `[JsonColumn]`
+- [Querying](querying.md) — WHERE, ORDER BY, LIMIT / OFFSET
+- [Sequences](sequences.md) — reading back auto-increment values after insert
+- [Flagged Enums](flagged-enums.md) — junction-table insert / delete helpers

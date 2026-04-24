@@ -212,6 +212,20 @@ Tells the migration tool that a column was renamed (instead of drop + add):
 public string NewColumnName { get; set; } = "";
 ```
 
+## `[RawJsonColumn]` / `[JsonColumn]`
+
+Mark a property as a `jsonb` PostgreSQL column. Use `[RawJsonColumn]` for plain string storage, or `[JsonColumn(typeof(TContext))]` for AOT-safe typed serialization backed by a `JsonSerializerContext`.
+
+```csharp
+[RawJsonColumn]
+public string? Metadata { get; set; }
+
+[JsonColumn(typeof(MyDbJsonContext))]
+public UserProfile? Profile { get; set; }
+```
+
+See [JSON Columns](json-columns.md) for setup steps, serialization details, and migration behaviour.
+
 ## `[DatabaseEnum]`
 
 Marks an enum so the generator creates a PostgreSQL `ENUM` type instead of a plain integer column.
@@ -244,3 +258,11 @@ public partial class Post
     public DateTime? DeletedAt { get; set; }
 }
 ```
+
+## See also
+
+- [JSON Columns](json-columns.md) — `[RawJsonColumn]` and `[JsonColumn]`
+- [Validation Attributes](validation-attributes.md) — `[StringLength]`, `[Min]`, `[Max]`, `[Unique]`
+- [Check Constraints](check-constraints.md) — custom `[Check]` expressions
+- [Sequences](sequences.md) — `[AutoIncrement]` and sequence helpers
+- [Flagged Enums](flagged-enums.md) — `[FlaggedEnum]` junction tables

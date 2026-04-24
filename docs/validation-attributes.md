@@ -140,3 +140,9 @@ public string Username { get; set; } = "";
 [Min(0), Max(100)]
 public int Percentage { get; set; }
 ```
+
+## See also
+
+- [Defining Tables](defining-tables.md) — full attribute reference
+- [Check Constraints](check-constraints.md) — arbitrary SQL CHECK expressions
+- [JSON Columns](json-columns.md) — `[RawJsonColumn]` and `[JsonColumn]` for `jsonb` storage

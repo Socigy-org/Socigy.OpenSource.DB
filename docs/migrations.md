@@ -113,6 +113,7 @@ public class BackfillDisplayNames : ILocalMigration
 | FK `OnDelete`/`OnUpdate` change | Detected as a constraint change, regenerates the FK |
 | `[FlaggedEnum]` removed | `DROP TABLE CASCADE` on the junction table |
 | Enum value added/removed | `INSERT` / `DELETE` on the reference table |
+| `[RawJsonColumn]` / `[JsonColumn]` added | Column emitted with type `jsonb`; recorded in `structure.json` with `isJsonColumn: true` |
 
 ## Manual invocation
 
@@ -124,3 +125,9 @@ dotnet run --project Socigy.OpenSource.DB.Tool -- generate \
 ```
 
 Omit `--migrate` to regenerate only the static binding files without producing a new migration.
+
+## See also
+
+- [Defining Tables](defining-tables.md) — all column and table attributes
+- [JSON Columns](json-columns.md) — how `[RawJsonColumn]` and `[JsonColumn]` are recorded in `structure.json`
+- [Getting Started](getting-started.md) — first migration walkthrough
