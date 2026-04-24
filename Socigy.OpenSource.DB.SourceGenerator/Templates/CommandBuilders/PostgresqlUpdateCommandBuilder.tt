@@ -3,6 +3,7 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+#pragma warning disable
 using System;
 using System.Text;
 using System.Data.Common;
@@ -242,6 +243,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                 if (dbValue == null || dbValue == DBNull.Value || IsEnumType(info.Type))
                     p.NpgsqlDbType = GetDbType(info.Type);
+
+                if (info.IsJson)
+                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;
 
                 command.Parameters.Add(p);
                 sb.Append($"\"{dbColumnName}\" = {paramName}");

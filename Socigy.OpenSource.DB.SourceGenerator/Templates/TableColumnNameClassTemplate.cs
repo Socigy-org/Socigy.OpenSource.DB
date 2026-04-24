@@ -28,7 +28,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write("\n\n\n\n\nusing Socigy.OpenSource.DB.Core.Interfaces;\nusing System.Collections.Generic" +
+            this.Write("#pragma warning disable\n\n\n\n\nusing Socigy.OpenSource.DB.Core.Interfaces;\nusing System.Collections.Generic" +
                     ";\nusing Socigy.OpenSource.DB.Core.CommandBuilders;\nusing System;\n\n#nullable enabl" +
                     "e\n\nnamespace ");
 
@@ -120,6 +120,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
 
                 foreach(var col in Columns)
                 {
+                    bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
 
 
             #line default
@@ -135,14 +136,33 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                     "              Type = typeof(");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Type.Replace("?", " ")));
+            this.Write(this.ToStringHelper.ToStringWithCulture(col.IsJsonColumn ? "string " : col.Type.Replace("?", " ")));
 
             #line default
             #line hidden
             this.Write("),\n                        Value = ");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            if (isTypedJson)
+            {
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" == null ? null : global::System.Text.Json.JsonSerializer.Serialize(");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(", ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
+                this.Write(".Default.Options)");
+            }
+            else
+            {
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            }
+
+            #line default
+            #line hidden
+            this.Write(",\n                        IsJson = ");
+
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(col.IsJsonColumn ? "true" : "false"));
 
             #line default
             #line hidden
@@ -167,21 +187,31 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
 
             #line default
             #line hidden
-            this.Write(",\n                        SetValue = v => ");
+            this.Write(",\n                        SetValue = ");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            if (isTypedJson)
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type.TrimEnd('?')));
+                this.Write(">(v?.ToString() ?? \"\", ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
+                this.Write(".Default.Options)");
+            }
+            else
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = ColumnInfo.ApplyDbValue<");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
+                this.Write(">(v)");
+            }
 
             #line default
             #line hidden
-            this.Write(" = ColumnInfo.ApplyDbValue<");
-
-            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
-
-            #line default
-            #line hidden
-            this.Write(">(v)\n                    }\n                },\n");
+            this.Write("\n                    }\n                },\n");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
 
@@ -268,6 +298,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
 
                foreach (var col in Columns)
                {
+                   bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
 
 
             #line default
@@ -290,14 +321,33 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                     "                          Type = typeof(");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Type.Replace("?", " ")));
+            this.Write(this.ToStringHelper.ToStringWithCulture(col.IsJsonColumn ? "string " : col.Type.Replace("?", " ")));
 
             #line default
             #line hidden
             this.Write("),\n                            Value = ");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            if (isTypedJson)
+            {
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" == null ? null : global::System.Text.Json.JsonSerializer.Serialize(");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(", ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
+                this.Write(".Default.Options)");
+            }
+            else
+            {
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            }
+
+            #line default
+            #line hidden
+            this.Write(",\n                            IsJson = ");
+
+            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(col.IsJsonColumn ? "true" : "false"));
 
             #line default
             #line hidden
@@ -322,21 +372,31 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
 
             #line default
             #line hidden
-            this.Write(",\n                            SetValue = v => ");
+            this.Write(",\n                            SetValue = ");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+            if (isTypedJson)
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type.TrimEnd('?')));
+                this.Write(">(v?.ToString() ?? \"\", ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
+                this.Write(".Default.Options)");
+            }
+            else
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = ColumnInfo.ApplyDbValue<");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
+                this.Write(">(v)");
+            }
 
             #line default
             #line hidden
-            this.Write(" = ColumnInfo.ApplyDbValue<");
-
-            #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
-
-            #line default
-            #line hidden
-            this.Write(">(v)\n                        }\n                    );\n");
+            this.Write("\n                        }\n                    );\n");
 
             #line 1 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableColumnNameClassTemplate.tt"
 
@@ -408,6 +468,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         public bool IsAutoIncrement { get; set; }
         public bool HasDbDefault { get; set; }
         public string SequenceName { get; set; }
+        public bool IsJsonColumn { get; set; }
+        public string JsonContextType { get; set; }
     }
 
 

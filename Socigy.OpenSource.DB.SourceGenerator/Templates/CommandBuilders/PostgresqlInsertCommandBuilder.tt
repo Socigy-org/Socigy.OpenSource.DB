@@ -3,6 +3,7 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+#pragma warning disable
 using System;
 using System.Text;
 using System.Data.Common;
@@ -347,6 +348,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 {
                     param.NpgsqlDbType = GetDbType(type);
                 }
+
+                if (info.IsJson)
+                    param.NpgsqlDbType = NpgsqlDbType.Jsonb;
 
                 command.Parameters.Add(param);
             }

@@ -28,7 +28,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write("using Microsoft.Extensions.Configuration;\r\nusing Microsoft.Extensions.DependencyI" +
+            this.Write("#pragma warning disable\r\nusing Microsoft.Extensions.Configuration;\r\nusing Microsoft.Extensions.DependencyI" +
                     "njection;\r\nusing Microsoft.Extensions.Logging;\r\nusing Microsoft.Extensions.Hosti" +
                     "ng;\r\nusing Socigy.OpenSource.DB.Core;\r\nusing System.Data.Common;\r\nusing System.S" +
                     "ecurity;\r\n");

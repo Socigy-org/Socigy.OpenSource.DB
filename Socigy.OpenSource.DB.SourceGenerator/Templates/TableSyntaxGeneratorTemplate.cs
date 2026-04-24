@@ -28,7 +28,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write(@"
+            this.Write(@"#pragma warning disable
 // Auto-generated code. Do not modify manually. Socigy.OpenSource.DB Source Generator
 
 using System;
@@ -140,82 +140,121 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line 68 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
 
-            foreach(var column in Columns) 
+            foreach(var column in Columns)
             {
-                if (string.IsNullOrEmpty(column.Converter))
+                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
                 {
 
 
-            
+            #line default
+            #line hidden
+            this.Write("          { var __json = ReadValue<string?>(reader, ");
+
+            #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
+
+            #line default
+            #line hidden
+            this.Write("ColumnName, columnOverrides); ");
+
+            #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
+
+            #line default
+            #line hidden
+            this.Write(" = __json == null ? null : global::System.Text.Json.JsonSerializer.Deserialize<");
+
+            #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.TypeName.TrimEnd('?')));
+
+            #line default
+            #line hidden
+            this.Write(">(__json, ");
+
+            #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(column.JsonContextType));
+
+            #line default
+            #line hidden
+            this.Write(".Default.Options); }\r\n");
+
+            #line 75 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
+
+                }
+                else if (string.IsNullOrEmpty(column.Converter))
+                {
+
+
+
             #line default
             #line hidden
             this.Write("          ");
-            
+
             #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
-            
+
             #line default
             #line hidden
             this.Write(" = ReadValue<");
-            
+
             #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.TypeName));
-            
+
             #line default
             #line hidden
             this.Write(">(reader, ");
-            
+
             #line 74 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
-            
+
             #line default
             #line hidden
             this.Write("ColumnName, columnOverrides);\r\n");
-            
+
             #line 75 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
 
                 }
                 else
                 {
 
-            
+
             #line default
             #line hidden
             this.Write("          ");
-            
+
             #line 79 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
-            
+
             #line default
             #line hidden
             this.Write(" = ReadValueConvertor<");
-            
+
             #line 79 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.TypeName));
-            
+
             #line default
             #line hidden
             this.Write(",");
-            
+
             #line 79 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.Converter));
-            
+
             #line default
             #line hidden
             this.Write(">(reader, ");
-            
+
             #line 79 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(column.SourceName));
-            
+
             #line default
             #line hidden
             this.Write("ColumnName, columnOverrides);\r\n");
-            
+
             #line 80 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
 
                 }
             }
-        
+
             
             #line default
             #line hidden
@@ -1131,7 +1170,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType)> Columns { get; set; } = [];
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 

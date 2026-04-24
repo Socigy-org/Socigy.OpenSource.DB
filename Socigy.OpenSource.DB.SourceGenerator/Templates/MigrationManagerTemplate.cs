@@ -28,7 +28,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write("using Microsoft.Extensions.DependencyInjection;\r\nusing Microsoft.Extensions.Loggi" +
+            this.Write("#pragma warning disable\r\nusing Microsoft.Extensions.DependencyInjection;\r\nusing Microsoft.Extensions.Loggi" +
                     "ng;\r\nusing Socigy.OpenSource.DB.Core.Migrations;\r\nusing Socigy.OpenSource.DB.Cor" +
                     "e;\r\nusing Socigy.OpenSource.DB.Migrations;\r\n\r\n#nullable enable\r\n\r\nnamespace ");
             
@@ -99,7 +99,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 }
             }
 
-            // IMigrationManager.LocalMigrations — materialises on demand (rarely called).
+            // IMigrationManager.LocalMigrations ï¿½ materialises on demand (rarely called).
             public Dictionary<string, ILocalMigration> LocalMigrations =>
                 _idToIndex.ToDictionary(kvp => kvp.Key, kvp => _factoriesOrderedDesc[kvp.Value]());
 
@@ -183,7 +183,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                             ExecutedBy = $""{Environment.UserName} - {Environment.MachineName}"",
                             IsRollback = false
                         }, connection);
-                        // migToApply goes out of scope here — SQL strings are GC-eligible
+                        // migToApply goes out of scope here ï¿½ SQL strings are GC-eligible
                     }
                 }
                 else

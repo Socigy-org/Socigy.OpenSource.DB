@@ -21,6 +21,13 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         public bool HasDbDefault { get; set; }
 
         /// <summary>
+        /// True when this column is backed by a <c>jsonb</c> DB type.
+        /// The insert/update builders will use <c>NpgsqlDbType.Jsonb</c> for this parameter.
+        /// The value stored here is already serialized to a JSON string (or is the raw string for <c>[RawJsonColumn]</c>).
+        /// </summary>
+        public bool IsJson { get; set; }
+
+        /// <summary>
         /// Optional callback that writes a value read back from the database into the row instance.
         /// Used by <c>WithValuePropagation()</c> to fill auto-generated column values after INSERT.
         /// </summary>

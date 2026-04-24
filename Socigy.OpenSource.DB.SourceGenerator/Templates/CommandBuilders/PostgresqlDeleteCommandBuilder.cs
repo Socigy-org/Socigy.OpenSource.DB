@@ -28,7 +28,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write(@"using System;
+            this.Write(@"#pragma warning disable
+using System;
 using System.Text;
 using System.Data.Common;
 using System.Threading.Tasks;

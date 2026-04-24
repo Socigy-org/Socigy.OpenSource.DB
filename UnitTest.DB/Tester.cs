@@ -1,5 +1,7 @@
 using Socigy.OpenSource.DB.Attributes;
 using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace UnitTest.DB;
 
@@ -51,6 +53,43 @@ public partial class TestCounter
     public int Seq { get; set; }
 
     public string Label { get; set; } = "";
+}
+
+// ---------------------------------------------------------------------------
+// JSON column test models
+// ---------------------------------------------------------------------------
+
+/// <summary>POCO stored as a typed <c>jsonb</c> column via <c>[JsonColumn]</c>.</summary>
+public class TestJsonPayload
+{
+    public string Title { get; set; } = "";
+    public int Score { get; set; }
+    public List<string> Tags { get; set; } = [];
+}
+
+/// <summary>AOT-safe <see cref="JsonSerializerContext"/> for <see cref="TestJsonPayload"/>.</summary>
+[JsonSerializable(typeof(TestJsonPayload))]
+public partial class TestJsonContext : JsonSerializerContext { }
+
+/// <summary>
+/// Table with one raw-JSON column (<c>[RawJsonColumn]</c>) and one typed-JSON
+/// column (<c>[JsonColumn]</c>) — exercises jsonb insert, query, and update.
+/// </summary>
+[Table("test_json_items")]
+public partial class TestJsonItem
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    /// <summary>Stored verbatim as <c>jsonb</c>; any valid JSON string is accepted.</summary>
+    [RawJsonColumn]
+    public string? RawData { get; set; }
+
+    /// <summary>Serialized/deserialized via <see cref="TestJsonContext"/> (AOT-safe).</summary>
+    [JsonColumn(typeof(TestJsonContext))]
+    public TestJsonPayload? Payload { get; set; }
 }
 
 /// <summary>

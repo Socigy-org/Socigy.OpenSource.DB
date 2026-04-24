@@ -3,6 +3,7 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+#pragma warning disable
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Socigy.OpenSource.DB.Core.Migrations;

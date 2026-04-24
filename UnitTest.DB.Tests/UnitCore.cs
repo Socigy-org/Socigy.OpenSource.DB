@@ -91,6 +91,17 @@ public static class UnitCore
         );
 
         -- ---------------------------------------------------------------
+        -- test_json_items  (raw JSON + typed JSON columns)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_json_items"" (
+            ""id""       UUID  NOT NULL DEFAULT gen_random_uuid(),
+            ""name""     TEXT  NOT NULL DEFAULT '',
+            ""raw_data"" JSONB,
+            ""payload""  JSONB,
+            PRIMARY KEY (""id"")
+        );
+
+        -- ---------------------------------------------------------------
         -- test_roles  (enum reference table for FlaggedEnum)
         -- ---------------------------------------------------------------
         CREATE TABLE IF NOT EXISTS ""test_roles"" (

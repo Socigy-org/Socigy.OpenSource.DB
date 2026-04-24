@@ -234,6 +234,8 @@ namespace Socigy.OpenSource.DB.Tool
         private static readonly string FlaggedEnumTableAttributeFullName = typeof(FlaggedEnumTableAttribute).FullName!;
         private static readonly string FlagsAttributeFullName = typeof(FlagsAttribute).FullName!;
         private static readonly string DescriptionAttributeFullName = typeof(DescriptionAttribute).FullName!;
+        private static readonly string RawJsonColumnAttributeFullName = typeof(RawJsonColumnAttribute).FullName!;
+        private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
 
         private static DbTable? ProcessEnumTable(Type enumTableType)
         {
@@ -719,6 +721,23 @@ namespace Socigy.OpenSource.DB.Tool
                             Columns = [property.Name]
                         });
                     }
+                }
+                // [RawJsonColumn] — store as jsonb, raw string value
+                else if (attribute.AttributeType.FullName == RawJsonColumnAttributeFullName)
+                {
+                    column.IsJsonColumn = true;
+                    column.DatabaseType = "jsonb";
+                }
+                // [JsonColumn(typeof(Ctx))] — store as jsonb, typed serialization
+                else if (attribute.AttributeType.FullName == JsonColumnAttributeFullName)
+                {
+                    column.IsJsonColumn = true;
+                    column.DatabaseType = "jsonb";
+                    var ctxTypeArg = attribute.ConstructorArguments.FirstOrDefault().Value;
+                    if (ctxTypeArg is Type ctxType)
+                        column.JsonContextType = ctxType.FullName;
+                    else if (ctxTypeArg is string ctxStr)
+                        column.JsonContextType = ctxStr;
                 }
                 // Comparison constraints
                 else if (attribute.AttributeType.FullName == MinAttributeFullName)

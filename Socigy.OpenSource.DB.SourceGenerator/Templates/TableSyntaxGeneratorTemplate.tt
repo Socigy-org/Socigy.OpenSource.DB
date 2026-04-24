@@ -4,6 +4,7 @@
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
 
+#pragma warning disable
 // Auto-generated code. Do not modify manually. Socigy.OpenSource.DB Source Generator
 
 using System;
@@ -72,7 +73,12 @@ namespace <#= Namespace #>
         <#
             foreach(var column in Columns)
             {
-                if (string.IsNullOrEmpty(column.Converter))
+                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                {
+#>          { var __json = ReadValue<string?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); <#= column.SourceName #> = __json == null ? null : global::System.Text.Json.JsonSerializer.Deserialize<<#= column.TypeName.TrimEnd('?') #>>(__json, <#= column.JsonContextType #>.Default.Options); }
+<#
+                }
+                else if (string.IsNullOrEmpty(column.Converter))
                 {
 #>          <#= column.SourceName #> = ReadValue<<#= column.TypeName #>>(reader, <#= column.SourceName #>ColumnName, columnOverrides);
 <#
@@ -545,7 +551,7 @@ namespace <#= Namespace #>
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType)> Columns { get; set; } = [];
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 

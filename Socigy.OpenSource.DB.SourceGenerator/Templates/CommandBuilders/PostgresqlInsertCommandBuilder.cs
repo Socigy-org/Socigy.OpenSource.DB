@@ -28,7 +28,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders
         /// </summary>
         public virtual string TransformText()
         {
-            this.Write("\n");
+            this.Write("#pragma warning disable\n");
             this.Write("\n");
             this.Write("\n");
             this.Write("\n");
@@ -186,7 +186,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders
                     "e);\n\n                var param = new NpgsqlParameter(paramName, value ?? DBNull.V" +
                     "alue);\n\n                if (value == null || value == DBNull.Value || actualType." +
                     "IsEnum)\n                {\n                    param.NpgsqlDbType = GetDbType(type)" +
-                    ";\n                }\n\n                command.Parameters.Add(param);\n            }" +
+                    ";\n                }\n\n                if (info.IsJson)\n                    param.Np" +
+                    "gsqlDbType = NpgsqlDbType.Jsonb;\n\n                command.Parameters.Add(param);\n" +
+                    "            }" +
                     "\n        }\n\n        public NpgsqlDbType GetDbType(Type type)\n        {\n          " +
                     "  type = Nullable.GetUnderlyingType(type) ?? type;\n\n            if (type.IsEnum)\n" +
                     "                type = Enum.GetUnderlyingType(type);\n\n            return type swit" +

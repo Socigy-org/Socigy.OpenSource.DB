@@ -22,6 +22,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         private static readonly string FlaggedEnumAttributeFullName = typeof(FlaggedEnumAttribute).FullName!;
         private static readonly string FlaggedEnumTableAttributeFullName = typeof(FlaggedEnumTableAttribute).FullName!;
         private static readonly string IgnoreAttributeFullName = typeof(IgnoreAttribute).FullName!;
+        private static readonly string RawJsonColumnAttributeFullName = typeof(RawJsonColumnAttribute).FullName!;
+        private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
 
         private static readonly DiagnosticDescriptor AutoIncrementTypeError = new(
             id: "SCGDB001",
@@ -179,6 +181,22 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                                 ? customSeqName
                                 : $"{tableName}_{columnInfo.DatabaseName}_seq";
                         }
+
+                        // [RawJsonColumn]
+                        if (attrs.Any(x => x.AttributeClass?.ToDisplayString() == RawJsonColumnAttributeFullName))
+                        {
+                            columnInfo.IsJsonColumn = true;
+                        }
+                        // [JsonColumn(typeof(Ctx))]
+                        var jsonColAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == JsonColumnAttributeFullName);
+                        if (jsonColAttr != null)
+                        {
+                            columnInfo.IsJsonColumn = true;
+                            columnInfo.JsonContextType = jsonColAttr.ConstructorArguments.Length > 0
+                                ? (jsonColAttr.ConstructorArguments[0].Value as INamedTypeSymbol)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                                  ?? jsonColAttr.ConstructorArguments[0].Value?.ToString()
+                                : null;
+                        }
                     }
 
                     tableColNameClassTemplate.Columns.Add(columnInfo);
@@ -193,7 +211,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                             .Value
                             .Value?.ToString() : null,
                         IsAutoIncrement: columnInfo.IsAutoIncrement,
-                        SequenceName: columnInfo.SequenceName
+                        SequenceName: columnInfo.SequenceName,
+                        IsJsonColumn: columnInfo.IsJsonColumn,
+                        JsonContextType: columnInfo.JsonContextType
                     ));
                 }
 

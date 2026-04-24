@@ -29,5 +29,10 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
         public int? MaxLength { get; set; }
         /// <summary>Minimum string length from <c>[StringLength]</c>; emits a CHECK constraint.</summary>
         public int? MinLength { get; set; }
+
+        /// <summary>True when the column is mapped to a <c>jsonb</c> DB type via <c>[RawJsonColumn]</c> or <c>[JsonColumn]</c>.</summary>
+        public bool? IsJsonColumn { get; set; }
+        /// <summary>Full type name of the <c>JsonSerializerContext</c> subclass; null for raw JSON string columns.</summary>
+        public string JsonContextType { get; set; }
     }
 }
