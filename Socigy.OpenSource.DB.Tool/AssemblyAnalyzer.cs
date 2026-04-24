@@ -25,6 +25,10 @@ namespace Socigy.OpenSource.DB.Tool
         private static AssemblyLoadContext? _checkContext;
         private static Assembly? _checkAssembly;
 
+        // FK constraints whose TargetColumns could not be resolved yet (target table not processed yet).
+        // Resolved in a second pass after all tables are processed.
+        private static readonly List<(DbConstraint Foreign, string Location)> _pendingForeignKeys = [];
+
         /// <summary>
         /// Attempts to invoke <c>IDbCheckExpression.Build(columnName)</c> on a type loaded
         /// from the user's assembly using reflection (no cast — avoids type-identity issues).
@@ -141,6 +145,34 @@ namespace Socigy.OpenSource.DB.Tool
                     Logger.Error($"Unexpected error: {ex}");
                 }
             }
+
+            // Second pass: resolve FK TargetColumns that were deferred because the target table
+            // had not been processed yet when the referencing table was analyzed.
+            foreach (var (foreign, location) in _pendingForeignKeys)
+            {
+                var targetTable = GeneratedSchema.Tables.FirstOrDefault(x => x.SourceName == foreign.TargetTable);
+                if (targetTable == null)
+                {
+                    Logger.Error($"Please specify the target table column using 'nameof()' in [ForeignKey] attribute on {location} property");
+                    Environment.Exit(-1);
+                }
+
+                var primaryKeys = targetTable.Columns.Where(x => x.IsPrimaryKey == true).ToList();
+                if (primaryKeys.Count > 1)
+                {
+                    Logger.Error($"The target table has more than 1 primary key and thus we cannot find the target key matching only 1 primary key... At [ForeignKey] attribute on {location} property");
+                    Environment.Exit(-1);
+                }
+
+                foreign.TargetColumns = [primaryKeys.First().SourceName.Split('.').Last()];
+
+                if (foreign.TargetColumns.Count() != foreign.Columns.Count())
+                {
+                    Logger.Error($"'Keys x TargetKeys' count does not match in [ForeignKey] attribute on {location} property");
+                    Environment.Exit(-1);
+                }
+            }
+            _pendingForeignKeys.Clear();
 
             _checkAssembly = null;
             _checkContext?.Unload();
@@ -772,8 +804,8 @@ namespace Socigy.OpenSource.DB.Tool
                         var targetTable = GeneratedSchema.Tables.FirstOrDefault(x => x.SourceName == foreign.TargetTable);
                         if (targetTable == null)
                         {
-                            Logger.Error($"Please specify the target table column using 'nameof()' in [ForeignKey] attribute on {property.DeclaringType!.FullName}.{property.Name} property");
-                            Environment.Exit(-1);
+                            // Target table not yet processed — defer resolution to a second pass.
+                            _pendingForeignKeys.Add((foreign, $"{property.DeclaringType!.FullName}.{property.Name}"));
                         }
                         else
                         {
@@ -788,7 +820,7 @@ namespace Socigy.OpenSource.DB.Tool
                         }
                     }
 
-                    if (foreign.TargetColumns.Count() != foreign.Columns.Count())
+                    if (foreign.TargetColumns != null && foreign.TargetColumns.Count() != foreign.Columns.Count())
                     {
                         Logger.Error($"'Keys x TargetKeys' count does not match in [ForeignKey] attribute on {property.DeclaringType!.FullName}.{property.Name} property");
                         Environment.Exit(-1);

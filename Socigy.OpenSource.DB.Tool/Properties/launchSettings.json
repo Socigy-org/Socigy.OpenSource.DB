@@ -2,7 +2,7 @@
   "profiles": {
     "Run Generation": {
       "commandName": "Project",
-      "commandLineArgs": "generate --target-assembly \"D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Example.Auth.DB\\bin\\Debug\\net10.0\\Example.Auth.DB.dll\" --project-dir \"D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Example.Auth.DB\\"
+      "commandLineArgs": "generate --target-assembly \"D:\\Personal\\mednote-mvp\\server\\MedNote.DB\\bin\\Debug\\net10.0\\MedNote.DB.dll\" --project-dir \"D:\\Personal\\mednote-mvp\\server\\MedNote.DB\""
     },
     "Run Migration": {
       "commandName": "Project",
