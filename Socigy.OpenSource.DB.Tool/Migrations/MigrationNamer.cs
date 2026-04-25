@@ -98,7 +98,7 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
         /// Creates a deterministic string representation of the schema changes.
         /// The order of operations is crucial for a consistent hash.
         /// </summary>
-        private static string GenerateCanonicalString(SchemaDiff diff)
+        public static string GenerateCanonicalString(SchemaDiff diff)
         {
             var sb = new StringBuilder();
 

@@ -49,7 +49,7 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
             migrationName = Configuration.Settings.Database.MigrationNameTemplate.Replace("${Name}", migrationName).Replace("${Timestamp}", MigrationNamer.GetMigrationId());
 #else
 
-            string migrationName = MigrationNamer.GenerateUniqueName(diff);
+            string migrationName = MigrationNamer.GenerateCanonicalString(diff);
 #endif
 
             var formattedMigrationName = migrationName.Replace(" ", "_");
