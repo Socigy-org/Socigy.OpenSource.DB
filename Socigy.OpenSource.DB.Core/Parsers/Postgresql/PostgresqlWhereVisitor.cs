@@ -183,6 +183,35 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             if (IsDependentOnParam(node) && node.Method.DeclaringType == typeof(string))
                 return HandleStringMethods(node);
 
+            // IEnumerable.Contains(x.Property) => column = ANY(@pN)
+            if (node.Method.Name == "Contains" && node.Method.DeclaringType != typeof(string))
+            {
+                Expression? collectionExpr = null;
+                Expression? itemExpr = null;
+
+                if (node.Object != null && node.Arguments.Count == 1)
+                {
+                    collectionExpr = node.Object;
+                    itemExpr = node.Arguments[0];
+                }
+                else if (node.Object == null && node.Arguments.Count == 2)
+                {
+                    collectionExpr = node.Arguments[0];
+                    itemExpr = node.Arguments[1];
+                }
+
+                if (collectionExpr != null && itemExpr != null
+                    && IsDependentOnParam(itemExpr) && !IsDependentOnParam(collectionExpr)
+                    && TryEvaluate(collectionExpr, out var collection))
+                {
+                    Visit(itemExpr);
+                    _Sql.Append(" = ANY(");
+                    AddParameter(ToTypedArray(collection));
+                    _Sql.Append(")");
+                    return node;
+                }
+            }
+
             // Partial evaluation
             if (TryEvaluate(node, out var value))
             {
@@ -196,6 +225,33 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         // -------------------------------------------------------------------------
         // Helpers
         // -------------------------------------------------------------------------
+        private static object? ToTypedArray(object? value)
+        {
+            if (value == null || value is Array) return value;
+
+            var type = value.GetType();
+            Type? elementType = null;
+            foreach (var iface in type.GetInterfaces())
+            {
+                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                {
+                    elementType = iface.GetGenericArguments()[0];
+                    break;
+                }
+            }
+
+            if (elementType == null || value is not System.Collections.IEnumerable enumerable)
+                return value;
+
+            var items = new System.Collections.ArrayList();
+            foreach (var item in enumerable)
+                items.Add(item);
+
+            var array = Array.CreateInstance(elementType, items.Count);
+            items.CopyTo(array);
+            return array;
+        }
+
         private bool IsSqlMarker(MethodCallExpression node)
         {
             var type = node.Method.DeclaringType;

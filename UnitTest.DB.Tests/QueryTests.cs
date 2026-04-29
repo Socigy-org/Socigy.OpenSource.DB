@@ -170,6 +170,55 @@ public class QueryTests : BaseUnitTest
     }
 
     // ------------------------------------------------------------------
+    // Collection contains (IN / ANY)
+    // ------------------------------------------------------------------
+
+    [Test]
+    public async Task Query_CollectionContains_ReturnsMatchingRows()
+    {
+        var ids = new List<Guid> { IdA, IdC };
+
+        var rows = await TestItem.Query(x => ids.Contains(x.Id))
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(2));
+        Assert.That(rows.Select(r => r.Id), Does.Contain(IdA));
+        Assert.That(rows.Select(r => r.Id), Does.Contain(IdC));
+        Assert.That(rows.Select(r => r.Id), Does.Not.Contain(IdB));
+    }
+
+    [Test]
+    public async Task Query_HashSetContains_ReturnsMatchingRows()
+    {
+        var ids = new HashSet<Guid> { IdA, IdC };
+
+        var rows = await TestItem.Query(x => ids.Contains(x.Id))
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(2));
+        Assert.That(rows.Select(r => r.Id), Does.Contain(IdA));
+        Assert.That(rows.Select(r => r.Id), Does.Contain(IdC));
+        Assert.That(rows.Select(r => r.Id), Does.Not.Contain(IdB));
+    }
+
+    [Test]
+    public async Task Query_CollectionContains_EmptyCollection_ReturnsNoRows()
+    {
+        var ids = new List<Guid>();
+
+        var rows = await TestItem.Query(x => ids.Contains(x.Id))
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Is.Empty);
+    }
+
+    // ------------------------------------------------------------------
     // Limit / Offset / OrderBy
     // ------------------------------------------------------------------
 
