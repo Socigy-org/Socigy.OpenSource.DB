@@ -98,7 +98,7 @@ jobs:
 
       - name: Pack
         if: steps.version_check.outputs.should_publish == 'true'
-        run: dotnet pack Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj -c Release --no-build /p:EnableWindowsTargeting=true
+        run: dotnet pack Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj -c Release --no-build -o ./nupkgs /p:EnableWindowsTargeting=true
 
       - name: Publish to NuGet
         if: steps.version_check.outputs.should_publish == 'true'
