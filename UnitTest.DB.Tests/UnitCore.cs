@@ -120,7 +120,7 @@ public static class UnitCore
             PRIMARY KEY (""id"")
         );
         INSERT INTO ""test_roles"" (""id"", ""name"") VALUES
-            (1, 'Reader'), (2, 'Writer'), (3, 'Moderator'), (4, 'Admin')
+            (1, 'Reader'), (2, 'Writer'), (4, 'Moderator'), (8, 'Admin')
         ON CONFLICT (""id"") DO UPDATE SET ""name"" = EXCLUDED.""name"";
 
         -- ---------------------------------------------------------------

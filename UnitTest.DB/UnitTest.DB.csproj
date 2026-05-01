@@ -6,6 +6,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
 	</PropertyGroup>
 
 	<!-- Wire socigy.json so the source generator knows the DB platform -->
@@ -21,7 +22,8 @@
 		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
 
 		<!-- Source generator — applied as an Analyzer, not linked into the output -->
-		<ProjectReference Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
+		<ProjectReference
+			Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
 			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
 			<OutputItemType>Analyzer</OutputItemType>
 		</ProjectReference>

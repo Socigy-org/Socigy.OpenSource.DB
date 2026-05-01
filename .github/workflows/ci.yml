@@ -56,8 +56,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -70,16 +68,17 @@ jobs:
           CURRENT=$(grep -oP '(?<=<PackageVersion>)[^<]+' Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj)
           echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
 
-          PREV=$(git show HEAD~1:Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj 2>/dev/null \
-            | grep -oP '(?<=<PackageVersion>)[^<]+' || echo "")
-
-          if [ "$CURRENT" != "$PREV" ]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            echo "Version changed: $PREV -> $CURRENT"
-          else
+          # Check if this version already exists on nuget.org
+          PUBLISHED=$(curl -sf "https://api.nuget.org/v3-flatcontainer/socigy.opensource.db/index.json" \
+            | grep -o "\"$CURRENT\"" || echo "")
+          if [ -n "$PUBLISHED" ]; then
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "Version unchanged ($CURRENT), skipping publish"
+            echo "Version $CURRENT already published on nuget.org, skipping"
+            exit 0
           fi
+
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          echo "Version $CURRENT not found on nuget.org — will publish"
 
       - name: Pack
         if: steps.version_check.outputs.should_publish == 'true'
@@ -91,4 +90,17 @@ jobs:
           dotnet nuget push ./nupkgs/*.nupkg \
             --api-key ${{ secrets.NUGET_API_KEY }} \
             --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Publish to GitHub Packages
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: |
+          dotnet nuget add source \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text \
+            --name github \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          dotnet nuget push ./nupkgs/*.nupkg \
+            --source github \
             --skip-duplicate
