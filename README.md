@@ -13,6 +13,9 @@ A Roslyn source-generator–powered ORM for PostgreSQL. Define your tables with 
 - **Validation attributes** — `[Min]`, `[Max]`, `[Bigger]`, `[Lower]`, `[StringLength]`, `[Unique]`, and more
 - **Cross-platform constants** — `DbDefaults` and `DbValues` sentinel constants translate to correct SQL per engine
 - **Migration tool** — CLI that diffs your schema and generates versioned migration files
+- **Value Convertors** — transform C# values on the way in and out of the database with `[ValueConvertor(typeof(T))]`
+- **Procedure Mapping** — write raw SQL in `.sql` files and get type-safe C# call wrappers generated automatically
+- **Joins & Set Operations** — fluent `Join<T>()`, `LeftJoin<T>()`, `Union()`, `Intersect()`, `Except()`, and more
 
 ## Installation
 
@@ -44,6 +47,9 @@ The package includes both the runtime Core library and the Roslyn source generat
 | [Validation Attributes](docs/validation-attributes.md) | Min/Max/Bigger/Lower/StringLength/Unique/Nullable/Equal |
 | [DbDefaults & DbValues](docs/db-constants.md) | Cross-platform sentinel constants for defaults and FK actions |
 | [Migrations](docs/migrations.md) | CLI tool, `socigy.json`, migration workflow, `ILocalMigration` |
+| [Value Convertors](docs/value-convertors.md) | Custom read/write transforms with `[ValueConvertor]` |
+| [Procedure Mapping](docs/procedure-mapping.md) | Type-safe wrappers generated from `.sql` files |
+| [Joins and Set Operations](docs/joins-and-set-operations.md) | Multi-table joins and UNION / INTERSECT / EXCEPT |
 
 ## Quick Example
 

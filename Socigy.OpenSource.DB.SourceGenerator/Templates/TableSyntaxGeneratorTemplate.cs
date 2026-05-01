@@ -113,6 +113,17 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             return convertor.ConvertFromDbValue(reader.GetValue(index));
         }
 
+        public T? ReadValueConvertor<T, TConvertor>(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides = null)
+            where TConvertor : IDbValueConvertor<T>, new()
+        {
+            int index = GetColumnDbIndex(reader, columnName, columnOverrides);
+            if (index < 0 || reader.IsDBNull(index))
+                return default;
+
+            var convertor = new TConvertor();
+            return convertor.ConvertFromDbValue(reader.GetValue(index));
+        }
+
         public int GetColumnDbIndex(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides = null)
         {
             if (columnOverrides != null && columnOverrides.ContainsKey(columnName))
@@ -834,7 +845,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                 }
             }
             this.Write("\r\n        public class TableQueryBuilder : SqlCommandBuilder" +
-                    "<TableQueryBuilder>\r\n        {\r\n            private Expression<Func<");
+                    "<TableQueryBuilder>, global::Socigy.OpenSource.DB.Core.Interfaces.ICompiledQuery\r\n        {\r\n            private Expression<Func<");
             
             #line 129 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
@@ -1149,7 +1160,243 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line default
             #line hidden
-            this.Write(".ConvertFrom(reader);\r\n                }\r\n            }\r\n        }\r\n        ");
+            this.Write(".ConvertFrom(reader);\r\n                }\r\n            }\r\n\r\n            /// <summary>Builds this query's SQL and appends its parameters to <paramref name=\"command\"/> without executing.</summary>\r\n            public string Compile(DbCommand command)\r\n            {\r\n                var parser = new SqlQueryBuilderExpressionParser<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(command, ");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(".GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);\r\n                parser.Process(");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@".TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
+                if (_Limit > 0) parser.AddLimit(_Limit);
+                if (_Offset > 0) parser.AddOffset(_Offset);
+                return parser.ToString();
+            }
+
+            // -- Set-operation factory methods
+            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@"> Union(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(this, rhs, \"UNION\");\r\n            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write("> UnionAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(this, rhs, \"UNION ALL\");\r\n            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write("> Intersect(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(this, rhs, \"INTERSECT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write("> IntersectAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(this, rhs, \"INTERSECT ALL\");\r\n            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write("> Except(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(">(this, rhs, \"EXCEPT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write("> ExceptAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@">(this, rhs, ""EXCEPT ALL"");
+
+            // -- Join factory methods
+            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin> Join<TJoin>(
+                Expression<Func<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);
+            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin> LeftJoin<TJoin>(
+                Expression<Func<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);
+            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin> RightJoin<TJoin>(
+                Expression<Func<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);
+            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin> FullOuterJoin<TJoin>(
+                Expression<Func<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(@", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);
+            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin> NaturalJoin<TJoin>()\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);\r\n            public PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin> CrossJoin<TJoin>()\r\n                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQueryCommandBuilder<");
+
+            #line 356 "D:\\Socigy\\OpenSource\\Socigy.OpenSource.DB\\Socigy.OpenSource.DB.SourceGenerator\\Templates\\TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture(ClassName));
+
+            #line default
+            #line hidden
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);\r\n        }\r\n        ");
             
             #line 360 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture(CustomPostClass));

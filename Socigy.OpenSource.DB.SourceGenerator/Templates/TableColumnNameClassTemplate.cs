@@ -121,6 +121,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 foreach(var col in Columns)
                 {
                     bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+                    bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
 
 
             #line default
@@ -151,6 +152,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 this.Write(", ");
                 this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
                 this.Write(".Default.Options)");
+            }
+            else if (hasConvertor)
+            {
+                this.Write("new ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Converter));
+                this.Write("().ConvertToDbValue(");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(")");
             }
             else
             {
@@ -199,6 +208,16 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 this.Write(">(v?.ToString() ?? \"\", ");
                 this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
                 this.Write(".Default.Options)");
+            }
+            else if (hasConvertor)
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = (");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
+                this.Write(")(new ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Converter));
+                this.Write("().ConvertFromDbValue(v))");
             }
             else
             {
@@ -299,6 +318,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                foreach (var col in Columns)
                {
                    bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+                   bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
 
 
             #line default
@@ -336,6 +356,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 this.Write(", ");
                 this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
                 this.Write(".Default.Options)");
+            }
+            else if (hasConvertor)
+            {
+                this.Write("new ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Converter));
+                this.Write("().ConvertToDbValue(");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(")");
             }
             else
             {
@@ -384,6 +412,16 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
                 this.Write(">(v?.ToString() ?? \"\", ");
                 this.Write(this.ToStringHelper.ToStringWithCulture(col.JsonContextType));
                 this.Write(".Default.Options)");
+            }
+            else if (hasConvertor)
+            {
+                this.Write("v => ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Name));
+                this.Write(" = (");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Type));
+                this.Write(")(new ");
+                this.Write(this.ToStringHelper.ToStringWithCulture(col.Converter));
+                this.Write("().ConvertFromDbValue(v))");
             }
             else
             {
@@ -470,6 +508,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates
         public string SequenceName { get; set; }
         public bool IsJsonColumn { get; set; }
         public string JsonContextType { get; set; }
+        public string Converter { get; set; }
     }
 
 

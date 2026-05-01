@@ -1,4 +1,5 @@
 using Socigy.OpenSource.DB.Attributes;
+using Socigy.OpenSource.DB.Core.Convertors;
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
@@ -90,6 +91,34 @@ public partial class TestJsonItem
     /// <summary>Serialized/deserialized via <see cref="TestJsonContext"/> (AOT-safe).</summary>
     [JsonColumn(typeof(TestJsonContext))]
     public TestJsonPayload? Payload { get; set; }
+}
+
+// ---------------------------------------------------------------------------
+// Value convertor test models
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Converts a <c>string</c> to upper-case before writing to the DB and returns
+/// it as-is when reading back.
+/// </summary>
+public class UpperCaseStringConvertor : IDbValueConvertor<string>
+{
+    public object? ConvertToDbValue(string? value) => value?.ToUpperInvariant();
+    public string? ConvertFromDbValue(object? dbValue) => dbValue?.ToString();
+}
+
+/// <summary>Table that exercises <c>[ValueConvertor]</c> on a <c>string</c> column.</summary>
+[Table("test_convertor_items")]
+public partial class TestConvertorItem
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    /// <summary>Stored as upper-case in the DB via <see cref="UpperCaseStringConvertor"/>.</summary>
+    [ValueConvertor(typeof(UpperCaseStringConvertor))]
+    public string Label { get; set; } = "";
+
+    public int Value { get; set; }
 }
 
 /// <summary>

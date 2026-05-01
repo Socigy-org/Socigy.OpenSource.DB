@@ -61,17 +61,18 @@ namespace <#= Namespace #>
                 foreach(var col in Columns)
                 {
                     bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+                    bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
 #>              {
                     <#= col.Name #>ColumnName,
                     new ColumnInfo()
                     {
                         Type = typeof(<#= col.IsJsonColumn ? "string " : col.Type.Replace("?", " ") #>),
-                        Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : col.Name #>,
+                        Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")" : col.Name #>,
                         IsJson = <#= col.IsJsonColumn ? "true" : "false" #>,
                         IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
                         IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
                         HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
-                        SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
+                        SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
                     }
                 },
 <#
@@ -113,6 +114,7 @@ namespace <#= Namespace #>
                foreach (var col in Columns)
                {
                    bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+                   bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
 #>
                 case <#= col.Name #>ColumnName:
                     return (
@@ -120,12 +122,12 @@ namespace <#= Namespace #>
                         new ColumnInfo()
                         {
                             Type = typeof(<#= col.IsJsonColumn ? "string " : col.Type.Replace("?", " ") #>),
-                            Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : col.Name #>,
+                            Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")" : col.Name #>,
                             IsJson = <#= col.IsJsonColumn ? "true" : "false" #>,
                             IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
                             IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
                             HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
-                            SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
+                            SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
                         }
                     );
 <#
@@ -169,5 +171,6 @@ namespace <#= Namespace #>
         public string SequenceName { get; set; }
         public bool IsJsonColumn { get; set; }
         public string JsonContextType { get; set; }
+        public string Converter { get; set; }
     }
 #>

@@ -24,6 +24,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         private static readonly string IgnoreAttributeFullName = typeof(IgnoreAttribute).FullName!;
         private static readonly string RawJsonColumnAttributeFullName = typeof(RawJsonColumnAttribute).FullName!;
         private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
+        private static readonly string ValueConvertorAttributeFullName = typeof(ValueConvertorAttribute).FullName!;
 
         private static readonly DiagnosticDescriptor AutoIncrementTypeError = new(
             id: "SCGDB001",
@@ -197,6 +198,27 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                                   ?? jsonColAttr.ConstructorArguments[0].Value?.ToString()
                                 : null;
                         }
+
+                        // [ValueConvertor(typeof(TConvertor))] standalone attribute
+                        var vcAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == ValueConvertorAttributeFullName);
+                        if (vcAttr != null && vcAttr.ConstructorArguments.Length > 0)
+                        {
+                            columnInfo.Converter = (vcAttr.ConstructorArguments[0].Value as INamedTypeSymbol)
+                                ?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                                ?? vcAttr.ConstructorArguments[0].Value?.ToString();
+                        }
+                        // Fallback: [Column(ValueConvertor = typeof(TConvertor))]
+                        if (columnInfo.Converter == null && columnAttribute != null)
+                        {
+                            var vcNamedArg = columnAttribute.NamedArguments
+                                .FirstOrDefault(na => na.Key == nameof(ColumnAttribute.ValueConvertor));
+                            if (vcNamedArg.Key != null && vcNamedArg.Value.Value != null)
+                            {
+                                columnInfo.Converter = (vcNamedArg.Value.Value as INamedTypeSymbol)
+                                    ?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                                    ?? vcNamedArg.Value.Value?.ToString();
+                            }
+                        }
                     }
 
                     tableColNameClassTemplate.Columns.Add(columnInfo);
@@ -204,12 +226,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         SourceName: symbolInfo.Name,
                         TypeName: symbolInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         IsPrimaryKey: columnInfo.IsPrimaryKey,
-                        Converter: member.AttributeLists.Count > 0 ? symbolInfo.GetAttributes()
-                            .FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == ColumnAttributeFullName)?
-                            .NamedArguments
-                            .FirstOrDefault(na => na.Key == nameof(ColumnAttribute.ValueConvertor))
-                            .Value
-                            .Value?.ToString() : null,
+                        Converter: columnInfo.Converter,
                         IsAutoIncrement: columnInfo.IsAutoIncrement,
                         SequenceName: columnInfo.SequenceName,
                         IsJsonColumn: columnInfo.IsJsonColumn,

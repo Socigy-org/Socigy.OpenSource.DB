@@ -61,7 +61,7 @@ CREATE TABLE "users" (
     "is_child" boolean,
     "parent_id" uuid,
     "visibility" smallint,
-    CONSTRAINT "CHCK_f2d6aa1d5a5c4878913cd18194603183" CHECK (LEN(email) < 25),
+    CONSTRAINT "CHCK_f2d6aa1d5a5c4878913cd18194603183" CHECK (LENGTH(email) < 25),
     CONSTRAINT "PK_users" PRIMARY KEY ("id")
 );
 CREATE TABLE "users_parent_role" (

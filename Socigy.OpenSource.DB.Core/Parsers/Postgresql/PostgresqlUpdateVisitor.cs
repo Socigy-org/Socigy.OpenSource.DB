@@ -1,4 +1,5 @@
 ﻿using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -142,6 +143,20 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private object? ReadEntityValue(string memberName)
         {
             if (_Entity is null) return null;
+
+            // When the entity implements IDbTable, use GetColumn so that any
+            // ValueConvertor applied to the property is called via ColumnInfo.Value.
+            if (_Entity is IDbTable dbTable)
+            {
+                var dbColName = dbTable.GetDbColumnName(memberName);
+                if (dbColName != null)
+                {
+                    var col = dbTable.GetColumn(dbColName);
+                    if (col.HasValue)
+                        return col.Value.Info.Value;
+                }
+            }
+
             var type = _Entity.GetType();
             return type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(_Entity)
                 ?? type.GetField(memberName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(_Entity);

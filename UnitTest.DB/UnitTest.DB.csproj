@@ -11,6 +11,7 @@
 	<!-- Wire socigy.json so the source generator knows the DB platform -->
 	<ItemGroup>
 		<AdditionalFiles Include="socigy.json" Condition="Exists('socigy.json')" />
+		<AdditionalFiles Include="Socigy\Procedures\**\*.sql" />
 	</ItemGroup>
 
 	<ItemGroup>

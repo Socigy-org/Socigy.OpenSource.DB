@@ -1,6 +1,6 @@
 {
-  "id": "202604221752__ssdfghgj_3d1c5b8534",
-  "previousId": "202604221342__Changed_Use_23ce5eb7f2",
+  "id": "202605011518_Added_procedures_73149000fa",
+  "previousId": "202604221752__ssdfghgj_3d1c5b8534",
   "tables": [
     {
       "name": "user_visibility",
@@ -117,7 +117,8 @@
       "constraints": [
         {
           "type": "foreign_key",
-          "name": "FK_users_id",
+          "tableName": "users_user_role",
+          "name": "FK_users_user_role_users_id",
           "columns": [
             "users_id"
           ],
@@ -129,7 +130,8 @@
         },
         {
           "type": "foreign_key",
-          "name": "FK_user_role_id",
+          "tableName": "users_user_role",
+          "name": "FK_users_user_role_user_role_id",
           "columns": [
             "user_role_id"
           ],
@@ -246,12 +248,14 @@
       "constraints": [
         {
           "type": "check",
-          "name": "CHCK_4606b79cdaef4985a107a190813a1832",
+          "tableName": "users",
+          "name": "CHCK_users_7891533e80bb41b4932bd9453d50a59e",
           "value": "LEN(email) \u003C 25"
         },
         {
           "type": "foreign_key",
-          "name": "FK_ParentRole",
+          "tableName": "users",
+          "name": "FK_users_ParentRole",
           "columns": [
             "ParentRole"
           ],
@@ -262,7 +266,8 @@
         },
         {
           "type": "foreign_key",
-          "name": "FK_Visibility",
+          "tableName": "users",
+          "name": "FK_users_Visibility",
           "columns": [
             "Visibility"
           ],
@@ -303,7 +308,8 @@
       "constraints": [
         {
           "type": "foreign_key",
-          "name": "FK_UserId",
+          "tableName": "users_parent_role",
+          "name": "FK_users_parent_role_UserId",
           "columns": [
             "UserId"
           ],
@@ -315,7 +321,8 @@
         },
         {
           "type": "foreign_key",
-          "name": "FK_UserRoleId",
+          "tableName": "users_parent_role",
+          "name": "FK_users_parent_role_UserRoleId",
           "columns": [
             "UserRoleId"
           ],
@@ -382,7 +389,8 @@
       "constraints": [
         {
           "type": "foreign_key",
-          "name": "FK_UserId",
+          "tableName": "user_course",
+          "name": "FK_user_course_UserId",
           "columns": [
             "UserId"
           ],
@@ -393,56 +401,8 @@
         },
         {
           "type": "foreign_key",
-          "name": "FK_CourseId",
-          "columns": [
-            "CourseId"
-          ],
-          "targetTable": "Example.Auth.DB.Course",
-          "targetColumns": [
-            "Id"
-          ]
-        }
-      ]
-    },
-    {
-      "name": "user_test",
-      "sourceName": "Example.Auth.DB.UserTest",
-      "columns": [
-        {
-          "name": "user_id",
-          "sourceName": "UserId",
-          "dotnetType": "System.Guid",
-          "databaseType": "uuid"
-        },
-        {
-          "name": "course_id",
-          "sourceName": "CourseId",
-          "dotnetType": "System.Guid",
-          "databaseType": "uuid"
-        },
-        {
-          "name": "registered_at",
-          "sourceName": "RegisteredAt",
-          "dotnetType": "System.DateTime",
-          "databaseType": "timestamp without time zone",
-          "isPrimaryKey": true
-        }
-      ],
-      "constraints": [
-        {
-          "type": "foreign_key",
-          "name": "FK_UserId",
-          "columns": [
-            "UserId"
-          ],
-          "targetTable": "Example.Auth.DB.User",
-          "targetColumns": [
-            "ID"
-          ]
-        },
-        {
-          "type": "foreign_key",
-          "name": "FK_CourseId",
+          "tableName": "user_course",
+          "name": "FK_user_course_CourseId",
           "columns": [
             "CourseId"
           ],
@@ -473,7 +433,8 @@
       "constraints": [
         {
           "type": "foreign_key",
-          "name": "FK_UserId_CourseId",
+          "tableName": "user_course_agreement",
+          "name": "FK_user_course_agreement_UserId_CourseId",
           "columns": [
             "UserId",
             "CourseId"
@@ -502,7 +463,7 @@
           "sourceName": "Username",
           "dotnetType": "System.String",
           "databaseType": "text",
-          "defaultValue": "\u0027Tvoje m\u00E1ma\u0027"
+          "defaultValue": "\u0027\u0027"
         },
         {
           "name": "password_hash",

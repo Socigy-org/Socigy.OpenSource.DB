@@ -102,6 +102,16 @@ public static class UnitCore
         );
 
         -- ---------------------------------------------------------------
+        -- test_convertor_items  (value convertor)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_convertor_items"" (
+            ""id""    UUID    NOT NULL DEFAULT gen_random_uuid(),
+            ""label"" TEXT    NOT NULL DEFAULT '',
+            ""value"" INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (""id"")
+        );
+
+        -- ---------------------------------------------------------------
         -- test_roles  (enum reference table for FlaggedEnum)
         -- ---------------------------------------------------------------
         CREATE TABLE IF NOT EXISTS ""test_roles"" (

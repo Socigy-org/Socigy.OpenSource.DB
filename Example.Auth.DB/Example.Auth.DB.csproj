@@ -13,7 +13,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.73" />
+		<AdditionalFiles Include="Socigy\Procedures\**\*.sql" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Socigy.OpenSource.DB" Version="0.1.78" />
 	</ItemGroup>
 
 	<ItemGroup>

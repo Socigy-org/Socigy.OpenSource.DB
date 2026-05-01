@@ -120,6 +120,19 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 .Select((pair, _) => pair.Left.AddRange(pair.Right));
 
             context.RegisterSourceOutput(context.CompilationProvider.Combine(allTableClasses), Execute);
+
+            var sqlFiles = context.AdditionalTextsProvider
+                .Where(x => x.Path.EndsWith(".sql", StringComparison.OrdinalIgnoreCase));
+
+            context.RegisterSourceOutput(
+                context.CompilationProvider.Combine(sqlFiles.Collect()),
+                (spc, pair) =>
+                {
+                    var (comp, texts) = pair;
+                    if (comp.AssemblyName!.StartsWith("Socigy.OpenSource.DB"))
+                        return;
+                    ProcedureGenerator.Execute(spc, comp, texts);
+                });
         }
 
         public void Execute(SourceProductionContext ctx, (Compilation, ImmutableArray<ClassDeclarationSyntax>) tuple)

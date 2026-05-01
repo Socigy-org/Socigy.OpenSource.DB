@@ -24,7 +24,7 @@ namespace Example.Auth.DB
     }
 
     [Table("users")]
-    [Check("LEN(email) < 25")]
+    [Check("LENGTH(email) < 25")]
     public partial class User
     {
         [PrimaryKey, Default(DbDefaults.Guid.Random)]

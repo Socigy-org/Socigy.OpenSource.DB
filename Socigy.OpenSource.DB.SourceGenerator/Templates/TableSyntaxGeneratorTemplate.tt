@@ -59,6 +59,17 @@ namespace <#= Namespace #>
             return convertor.ConvertFromDbValue(reader.GetValue(index));
         }
 
+        public T? ReadValueConvertor<T, TConvertor>(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides = null)
+            where TConvertor : IDbValueConvertor<T>, new()
+        {
+            int index = GetColumnDbIndex(reader, columnName, columnOverrides);
+            if (index < 0 || reader.IsDBNull(index))
+                return default;
+
+            var convertor = new TConvertor();
+            return convertor.ConvertFromDbValue(reader.GetValue(index));
+        }
+
         public int GetColumnDbIndex(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides = null)
         {
             if (columnOverrides != null && columnOverrides.ContainsKey(columnName))
@@ -380,7 +391,7 @@ namespace <#= Namespace #>
 <# } #>
 <# } #>
 
-        public class TableQueryBuilder : SqlCommandBuilder<TableQueryBuilder>
+        public class TableQueryBuilder : SqlCommandBuilder<TableQueryBuilder>, global::Socigy.OpenSource.DB.Core.Interfaces.ICompiledQuery
         {
             private Expression<Func<<#= ClassName #>, object?[]>> _SelectClause;
             private Expression<Func<<#= ClassName #>, bool>> _WhereClause;
@@ -535,6 +546,54 @@ namespace <#= Namespace #>
                     yield return <#= ClassName #>.ConvertFrom(reader);
                 }
             }
+
+            /// <summary>Builds this query's SQL and appends its parameters to <paramref name="command"/> without executing.</summary>
+            public string Compile(DbCommand command)
+            {
+                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
+                parser.Process(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
+                if (_Limit > 0) parser.AddLimit(_Limit);
+                if (_Offset > 0) parser.AddOffset(_Offset);
+                return parser.ToString();
+            }
+
+            // ── Set-operation factory methods ─────────────────────────────────────────
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> Union(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "UNION");
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> UnionAll(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "UNION ALL");
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> Intersect(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "INTERSECT");
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> IntersectAll(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "INTERSECT ALL");
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> Except(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "EXCEPT");
+            public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> ExceptAll(TableQueryBuilder rhs)
+                => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "EXCEPT ALL");
+
+            // ── Join factory methods ───────────────────────────────────────────────────
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> Join<TJoin>(
+                Expression<Func<<#= ClassName #>, TJoin, bool>> on)
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> LeftJoin<TJoin>(
+                Expression<Func<<#= ClassName #>, TJoin, bool>> on)
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> RightJoin<TJoin>(
+                Expression<Func<<#= ClassName #>, TJoin, bool>> on)
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> FullOuterJoin<TJoin>(
+                Expression<Func<<#= ClassName #>, TJoin, bool>> on)
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> NaturalJoin<TJoin>()
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);
+            public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> CrossJoin<TJoin>()
+                where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);
         }
         <#= CustomPostClass #>
 	}

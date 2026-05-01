@@ -1,11 +1,30 @@
 @Example.API_HostAddress = http://localhost:5010
 
-GET {{Example.API_HostAddress}}/todos/
+### Seed demo data (run once to populate tables)
+POST {{Example.API_HostAddress}}/auth/seed
+
+###
+
+### Value Convertor + Procedure: lookup by username (case-insensitive — "Alice" stored as "alice")
+GET {{Example.API_HostAddress}}/auth/login/Alice
 Accept: application/json
 
 ###
 
-GET {{Example.API_HostAddress}}/todos/1
+### Same lookup lowercase — same result
+GET {{Example.API_HostAddress}}/auth/login/alice
+Accept: application/json
+
+###
+
+### JOIN: courses enrolled by a user (replace with userId returned from /auth/seed)
+GET {{Example.API_HostAddress}}/auth/users/00000000-0000-0000-0000-000000000000/courses
+Accept: application/json
+
+###
+
+### Set Operation (UNION): all distinct courses
+GET {{Example.API_HostAddress}}/auth/courses
 Accept: application/json
 
 ###
