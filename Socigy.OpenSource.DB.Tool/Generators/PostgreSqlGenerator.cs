@@ -578,7 +578,9 @@ namespace Socigy.OpenSource.DB.Tool.Generators
           { "datetime", "timestamp without time zone" },
           { "datetimeoffset", "timestamp with time zone" },
           { "date", "date" },
+          { "dateonly", "date" },
           { "time", "time without time zone" },
+          { "timeonly", "time without time zone" },
           { "timespan", "interval" },
 
           // Booleans

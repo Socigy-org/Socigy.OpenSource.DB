@@ -106,6 +106,85 @@ public string Metadata { get; set; } = "";
 
 Without `[Column]`, the property name is converted to `snake_case` automatically.
 
+## C# to PostgreSQL type mapping
+
+The migration tool infers the SQL column type from the C# property type. The full mapping is:
+
+| C# type | PostgreSQL type |
+|---------|----------------|
+| `string` | `text` |
+| `char` | `character(1)` |
+| `bool` / `boolean` | `boolean` |
+| `short` / `int16` | `smallint` |
+| `int` / `int32` | `integer` |
+| `long` / `int64` | `bigint` |
+| `float` / `single` | `real` |
+| `double` | `double precision` |
+| `decimal` | `numeric` |
+| `Guid` | `uuid` |
+| `DateTime` | `timestamp without time zone` |
+| `DateTimeOffset` | `timestamp with time zone` |
+| `DateOnly` | `date` |
+| `TimeOnly` | `time without time zone` |
+| `TimeSpan` | `interval` |
+| `byte[]` | `bytea` |
+
+When the inferred type is not what you need, override it with `[Column(Type = "...")]`:
+
+```csharp
+// Force a specific precision
+[Column(Type = "NUMERIC(10,2)")]
+public decimal Price { get; set; }
+
+// Store as date (DateOnly is inferred automatically, but explicit override also works)
+[Column(Type = "DATE")]
+public DateOnly BirthDate { get; set; }
+```
+
+### `DateOnly` and `TimeOnly`
+
+`System.DateOnly` maps to `date` and `System.TimeOnly` maps to `time without time zone`. They work in every context — migrations, INSERT, UPDATE, WHERE clauses, and reads:
+
+```csharp
+[Table("events")]
+public partial class Event
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    // Stored as PostgreSQL DATE
+    public DateOnly Date { get; set; }
+
+    // Stored as PostgreSQL TIME WITHOUT TIME ZONE
+    public TimeOnly StartTime { get; set; }
+
+    // Nullable variants work too
+    public TimeOnly? EndTime { get; set; }
+}
+```
+
+```csharp
+// Insert
+var ev = new Event
+{
+    Name     = "Team standup",
+    Date     = new DateOnly(2026, 6, 1),
+    StartTime = new TimeOnly(9, 30),
+};
+await ev.Insert().WithConnection(conn).ExcludeAutoFields().ExecuteAsync();
+
+// Query with WHERE
+await foreach (var e in Event.Query(x => x.Date == new DateOnly(2026, 6, 1))
+    .WithConnection(conn).ExecuteAsync())
+{
+    Console.WriteLine($"{e.Name} at {e.StartTime}");
+}
+```
+
+> **Requires Npgsql 6 or later.** Earlier versions map `date` columns to `DateTime`; the `DateOnly`/`TimeOnly` ADO.NET types were added in Npgsql 6.
+
 ## `[Nullable]`
 
 Marks a column as nullable (`NULL` instead of `NOT NULL`):

@@ -898,8 +898,10 @@ namespace Socigy.OpenSource.DB.Tool
                 string s  => $"'{s.Replace("'", "''")}'",
                 bool b    => b ? "TRUE" : "FALSE",
                 Guid g    => $"'{g}'",
-                DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
-                _         => Convert.ToString(value, CultureInfo.InvariantCulture)
+                DateTime dt  => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
+                DateOnly d   => $"'{d:yyyy-MM-dd}'",
+                TimeOnly t   => $"'{t:HH:mm:ss}'",
+                _            => Convert.ToString(value, CultureInfo.InvariantCulture)
             };
         }
 
