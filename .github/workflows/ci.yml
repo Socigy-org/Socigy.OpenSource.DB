@@ -80,15 +80,13 @@ jobs:
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
           echo "Version $CURRENT not found on nuget.org — will publish"
 
-      - name: Restore
+      - name: Restore Tool
         if: steps.version_check.outputs.should_publish == 'true'
-        run: |
-          dotnet restore Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj
-          dotnet restore Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj
+        run: dotnet restore Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj -p:TargetFramework=net10.0
 
       - name: Pack
         if: steps.version_check.outputs.should_publish == 'true'
-        run: dotnet pack Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj -c Release --output ./nupkgs --no-restore
+        run: dotnet pack Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj -c Release --output ./nupkgs
 
       - name: Publish to NuGet
         if: steps.version_check.outputs.should_publish == 'true'
