@@ -165,7 +165,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 case ExpressionType.AndAlso: _Sql.Append(" AND "); break;
                 case ExpressionType.OrElse: _Sql.Append(" OR "); break;
                 case ExpressionType.NotEqual: _Sql.Append(" != "); break;
-                default: _Sql.Append($" {node.NodeType} "); break;
+                case ExpressionType.GreaterThan: _Sql.Append(" > "); break;
+                case ExpressionType.GreaterThanOrEqual: _Sql.Append(" >= "); break;
+                case ExpressionType.LessThan: _Sql.Append(" < "); break;
+                case ExpressionType.LessThanOrEqual: _Sql.Append(" <= "); break;
+                default:
+                    throw new NotSupportedException(
+                        $"Unsupported binary operator '{node.NodeType}' in SQL SELECT translation: {node}");
             }
             Visit(node.Right);
             _Sql.Append(")");

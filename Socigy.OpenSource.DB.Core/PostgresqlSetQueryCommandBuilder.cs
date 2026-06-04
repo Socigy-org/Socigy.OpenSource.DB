@@ -59,8 +59,10 @@ namespace Socigy.OpenSource.DB.Core
 
             command.CommandText = sql;
 
-            using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
+            await using var instr = await Diagnostics.DbDiagnostics.ExecuteReaderAsync(
+                command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
+            var reader = instr.Reader;
+            while (await instr.ReadAsync(cancellationToken))
             {
                 var row = new T();
                 foreach (var kv in row.GetColumns())

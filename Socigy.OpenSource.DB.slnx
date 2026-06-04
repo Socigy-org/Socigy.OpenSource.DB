@@ -20,6 +20,9 @@
     <File Path=".editorconfig" />
   </Folder>
   <Folder Name="/Unit Tests/">
+    <Project Path="Socigy.OpenSource.DB.UnitTests/Socigy.OpenSource.DB.UnitTests.csproj">
+      <BuildType Solution="DB_Migration|*" Project="Release" />
+    </Project>
     <Project Path="UnitTest.DB.Tests/UnitTest.DB.Tests.csproj" Id="c3c262b1-0163-465f-815c-8d890a87f7b8">
       <BuildType Solution="DB_Migration|*" Project="Release" />
     </Project>

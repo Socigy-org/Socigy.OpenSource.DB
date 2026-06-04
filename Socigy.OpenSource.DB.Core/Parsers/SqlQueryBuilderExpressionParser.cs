@@ -37,8 +37,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             else
                 _Sql.Append(ProcessSelect(select));
 
-            Console.WriteLine($"Command after select: {_Sql}");
-
             _Sql.Append($" FROM {tableName}");
 
             if (where != null)

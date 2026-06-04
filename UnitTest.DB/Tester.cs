@@ -137,3 +137,25 @@ public partial class TestUser
     [FlaggedEnum]
     public TestRole Role { get; set; }
 }
+
+/// <summary>
+/// Table exercising a broader set of CLR types and a nullable column — drives the
+/// type-binding and parser-operator (bool / Nullable&lt;T&gt; / arithmetic / coalesce) tests.
+/// </summary>
+[Table("test_types")]
+public partial class TestType
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public int? NullableValue { get; set; }
+
+    public decimal Amount { get; set; }
+
+    [Default(DbDefaults.Time.Now)]
+    public DateTime When { get; set; }
+
+    public string? Note { get; set; }
+}

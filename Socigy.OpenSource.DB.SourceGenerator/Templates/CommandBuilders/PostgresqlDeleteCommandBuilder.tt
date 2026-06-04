@@ -146,7 +146,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         DELETE FROM ""{<#= ClassName #>.TableName}""
         {where}";
 
-            return await command.ExecuteNonQueryAsync();
+            return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DELETE", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
         }
 
         public NpgsqlDbType GetDbType(Type type)

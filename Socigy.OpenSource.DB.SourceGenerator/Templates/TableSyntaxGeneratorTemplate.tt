@@ -168,7 +168,7 @@ namespace <#= Namespace #>
                 {
                     await using var cmd = connection.CreateCommand();
                     cmd.CommandText = $"SELECT nextval('{_Name}')";
-                    var result = await cmd.ExecuteScalarAsync();
+                    var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(cmd, "SEQUENCE", ct => cmd.ExecuteScalarAsync(ct));
                     return Convert.ToInt64(result);
                 }
                 finally
@@ -186,7 +186,7 @@ namespace <#= Namespace #>
                 {
                     await using var cmd = connection.CreateCommand();
                     cmd.CommandText = $"SELECT last_value FROM \"{_Name}\"";
-                    var result = await cmd.ExecuteScalarAsync();
+                    var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(cmd, "SEQUENCE", ct => cmd.ExecuteScalarAsync(ct));
                     return Convert.ToInt64(result);
                 }
                 finally
@@ -234,7 +234,7 @@ namespace <#= Namespace #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
 <# } #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
-                await cmd.ExecuteNonQueryAsync();
+                await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, "INSERT", ct => cmd.ExecuteNonQueryAsync(ct));
             }
             finally { if (shouldClose) await connection.CloseAsync(); }
         }
@@ -252,7 +252,7 @@ namespace <#= Namespace #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
 <# } #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
-                await cmd.ExecuteNonQueryAsync();
+                await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, "DELETE", ct => cmd.ExecuteNonQueryAsync(ct));
             }
             finally { if (shouldClose) await connection.CloseAsync(); }
         }
@@ -269,8 +269,9 @@ namespace <#= Namespace #>
 <# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
 <# } #>
-                await using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(cmd, "SELECT", ct => cmd.ExecuteReaderAsync(ct));
+                var reader = __instr.Reader;
+                while (await __instr.ReadAsync())
                     yield return (<#= fe.EnumTypeFullName #>)Convert.ChangeType(reader.GetValue(0), Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>)));
             }
             finally { if (shouldClose) await connection.CloseAsync(); }
@@ -289,7 +290,7 @@ namespace <#= Namespace #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
 <# } #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= fe.PkMappings.Count #>"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))); cmd.Parameters.Add(p); }
-                return await cmd.ExecuteScalarAsync() != null;
+                return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(cmd, "SELECT", ct => cmd.ExecuteScalarAsync(ct)) != null;
             }
             finally { if (shouldClose) await connection.CloseAsync(); }
         }
@@ -529,7 +530,6 @@ namespace <#= Namespace #>
                 if (_Transaction != null)
                     command.Transaction = _Transaction;
 
-                System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
                 parser.Process(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
                 if (_Limit > 0)
@@ -538,10 +538,10 @@ namespace <#= Namespace #>
                     parser.AddOffset(_Offset);
 
                 command.CommandText = parser.ToString();
-                Console.WriteLine($"[TableQueryBuilder] Executing SQL Query: {command.CommandText} (Prepared in {watch.ElapsedMilliseconds} ms)");
 
-                using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), default, _Diagnostics);
+                var reader = __instr.Reader;
+                while (await __instr.ReadAsync())
                 {
                     yield return <#= ClassName #>.ConvertFrom(reader);
                 }

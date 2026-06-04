@@ -84,7 +84,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
-            return base.VisitUnary(node);
+            throw new NotSupportedException(
+                $"Unsupported unary operator '{node.NodeType}' in SQL WHERE translation: {node}");
         }
 
         // -------------------------------------------------------------------------
@@ -96,6 +97,17 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
             if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
             if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+
+            // Null-coalescing (a ?? b) maps to COALESCE(a, b), not an infix operator.
+            if (node.NodeType == ExpressionType.Coalesce)
+            {
+                _Sql.Append("COALESCE(");
+                Visit(node.Left);
+                _Sql.Append(", ");
+                Visit(node.Right);
+                _Sql.Append(")");
+                return node;
+            }
 
             _Sql.Append("(");
             Visit(node.Left);
@@ -110,7 +122,15 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 case ExpressionType.GreaterThanOrEqual: _Sql.Append(" >= "); break;
                 case ExpressionType.LessThan: _Sql.Append(" < "); break;
                 case ExpressionType.LessThanOrEqual: _Sql.Append(" <= "); break;
-                default: _Sql.Append($" {node.NodeType} "); break;
+                case ExpressionType.Add: _Sql.Append(" + "); break;
+                case ExpressionType.Subtract: _Sql.Append(" - "); break;
+                case ExpressionType.Multiply: _Sql.Append(" * "); break;
+                case ExpressionType.Divide: _Sql.Append(" / "); break;
+                case ExpressionType.Modulo: _Sql.Append(" % "); break;
+                // Fail fast instead of emitting invalid SQL like "... AndAlso ...".
+                default:
+                    throw new NotSupportedException(
+                        $"Unsupported binary operator '{node.NodeType}' in SQL WHERE translation: {node}");
             }
 
             Visit(node.Right);
@@ -129,13 +149,31 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
+            // Nullable<T> access on a column: x.Col.HasValue / x.Col.Value
+            if (node.Expression is MemberExpression inner && inner.Expression == _rowParam)
+            {
+                if (node.Member.Name == "HasValue")
+                {
+                    _Sql.Append(_GetColumnName(inner.Member.Name));
+                    _Sql.Append(" IS NOT NULL");
+                    return node;
+                }
+                if (node.Member.Name == "Value")
+                {
+                    _Sql.Append(_GetColumnName(inner.Member.Name));
+                    return node;
+                }
+            }
+
             if (TryEvaluate(node, out var value))
             {
                 AddParameter(value);
                 return node;
             }
 
-            return base.VisitMember(node);
+            throw new NotSupportedException(
+                $"Unsupported member access '{node.Member.Name}' in SQL WHERE translation: {node}. " +
+                "Nested navigation properties are not supported — use a join or a flat column.");
         }
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
@@ -219,7 +257,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
-            return base.VisitMethodCall(node);
+            throw new NotSupportedException(
+                $"Unsupported method call '{node.Method.DeclaringType?.Name}.{node.Method.Name}' in SQL WHERE translation: {node}");
         }
 
         // -------------------------------------------------------------------------
@@ -284,13 +323,67 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private Expression HandleStringMethods(MethodCallExpression node)
         {
-            Visit(node.Object);
-            var rawValue = Evaluate(node.Arguments[0])?.ToString() ?? "";
-            if (node.Method.Name == "Contains") { _Sql.Append(" LIKE "); AddParameter($"%{rawValue}%"); }
-            else if (node.Method.Name == "StartsWith") { _Sql.Append(" LIKE "); AddParameter($"{rawValue}%"); }
-            else if (node.Method.Name == "EndsWith") { _Sql.Append(" LIKE "); AddParameter($"%{rawValue}"); }
-            return node;
+            string name = node.Method.Name;
+
+            // Static string.IsNullOrEmpty(x.Col) / string.IsNullOrWhiteSpace(x.Col)
+            if (node.Object == null && (name == "IsNullOrEmpty" || name == "IsNullOrWhiteSpace") && node.Arguments.Count == 1)
+            {
+                _Sql.Append("(");
+                Visit(node.Arguments[0]);
+                _Sql.Append(" IS NULL OR ");
+                Visit(node.Arguments[0]);
+                _Sql.Append(name == "IsNullOrWhiteSpace" ? " ~ '^\\s*$'" : " = ''");
+                _Sql.Append(")");
+                return node;
+            }
+
+            // Detect a case-insensitive target: x.Col.ToLower()/ToUpper() wrapping a LIKE-family call.
+            bool caseInsensitive = false;
+            Expression? target = node.Object;
+            if (target is MethodCallExpression mc && mc.Object != null &&
+                (mc.Method.Name == "ToLower" || mc.Method.Name == "ToUpper"))
+            {
+                caseInsensitive = true;
+                target = mc.Object;
+            }
+
+            string likeOp = caseInsensitive ? " ILIKE " : " LIKE ";
+
+            if (name == "Contains" || name == "StartsWith" || name == "EndsWith")
+            {
+                Visit(target);
+                var raw = Evaluate(node.Arguments[0])?.ToString() ?? "";
+                var esc = EscapeLike(raw);
+                string pattern = name == "Contains" ? $"%{esc}%" : name == "StartsWith" ? $"{esc}%" : $"%{esc}";
+                _Sql.Append(likeOp);
+                AddParameter(pattern);
+                _Sql.Append(" ESCAPE '\\'");
+                return node;
+            }
+
+            if (name == "Equals")
+            {
+                if (node.Object != null) { Visit(node.Object); _Sql.Append(" = "); AddParameter(Evaluate(node.Arguments[0])); }
+                else if (node.Arguments.Count >= 2) { Visit(node.Arguments[0]); _Sql.Append(" = "); AddParameter(Evaluate(node.Arguments[1])); }
+                else throw new NotSupportedException($"Unsupported string.Equals overload in SQL WHERE translation: {node}");
+                return node;
+            }
+
+            // Bare ToLower()/ToUpper() used directly in a comparison: LOWER("col") / UPPER("col").
+            if (name == "ToLower" || name == "ToUpper")
+            {
+                _Sql.Append(name == "ToLower" ? "LOWER(" : "UPPER(");
+                Visit(node.Object);
+                _Sql.Append(")");
+                return node;
+            }
+
+            throw new NotSupportedException($"Unsupported string method '{name}' in SQL WHERE translation: {node}");
         }
+
+        /// <summary>Escapes LIKE wildcards so user values match literally (used with <c>ESCAPE '\'</c>).</summary>
+        private static string EscapeLike(string value) =>
+            value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 
         protected override Expression VisitConstant(ConstantExpression node)
         {

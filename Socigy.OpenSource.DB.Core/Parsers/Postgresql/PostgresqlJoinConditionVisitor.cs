@@ -91,7 +91,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 ExpressionType.GreaterThanOrEqual => " >= ",
                 ExpressionType.LessThan => " < ",
                 ExpressionType.LessThanOrEqual => " <= ",
-                _ => $" {node.NodeType} "
+                ExpressionType.Add => " + ",
+                ExpressionType.Subtract => " - ",
+                ExpressionType.Multiply => " * ",
+                ExpressionType.Divide => " / ",
+                ExpressionType.Modulo => " % ",
+                _ => throw new NotSupportedException(
+                    $"Unsupported binary operator '{node.NodeType}' in SQL JOIN translation: {node}")
             });
 
             Visit(node.Right);

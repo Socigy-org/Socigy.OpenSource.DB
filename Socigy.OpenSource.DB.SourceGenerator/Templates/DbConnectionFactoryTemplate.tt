@@ -86,7 +86,7 @@ namespace <#= BaseNamespace #>
                     command.CommandText = "SELECT 1 FROM pg_database WHERE datname = @databaseName";
                     command.Parameters.Add(new NpgsqlParameter("databaseName", _ServiceKey));
                     
-                    var result = await command.ExecuteScalarAsync();
+                    var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "DDL", ct => command.ExecuteScalarAsync(ct));
                     databaseExists = result != null;
                 }
 
@@ -95,7 +95,7 @@ namespace <#= BaseNamespace #>
                     using (var command = connection.CreateCommand())
                     {
                         command.CommandText = $"CREATE DATABASE \"{_ServiceKey}\"";
-                        await command.ExecuteNonQueryAsync();
+                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DDL", ct => command.ExecuteNonQueryAsync(ct));
                     }
                 }
             }

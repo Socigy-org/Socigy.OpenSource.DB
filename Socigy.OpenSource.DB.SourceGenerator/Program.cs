@@ -145,6 +145,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             // Table.Query() and other method generation
             TableBindingsGenerator.Execute(ctx, compilation, tables, this);
 
+            // Testable context layer: I{Db}/{Db}Context, I{Table}Set/{Table}Set, {Db}Factory, Add{Db}Context
+            ContextGenerator.Execute(ctx, compilation, tables, this);
+
             // IServiceProvider and WebApplicationBuilder extensions
             ExtensionGenerator.Execute(ctx, compilation, this);
 

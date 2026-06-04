@@ -98,8 +98,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 sb.AppendLine($"{indent}    await using var cmd = conn.CreateCommand();");
                 sb.AppendLine($"{indent}    cmd.CommandText = @\"{EscapeVerbatim(proc.SqlBody)}\";");
                 EmitParameters(sb, proc.Params, indent);
-                sb.AppendLine($"{indent}    await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);");
-                sb.AppendLine($"{indent}    while (await reader.ReadAsync(cancellationToken))");
+                sb.AppendLine($"{indent}    await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(cmd, \"PROC\", ct => cmd.ExecuteReaderAsync(ct), cancellationToken);");
+                sb.AppendLine($"{indent}    var reader = __instr.Reader;");
+                sb.AppendLine($"{indent}    while (await __instr.ReadAsync(cancellationToken))");
                 sb.AppendLine($"{indent}        yield return {proc.ReturnType}.ConvertFrom(reader);");
                 sb.AppendLine($"{indent}}}");
             }
@@ -114,7 +115,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 sb.AppendLine($"{indent}    await using var cmd = conn.CreateCommand();");
                 sb.AppendLine($"{indent}    cmd.CommandText = @\"{EscapeVerbatim(proc.SqlBody)}\";");
                 EmitParameters(sb, proc.Params, indent);
-                sb.AppendLine($"{indent}    int affected = await cmd.ExecuteNonQueryAsync();");
+                sb.AppendLine($"{indent}    int affected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, \"PROC\", ct => cmd.ExecuteNonQueryAsync(ct));");
                 sb.AppendLine($"{indent}    return affected >= 0;");
                 sb.AppendLine($"{indent}}}");
             }

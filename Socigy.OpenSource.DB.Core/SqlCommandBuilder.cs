@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Data.Common;
 using System.Threading.Tasks;
+using Socigy.OpenSource.DB.Core.Diagnostics;
 
 namespace Socigy.OpenSource.DB.Core
 {
@@ -10,6 +11,23 @@ namespace Socigy.OpenSource.DB.Core
     {
         protected DbConnection? _Connection;
         protected DbTransaction? _Transaction;
+
+        /// <summary>
+        /// Diagnostics carrier (logger + options sourced from DI) used when this builder is driven by a
+        /// generated database context. When <see langword="null"/>, command instrumentation falls back to
+        /// the ambient <see cref="SocigyDbDiagnostics"/> configuration.
+        /// </summary>
+        protected DbDiagnosticsContext? _Diagnostics;
+
+        /// <summary>
+        /// Associates a diagnostics context with this builder so executed commands log/trace through the
+        /// context's logger and options. Passing <see langword="null"/> is a no-op (ambient config is used).
+        /// </summary>
+        public T WithDiagnostics(DbDiagnosticsContext? diagnostics)
+        {
+            _Diagnostics = diagnostics;
+            return (T)this;
+        }
 
         /// <summary>
         /// Associates the specified database transaction with the current instance and returns the updated instance.

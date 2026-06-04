@@ -123,8 +123,10 @@ namespace Socigy.OpenSource.DB.Core
 
             command.CommandText = sb.ToString();
 
-            using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
+            await using var instr = await Diagnostics.DbDiagnostics.ExecuteReaderAsync(
+                command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
+            var reader = instr.Reader;
+            while (await instr.ReadAsync(cancellationToken))
                 yield return (ReadRow<T>(reader, tOverrides), ReadRow<TJoin>(reader, jOverrides));
         }
 

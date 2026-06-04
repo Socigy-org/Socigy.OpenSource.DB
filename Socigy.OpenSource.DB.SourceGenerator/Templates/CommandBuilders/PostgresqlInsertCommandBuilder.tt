@@ -270,7 +270,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         ({string.Join(", ", paramNames)})
         RETURNING ""{returningColumn}""";
 
-            var result = await command.ExecuteScalarAsync();
+            var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "INSERT", ct => command.ExecuteScalarAsync(ct), default, _Diagnostics);
             if (result == null || result == DBNull.Value) return default;
             return (TReturning)Convert.ChangeType(result, typeof(TReturning));
         }
@@ -317,8 +317,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         ({string.Join(", ", paramNames)})
         RETURNING *";
 
-                await using var reader = await command.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
+                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "INSERT", ct => ((System.Data.Common.DbCommand)command).ExecuteReaderAsync(ct), default, _Diagnostics);
+                var reader = __instr.Reader;
+                if (await __instr.ReadAsync())
                 {
                     foreach (var kvp in _ColumnInfo!)
                     {
@@ -338,7 +339,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         VALUES
         ({string.Join(", ", paramNames)})";
 
-            int rowsAffected = await command.ExecuteNonQueryAsync();
+            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
             return rowsAffected > 0;
         }
 

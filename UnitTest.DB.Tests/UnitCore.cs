@@ -145,5 +145,18 @@ public static class UnitCore
             FOREIGN KEY (""test_users_id"")  REFERENCES ""test_users""(""id"") ON DELETE CASCADE,
             FOREIGN KEY (""test_roles_id"")  REFERENCES ""test_roles""(""id"")
         );
+
+        -- ---------------------------------------------------------------
+        -- test_types  (broad type coverage + nullable column)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_types"" (
+            ""id""             UUID      NOT NULL DEFAULT gen_random_uuid(),
+            ""is_active""      BOOLEAN   NOT NULL DEFAULT FALSE,
+            ""nullable_value"" INTEGER,
+            ""amount""         NUMERIC   NOT NULL DEFAULT 0,
+            ""when""           TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""note""           TEXT,
+            PRIMARY KEY (""id"")
+        );
     ";
 }

@@ -315,7 +315,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         SET {BuildSetClause(command)}
         {where}";
 
-            int rowsAffected = await command.ExecuteNonQueryAsync();
+            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "UPDATE", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
             return rowsAffected;
         }
 

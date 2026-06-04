@@ -115,7 +115,7 @@ namespace <#= BaseNamespace #>
 
                         using var command = connection.CreateCommand();
                         command.CommandText = migToApply.UpSql;
-                        await command.ExecuteNonQueryAsync();
+                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "MIGRATE", ct => command.ExecuteNonQueryAsync(ct));
 
                         await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
                         {
@@ -136,7 +136,7 @@ namespace <#= BaseNamespace #>
 
                         using var command = connection.CreateCommand();
                         command.CommandText = migToApply.DownSql;
-                        await command.ExecuteNonQueryAsync();
+                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "MIGRATE", ct => command.ExecuteNonQueryAsync(ct));
 
                         await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
                         {

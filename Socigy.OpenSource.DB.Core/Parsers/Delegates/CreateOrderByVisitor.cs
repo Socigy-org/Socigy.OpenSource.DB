@@ -1,4 +1,4 @@
-﻿using Socigy.OpenSource.DB.Core.Delegates;
+using Socigy.OpenSource.DB.Core.Delegates;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;

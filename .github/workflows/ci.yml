@@ -32,6 +32,9 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      - name: Unit tests (no database)
+        run: dotnet test Socigy.OpenSource.DB.UnitTests/Socigy.OpenSource.DB.UnitTests.csproj --verbosity normal
+
       - name: Configure test database connection
         run: |
           echo '{
