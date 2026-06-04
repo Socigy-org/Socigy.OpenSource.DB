@@ -100,8 +100,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 EmitParameters(sb, proc.Params, indent);
                 sb.AppendLine($"{indent}    await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(cmd, \"PROC\", ct => cmd.ExecuteReaderAsync(ct), cancellationToken);");
                 sb.AppendLine($"{indent}    var reader = __instr.Reader;");
+                sb.AppendLine($"{indent}    int[]? __ords = null;");
                 sb.AppendLine($"{indent}    while (await __instr.ReadAsync(cancellationToken))");
-                sb.AppendLine($"{indent}        yield return {proc.ReturnType}.ConvertFrom(reader);");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine($"{indent}        __ords ??= {proc.ReturnType}.GetColumnOrdinals(reader);");
+                sb.AppendLine($"{indent}        yield return {proc.ReturnType}.ConvertFrom(reader, __ords);");
+                sb.AppendLine($"{indent}    }}");
                 sb.AppendLine($"{indent}}}");
             }
             else

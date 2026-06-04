@@ -125,7 +125,7 @@ public class ContextIntegrationTests : BaseUnitTest
                 IsActive = true,
                 NullableValue = null,
                 Amount = 12.5m,
-                When = DateTime.UtcNow,
+                When = DateTime.Now,
                 Note = null
             });
         });
@@ -144,8 +144,8 @@ public class ContextIntegrationTests : BaseUnitTest
         var factory = NewFactory();
         await factory.ExecuteAsync(async db =>
         {
-            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = true, NullableValue = 5, Amount = 1m, When = DateTime.UtcNow });
-            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = false, NullableValue = null, Amount = 2m, When = DateTime.UtcNow });
+            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = true, NullableValue = 5, Amount = 1m, When = DateTime.Now });
+            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = false, NullableValue = null, Amount = 2m, When = DateTime.Now });
         });
 
         var actives = await factory.ExecuteAsync(db => db.TestTypes.ToListAsync(x => x.IsActive));

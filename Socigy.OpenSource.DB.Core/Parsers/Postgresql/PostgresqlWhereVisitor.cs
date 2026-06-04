@@ -15,6 +15,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private readonly GetColumnName _GetColumnName;
         private readonly ParameterExpression _rowParam;
         private readonly Dictionary<string, FlaggedEnumJoinInfo>? _flaggedEnums;
+        private readonly ParameterFinder _finder;
+
+        // When false (BindParameters / cache-hit mode) the traversal still appends parameters to the
+        // command but emits no SQL — the SQL is already known from the cache.
+        private bool _emit = true;
+
+        private void Emit(string s) { if (_emit) _Sql.Append(s); }
+        private void Emit(StringBuilder s) { if (_emit) _Sql.Append(s); }
 
         /// <summary>Creates a visitor without flagged-enum join support.</summary>
         public PostgresqlWhereVisitor(ParameterExpression rowParam, GetColumnName getColumnName, DbCommand command)
@@ -32,14 +40,27 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             _GetColumnName = getColumnName;
             _Command = command;
             _flaggedEnums = flaggedEnums;
+            _finder = new ParameterFinder(rowParam);
         }
 
         public string Parse(Expression expression)
         {
+            _emit = true;
             _Sql.Clear();
-            _Sql.Append(" WHERE ");
+            Emit(" WHERE ");
             Visit(expression);
             return _Sql.ToString();
+        }
+
+        /// <summary>
+        /// Re-binds the predicate's parameters to the command without emitting SQL — the same traversal
+        /// as <see cref="Parse"/>, so parameters are added in identical order to match cached SQL.
+        /// </summary>
+        public void BindParameters(Expression expression)
+        {
+            _emit = false;
+            try { Visit(expression); }
+            finally { _emit = true; }
         }
 
         private static object? NormalizeParameterValue(object? value)
@@ -60,7 +81,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             p.ParameterName = paramName;
             p.Value = value ?? DBNull.Value;
             _Command.Parameters.Add(p);
-            _Sql.Append(paramName);
+            Emit(paramName);
         }
 
         // ---------------------------------------------------------
@@ -72,9 +93,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
             if (node.NodeType == ExpressionType.Not)
             {
-                _Sql.Append(" NOT (");
+                Emit(" NOT (");
                 Visit(node.Operand);
-                _Sql.Append(")");
+                Emit(")");
                 return node;
             }
 
@@ -95,38 +116,38 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (TryEvaluate(node, out var value)) { AddParameter(value); return node; }
 
-            if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
-            if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+            if (IsNullConstant(node.Right)) { Visit(node.Left); Emit(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+            if (IsNullConstant(node.Left)) { Visit(node.Right); Emit(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
 
             // Null-coalescing (a ?? b) maps to COALESCE(a, b), not an infix operator.
             if (node.NodeType == ExpressionType.Coalesce)
             {
-                _Sql.Append("COALESCE(");
+                Emit("COALESCE(");
                 Visit(node.Left);
-                _Sql.Append(", ");
+                Emit(", ");
                 Visit(node.Right);
-                _Sql.Append(")");
+                Emit(")");
                 return node;
             }
 
-            _Sql.Append("(");
+            Emit("(");
             Visit(node.Left);
 
             switch (node.NodeType)
             {
-                case ExpressionType.AndAlso: _Sql.Append(" AND "); break;
-                case ExpressionType.OrElse: _Sql.Append(" OR "); break;
-                case ExpressionType.Equal: _Sql.Append(" = "); break;
-                case ExpressionType.NotEqual: _Sql.Append(" <> "); break;
-                case ExpressionType.GreaterThan: _Sql.Append(" > "); break;
-                case ExpressionType.GreaterThanOrEqual: _Sql.Append(" >= "); break;
-                case ExpressionType.LessThan: _Sql.Append(" < "); break;
-                case ExpressionType.LessThanOrEqual: _Sql.Append(" <= "); break;
-                case ExpressionType.Add: _Sql.Append(" + "); break;
-                case ExpressionType.Subtract: _Sql.Append(" - "); break;
-                case ExpressionType.Multiply: _Sql.Append(" * "); break;
-                case ExpressionType.Divide: _Sql.Append(" / "); break;
-                case ExpressionType.Modulo: _Sql.Append(" % "); break;
+                case ExpressionType.AndAlso: Emit(" AND "); break;
+                case ExpressionType.OrElse: Emit(" OR "); break;
+                case ExpressionType.Equal: Emit(" = "); break;
+                case ExpressionType.NotEqual: Emit(" <> "); break;
+                case ExpressionType.GreaterThan: Emit(" > "); break;
+                case ExpressionType.GreaterThanOrEqual: Emit(" >= "); break;
+                case ExpressionType.LessThan: Emit(" < "); break;
+                case ExpressionType.LessThanOrEqual: Emit(" <= "); break;
+                case ExpressionType.Add: Emit(" + "); break;
+                case ExpressionType.Subtract: Emit(" - "); break;
+                case ExpressionType.Multiply: Emit(" * "); break;
+                case ExpressionType.Divide: Emit(" / "); break;
+                case ExpressionType.Modulo: Emit(" % "); break;
                 // Fail fast instead of emitting invalid SQL like "... AndAlso ...".
                 default:
                     throw new NotSupportedException(
@@ -134,7 +155,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             }
 
             Visit(node.Right);
-            _Sql.Append(")");
+            Emit(")");
             return node;
         }
 
@@ -145,7 +166,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (node.Expression == _rowParam)
             {
-                _Sql.Append(_GetColumnName(node.Member.Name));
+                Emit(_GetColumnName(node.Member.Name));
                 return node;
             }
 
@@ -154,13 +175,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             {
                 if (node.Member.Name == "HasValue")
                 {
-                    _Sql.Append(_GetColumnName(inner.Member.Name));
-                    _Sql.Append(" IS NOT NULL");
+                    Emit(_GetColumnName(inner.Member.Name));
+                    Emit(" IS NOT NULL");
                     return node;
                 }
                 if (node.Member.Name == "Value")
                 {
-                    _Sql.Append(_GetColumnName(inner.Member.Name));
+                    Emit(_GetColumnName(inner.Member.Name));
                     return node;
                 }
             }
@@ -209,7 +230,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                     if (!first) sb.Append(" AND ");
                     sb.Append($"\"{joinInfo.JunctionTable}\".\"{joinInfo.EnumFkColumn}\" = {paramName})");
 
-                    _Sql.Append(sb);
+                    Emit(sb);
                     return node;
                 }
             }
@@ -243,9 +264,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                     && TryEvaluate(collectionExpr, out var collection))
                 {
                     Visit(itemExpr);
-                    _Sql.Append(" = ANY(");
-                    AddParameter(ToTypedArray(collection));
-                    _Sql.Append(")");
+                    Emit(" = ANY(");
+                    var elementType = itemExpr is UnaryExpression conv
+                        && (conv.NodeType == ExpressionType.Convert || conv.NodeType == ExpressionType.ConvertChecked)
+                        ? conv.Operand.Type
+                        : itemExpr.Type;
+                    AddParameter(ExpressionEvaluator.ToTypedArray(collection, elementType));
+                    Emit(")");
                     return node;
                 }
             }
@@ -264,33 +289,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         // -------------------------------------------------------------------------
         // Helpers
         // -------------------------------------------------------------------------
-        private static object? ToTypedArray(object? value)
-        {
-            if (value == null || value is Array) return value;
-
-            var type = value.GetType();
-            Type? elementType = null;
-            foreach (var iface in type.GetInterfaces())
-            {
-                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                {
-                    elementType = iface.GetGenericArguments()[0];
-                    break;
-                }
-            }
-
-            if (elementType == null || value is not System.Collections.IEnumerable enumerable)
-                return value;
-
-            var items = new System.Collections.ArrayList();
-            foreach (var item in enumerable)
-                items.Add(item);
-
-            var array = Array.CreateInstance(elementType, items.Count);
-            items.CopyTo(array);
-            return array;
-        }
-
         private bool IsSqlMarker(MethodCallExpression node)
         {
             var type = node.Method.DeclaringType;
@@ -301,7 +299,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (node.Method.Name == "Custom")
             {
-                if (TryEvaluate(node.Arguments[0], out var sql)) _Sql.Append(sql);
+                if (TryEvaluate(node.Arguments[0], out var sql)) Emit(sql?.ToString() ?? "");
                 return node;
             }
             ParseFluentCase(node);
@@ -311,13 +309,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private void ParseFluentCase(MethodCallExpression node)
         {
             if (node.Object is MethodCallExpression parent) ParseFluentCase(parent);
-            else if (node.Method.Name == "Case") { _Sql.Append("CASE"); return; }
+            else if (node.Method.Name == "Case") { Emit("CASE"); return; }
 
             switch (node.Method.Name)
             {
-                case "When": _Sql.Append(" WHEN "); Visit(node.Arguments[0]); break;
-                case "Then": _Sql.Append(" THEN "); Visit(node.Arguments[0]); break;
-                case "Else": _Sql.Append(" ELSE "); Visit(node.Arguments[0]); _Sql.Append(" END"); break;
+                case "When": Emit(" WHEN "); Visit(node.Arguments[0]); break;
+                case "Then": Emit(" THEN "); Visit(node.Arguments[0]); break;
+                case "Else": Emit(" ELSE "); Visit(node.Arguments[0]); Emit(" END"); break;
             }
         }
 
@@ -328,12 +326,12 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             // Static string.IsNullOrEmpty(x.Col) / string.IsNullOrWhiteSpace(x.Col)
             if (node.Object == null && (name == "IsNullOrEmpty" || name == "IsNullOrWhiteSpace") && node.Arguments.Count == 1)
             {
-                _Sql.Append("(");
+                Emit("(");
                 Visit(node.Arguments[0]);
-                _Sql.Append(" IS NULL OR ");
+                Emit(" IS NULL OR ");
                 Visit(node.Arguments[0]);
-                _Sql.Append(name == "IsNullOrWhiteSpace" ? " ~ '^\\s*$'" : " = ''");
-                _Sql.Append(")");
+                Emit(name == "IsNullOrWhiteSpace" ? " ~ '^\\s*$'" : " = ''");
+                Emit(")");
                 return node;
             }
 
@@ -355,16 +353,16 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 var raw = Evaluate(node.Arguments[0])?.ToString() ?? "";
                 var esc = EscapeLike(raw);
                 string pattern = name == "Contains" ? $"%{esc}%" : name == "StartsWith" ? $"{esc}%" : $"%{esc}";
-                _Sql.Append(likeOp);
+                Emit(likeOp);
                 AddParameter(pattern);
-                _Sql.Append(" ESCAPE '\\'");
+                Emit(" ESCAPE '\\'");
                 return node;
             }
 
             if (name == "Equals")
             {
-                if (node.Object != null) { Visit(node.Object); _Sql.Append(" = "); AddParameter(Evaluate(node.Arguments[0])); }
-                else if (node.Arguments.Count >= 2) { Visit(node.Arguments[0]); _Sql.Append(" = "); AddParameter(Evaluate(node.Arguments[1])); }
+                if (node.Object != null) { Visit(node.Object); Emit(" = "); AddParameter(Evaluate(node.Arguments[0])); }
+                else if (node.Arguments.Count >= 2) { Visit(node.Arguments[0]); Emit(" = "); AddParameter(Evaluate(node.Arguments[1])); }
                 else throw new NotSupportedException($"Unsupported string.Equals overload in SQL WHERE translation: {node}");
                 return node;
             }
@@ -372,9 +370,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             // Bare ToLower()/ToUpper() used directly in a comparison: LOWER("col") / UPPER("col").
             if (name == "ToLower" || name == "ToUpper")
             {
-                _Sql.Append(name == "ToLower" ? "LOWER(" : "UPPER(");
+                Emit(name == "ToLower" ? "LOWER(" : "UPPER(");
                 Visit(node.Object);
-                _Sql.Append(")");
+                Emit(")");
                 return node;
             }
 
@@ -393,11 +391,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private bool IsNullConstant(Expression exp) => exp is ConstantExpression c && c.Value == null;
 
-        private object? Evaluate(Expression e)
-        {
-            if (e is ConstantExpression c) return c.Value;
-            return Expression.Lambda(e).Compile().DynamicInvoke();
-        }
+        private static object? Evaluate(Expression e) => ExpressionEvaluator.Evaluate(e);
 
         private bool TryEvaluate(Expression e, out object? result)
         {
@@ -408,9 +402,10 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private bool IsDependentOnParam(Expression e)
         {
-            var finder = new ParameterFinder(_rowParam);
-            finder.Visit(e);
-            return finder.IsFound;
+            // Reused (not re-allocated) per node — the check is synchronous and non-reentrant.
+            _finder.Reset();
+            _finder.Visit(e);
+            return _finder.IsFound;
         }
 
         class ParameterFinder : ExpressionVisitor
@@ -418,6 +413,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             private readonly ParameterExpression _param;
             public bool IsFound { get; private set; }
             public ParameterFinder(ParameterExpression param) => _param = param;
+            public void Reset() => IsFound = false;
             protected override Expression VisitParameter(ParameterExpression node)
             {
                 if (node == _param) IsFound = true;

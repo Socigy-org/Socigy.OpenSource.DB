@@ -1,0 +1,362 @@
+// * Detailed results *
+AotInsertBenchmarks.'Socigy (insert builder)': JIT(Runtime=.NET 10.0, InvocationCount=1, UnrollFactor=1)
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 1.937 ms, StdErr = 0.015 ms (0.77%), N = 95, StdDev = 0.145 ms
+Min = 1.705 ms, Q1 = 1.831 ms, Median = 1.904 ms, Q3 = 2.029 ms, Max = 2.329 ms
+IQR = 0.198 ms, LowerFence = 1.534 ms, UpperFence = 2.325 ms
+ConfidenceInterval = [1.886 ms; 1.987 ms] (CI 99.9%), Margin = 0.051 ms (2.62% of Mean)
+Skewness = 0.87, Kurtosis = 3.23, MValue = 2.2
+-------------------- Histogram --------------------
+[1.663 ms ; 1.726 ms) | @@
+[1.726 ms ; 1.812 ms) | @@@@@@@@@@@@
+[1.812 ms ; 1.896 ms) | @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[1.896 ms ; 1.986 ms) | @@@@@@@@@@@@@@@@@@@@@
+[1.986 ms ; 2.079 ms) | @@@@@@@@@@@@@@@
+[2.079 ms ; 2.190 ms) | @@@@@@
+[2.190 ms ; 2.252 ms) | @
+[2.252 ms ; 2.335 ms) | @@@@@@
+---------------------------------------------------
+
+AotInsertBenchmarks.'Raw ADO.NET (hand-written)': JIT(Runtime=.NET 10.0, InvocationCount=1, UnrollFactor=1)
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 1.916 ms, StdErr = 0.015 ms (0.76%), N = 96, StdDev = 0.142 ms
+Min = 1.661 ms, Q1 = 1.800 ms, Median = 1.896 ms, Q3 = 1.991 ms, Max = 2.276 ms
+IQR = 0.191 ms, LowerFence = 1.514 ms, UpperFence = 2.277 ms
+ConfidenceInterval = [1.867 ms; 1.966 ms] (CI 99.9%), Margin = 0.049 ms (2.57% of Mean)
+Skewness = 0.63, Kurtosis = 2.58, MValue = 3.21
+-------------------- Histogram --------------------
+[1.654 ms ; 1.746 ms) | @@@@
+[1.746 ms ; 1.827 ms) | @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[1.827 ms ; 1.886 ms) | @@@@@@@@@@@
+[1.886 ms ; 1.968 ms) | @@@@@@@@@@@@@@@@@@@@@@
+[1.968 ms ; 2.053 ms) | @@@@@@@@@@@@@@
+[2.053 ms ; 2.109 ms) | @@@
+[2.109 ms ; 2.191 ms) | @@@@@@@@@
+[2.191 ms ; 2.286 ms) | @@@@@
+---------------------------------------------------
+
+AotInsertBenchmarks.'Socigy (insert builder)': NativeAOT(Runtime=NativeAOT 10.0, InvocationCount=1, UnrollFactor=1)
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 1.840 ms, StdErr = 0.017 ms (0.91%), N = 97, StdDev = 0.165 ms
+Min = 1.562 ms, Q1 = 1.721 ms, Median = 1.799 ms, Q3 = 1.947 ms, Max = 2.259 ms
+IQR = 0.225 ms, LowerFence = 1.383 ms, UpperFence = 2.285 ms
+ConfidenceInterval = [1.783 ms; 1.897 ms] (CI 99.9%), Margin = 0.057 ms (3.10% of Mean)
+Skewness = 0.74, Kurtosis = 2.87, MValue = 2.5
+-------------------- Histogram --------------------
+[1.514 ms ; 1.592 ms) | @@@
+[1.592 ms ; 1.693 ms) | @@@@@@@@@@@@
+[1.693 ms ; 1.787 ms) | @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[1.787 ms ; 1.903 ms) | @@@@@@@@@@@@@@@@@@@@@@
+[1.903 ms ; 1.984 ms) | @@@@@@@@
+[1.984 ms ; 2.078 ms) | @@@@@@@@@@@@
+[2.078 ms ; 2.176 ms) | @@
+[2.176 ms ; 2.270 ms) | @@@@@@
+---------------------------------------------------
+
+AotInsertBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT(Runtime=NativeAOT 10.0, InvocationCount=1, UnrollFactor=1)
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 2.001 ms, StdErr = 0.018 ms (0.92%), N = 99, StdDev = 0.183 ms
+Min = 1.663 ms, Q1 = 1.861 ms, Median = 1.976 ms, Q3 = 2.110 ms, Max = 2.476 ms
+IQR = 0.249 ms, LowerFence = 1.487 ms, UpperFence = 2.483 ms
+ConfidenceInterval = [1.939 ms; 2.063 ms] (CI 99.9%), Margin = 0.062 ms (3.12% of Mean)
+Skewness = 0.59, Kurtosis = 2.65, MValue = 3
+-------------------- Histogram --------------------
+[1.611 ms ; 1.726 ms) | @@
+[1.726 ms ; 1.824 ms) | @@@@@@@@@@@@@@
+[1.824 ms ; 1.928 ms) | @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[1.928 ms ; 1.992 ms) | @@@@@@@@
+[1.992 ms ; 2.096 ms) | @@@@@@@@@@@@@@@@@@@@@@
+[2.096 ms ; 2.225 ms) | @@@@@@@@@@@@
+[2.225 ms ; 2.345 ms) | @@@@@@@@@
+[2.345 ms ; 2.492 ms) | @@@@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8457/25H2/2025Update/HudsonValley2)
+Intel Core Ultra 9 275HX 2.70GHz, 1 CPU, 24 logical and 24 physical cores
+.NET SDK 10.0.300
+  [Host]    : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3
+  JIT       : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3
+  NativeAOT : .NET 10.0.8, X64 NativeAOT x86-64-v3
+
+InvocationCount=1  UnrollFactor=1
+
+| Method                       | Job       | Runtime        | Mean     | Error     | StdDev    | Ratio | RatioSD | Allocated | Alloc Ratio |
+|----------------------------- |---------- |--------------- |---------:|----------:|----------:|------:|--------:|----------:|------------:|
+| 'Socigy (insert builder)'    | JIT       | .NET 10.0      | 1.937 ms | 0.0507 ms | 0.1455 ms |  1.01 |    0.10 |   5.51 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | JIT       | .NET 10.0      | 1.916 ms | 0.0492 ms | 0.1421 ms |  0.99 |    0.10 |   3.45 KB |        0.63 |
+|                              |           |                |          |           |           |       |         |           |             |
+| 'Socigy (insert builder)'    | NativeAOT | NativeAOT 10.0 | 1.840 ms | 0.0570 ms | 0.1654 ms |  1.01 |    0.12 |    5.8 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 2.001 ms | 0.0624 ms | 0.1830 ms |  1.10 |    0.14 |    3.5 KB |        0.60 |
+
+// * Warnings *
+MultimodalDistribution
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': JIT       -> It seems that the distribution is bimodal (mValue = 3.21)
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> It seems that the distribution can have several modes (mValue = 3)
+MinIterationTime
+  AotInsertBenchmarks.'Socigy (insert builder)': JIT          -> The minimum observed iteration time is 1.705ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': JIT       -> The minimum observed iteration time is 1.661ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+  AotInsertBenchmarks.'Socigy (insert builder)': NativeAOT    -> The minimum observed iteration time is 1.562ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> The minimum observed iteration time is 1.663ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+
+// * Hints *
+Outliers
+  AotInsertBenchmarks.'Socigy (insert builder)': JIT          -> 5 outliers were removed (2.46 ms..5.47 ms)
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': JIT       -> 4 outliers were removed (2.30 ms..2.36 ms)
+  AotInsertBenchmarks.'Socigy (insert builder)': NativeAOT    -> 3 outliers were removed (2.46 ms..2.56 ms)
+  AotInsertBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> 1 outlier  was  removed (2.79 ms)
+// * Config Issues *
+
+// * Warnings *
+
+// ** Remained 4 (14.3%) benchmark(s) to run. Estimated finish 2026-06-04 23:40 (0h 2m from now) **
+Successfully reverted power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: High performance)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkResults\results\Benchmarks.Aot.AotProcedureBenchmarks-report.csv
+  BenchmarkResults\results\Benchmarks.Aot.AotProcedureBenchmarks-report-github.md
+  BenchmarkResults\results\Benchmarks.Aot.AotProcedureBenchmarks-report.html
+  BenchmarkResults\results\Benchmarks.Aot.AotProcedureBenchmarks-report-full.json
+
+// * Detailed results *
+AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT(Runtime=.NET 10.0) [Rows=1]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 317.791 us, StdErr = 1.858 us (0.58%), N = 96, StdDev = 18.204 us
+Min = 286.716 us, Q1 = 305.430 us, Median = 312.468 us, Q3 = 330.034 us, Max = 365.557 us
+IQR = 24.603 us, LowerFence = 268.525 us, UpperFence = 366.939 us
+ConfidenceInterval = [311.482 us; 324.101 us] (CI 99.9%), Margin = 6.309 us (1.99% of Mean)
+Skewness = 0.57, Kurtosis = 2.65, MValue = 2.86
+-------------------- Histogram --------------------
+[281.498 us ; 293.171 us) | @@@
+[293.171 us ; 303.995 us) | @@@@@@@@@@@@@@@@@@@
+[303.995 us ; 314.431 us) | @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[314.431 us ; 323.394 us) | @@@@@@@@
+[323.394 us ; 333.830 us) | @@@@@@@@@@@@@@@@
+[333.830 us ; 345.529 us) | @@@@@@@@@@@@@@@
+[345.529 us ; 359.517 us) | @@
+[359.517 us ; 370.775 us) | @@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': JIT(Runtime=.NET 10.0) [Rows=1]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 301.886 us, StdErr = 1.740 us (0.58%), N = 61, StdDev = 13.593 us
+Min = 274.977 us, Q1 = 292.158 us, Median = 302.961 us, Q3 = 310.641 us, Max = 337.579 us
+IQR = 18.483 us, LowerFence = 264.434 us, UpperFence = 338.365 us
+ConfidenceInterval = [295.864 us; 307.908 us] (CI 99.9%), Margin = 6.022 us (1.99% of Mean)
+Skewness = 0.07, Kurtosis = 2.49, MValue = 2.1
+-------------------- Histogram --------------------
+[270.445 us ; 278.956 us) | @@
+[278.956 us ; 289.801 us) | @@@@@@@@@@@
+[289.801 us ; 300.611 us) | @@@@@@@@@@
+[300.611 us ; 309.675 us) | @@@@@@@@@@@@@@@@@@@@@
+[309.675 us ; 318.803 us) | @@@@@@@@@@@@
+[318.803 us ; 328.399 us) | @@@@
+[328.399 us ; 342.111 us) | @
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=1]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 302.667 us, StdErr = 1.494 us (0.49%), N = 28, StdDev = 7.905 us
+Min = 282.688 us, Q1 = 300.333 us, Median = 303.333 us, Q3 = 306.923 us, Max = 317.567 us
+IQR = 6.590 us, LowerFence = 290.447 us, UpperFence = 316.808 us
+ConfidenceInterval = [297.154 us; 308.179 us] (CI 99.9%), Margin = 5.512 us (1.82% of Mean)
+Skewness = -0.52, Kurtosis = 3.23, MValue = 2
+-------------------- Histogram --------------------
+[282.199 us ; 292.149 us) | @@@
+[292.149 us ; 298.983 us) | @@@@
+[298.983 us ; 307.251 us) | @@@@@@@@@@@@@@
+[307.251 us ; 313.777 us) | @@@@@
+[313.777 us ; 320.984 us) | @@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=1]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 298.460 us, StdErr = 1.615 us (0.54%), N = 32, StdDev = 9.137 us
+Min = 278.380 us, Q1 = 294.129 us, Median = 299.479 us, Q3 = 304.845 us, Max = 313.222 us
+IQR = 10.715 us, LowerFence = 278.056 us, UpperFence = 320.918 us
+ConfidenceInterval = [292.591 us; 304.329 us] (CI 99.9%), Margin = 5.869 us (1.97% of Mean)
+Skewness = -0.42, Kurtosis = 2.36, MValue = 2
+-------------------- Histogram --------------------
+[274.602 us ; 282.730 us) | @@
+[282.730 us ; 290.285 us) | @@@@@
+[290.285 us ; 303.432 us) | @@@@@@@@@@@@@@@@
+[303.432 us ; 313.276 us) | @@@@@@@@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT(Runtime=.NET 10.0) [Rows=100]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 363.563 us, StdErr = 1.322 us (0.36%), N = 15, StdDev = 5.122 us
+Min = 354.788 us, Q1 = 360.808 us, Median = 364.571 us, Q3 = 367.618 us, Max = 371.172 us
+IQR = 6.810 us, LowerFence = 350.592 us, UpperFence = 377.833 us
+ConfidenceInterval = [358.087 us; 369.038 us] (CI 99.9%), Margin = 5.476 us (1.51% of Mean)
+Skewness = -0.24, Kurtosis = 1.85, MValue = 2
+-------------------- Histogram --------------------
+[352.062 us ; 366.384 us) | @@@@@@@@@@@
+[366.384 us ; 373.898 us) | @@@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': JIT(Runtime=.NET 10.0) [Rows=100]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 361.534 us, StdErr = 1.734 us (0.48%), N = 18, StdDev = 7.355 us
+Min = 338.559 us, Q1 = 360.597 us, Median = 362.084 us, Q3 = 365.228 us, Max = 372.289 us
+IQR = 4.631 us, LowerFence = 353.651 us, UpperFence = 372.174 us
+ConfidenceInterval = [354.660 us; 368.409 us] (CI 99.9%), Margin = 6.874 us (1.90% of Mean)
+Skewness = -1.5, Kurtosis = 5.76, MValue = 2
+-------------------- Histogram --------------------
+[334.876 us ; 342.243 us) | @
+[342.243 us ; 352.540 us) |
+[352.540 us ; 360.026 us) | @@@
+[360.026 us ; 367.393 us) | @@@@@@@@@@@
+[367.393 us ; 375.973 us) | @@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=100]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 359.509 us, StdErr = 1.868 us (0.52%), N = 24, StdDev = 9.152 us
+Min = 340.246 us, Q1 = 356.132 us, Median = 360.111 us, Q3 = 366.150 us, Max = 371.153 us
+IQR = 10.019 us, LowerFence = 341.103 us, UpperFence = 381.179 us
+ConfidenceInterval = [352.470 us; 366.547 us] (CI 99.9%), Margin = 7.039 us (1.96% of Mean)
+Skewness = -0.74, Kurtosis = 2.47, MValue = 2
+-------------------- Histogram --------------------
+[337.890 us ; 346.219 us) | @@@@
+[346.219 us ; 357.968 us) | @@@
+[357.968 us ; 366.297 us) | @@@@@@@@@@@@
+[366.297 us ; 375.318 us) | @@@@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=100]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 347.929 us, StdErr = 1.289 us (0.37%), N = 13, StdDev = 4.649 us
+Min = 340.005 us, Q1 = 346.066 us, Median = 347.113 us, Q3 = 349.623 us, Max = 356.740 us
+IQR = 3.557 us, LowerFence = 340.730 us, UpperFence = 354.958 us
+ConfidenceInterval = [342.362 us; 353.496 us] (CI 99.9%), Margin = 5.567 us (1.60% of Mean)
+Skewness = 0.3, Kurtosis = 2.47, MValue = 2
+-------------------- Histogram --------------------
+[337.410 us ; 351.074 us) | @@@@@@@@@@@
+[351.074 us ; 359.334 us) | @@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT(Runtime=.NET 10.0) [Rows=1000]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 593.000 us, StdErr = 2.613 us (0.44%), N = 15, StdDev = 10.122 us
+Min = 568.689 us, Q1 = 589.443 us, Median = 594.149 us, Q3 = 599.897 us, Max = 607.712 us
+IQR = 10.454 us, LowerFence = 573.762 us, UpperFence = 615.577 us
+ConfidenceInterval = [582.179 us; 603.820 us] (CI 99.9%), Margin = 10.821 us (1.82% of Mean)
+Skewness = -0.78, Kurtosis = 3.1, MValue = 2
+-------------------- Histogram --------------------
+[567.314 us ; 585.661 us) | @@
+[585.661 us ; 609.143 us) | @@@@@@@@@@@@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': JIT(Runtime=.NET 10.0) [Rows=1000]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3; GC = Concurrent Server
+Mean = 559.216 us, StdErr = 3.171 us (0.57%), N = 49, StdDev = 22.200 us
+Min = 526.716 us, Q1 = 540.732 us, Median = 559.914 us, Q3 = 574.820 us, Max = 617.214 us
+IQR = 34.088 us, LowerFence = 489.600 us, UpperFence = 625.952 us
+ConfidenceInterval = [548.100 us; 570.332 us] (CI 99.9%), Margin = 11.116 us (1.99% of Mean)
+Skewness = 0.39, Kurtosis = 2.31, MValue = 2
+-------------------- Histogram --------------------
+[518.754 us ; 531.048 us) | @@@@
+[531.048 us ; 546.973 us) | @@@@@@@@@@@@@@@
+[546.973 us ; 573.134 us) | @@@@@@@@@@@@@@@@@
+[573.134 us ; 588.107 us) | @@@@@@@@
+[588.107 us ; 609.251 us) | @@@@
+[609.251 us ; 625.176 us) | @
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=1000]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 627.842 us, StdErr = 3.199 us (0.51%), N = 24, StdDev = 15.671 us
+Min = 591.127 us, Q1 = 619.032 us, Median = 628.282 us, Q3 = 639.117 us, Max = 655.738 us
+IQR = 20.084 us, LowerFence = 588.906 us, UpperFence = 669.243 us
+ConfidenceInterval = [615.790 us; 639.894 us] (CI 99.9%), Margin = 12.052 us (1.92% of Mean)
+Skewness = -0.15, Kurtosis = 2.59, MValue = 2
+-------------------- Histogram --------------------
+[583.996 us ; 598.257 us) | @
+[598.257 us ; 616.278 us) | @@@@
+[616.278 us ; 630.540 us) | @@@@@@@@@@@
+[630.540 us ; 645.992 us) | @@@@@
+[645.992 us ; 662.868 us) | @@@
+---------------------------------------------------
+
+AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT(Runtime=NativeAOT 10.0) [Rows=1000]
+Runtime = .NET 10.0.8, X64 NativeAOT x86-64-v3; GC = Concurrent Server
+Mean = 559.337 us, StdErr = 2.720 us (0.49%), N = 16, StdDev = 10.880 us
+Min = 541.212 us, Q1 = 553.460 us, Median = 554.894 us, Q3 = 566.278 us, Max = 580.789 us
+IQR = 12.818 us, LowerFence = 534.233 us, UpperFence = 585.506 us
+ConfidenceInterval = [548.260 us; 570.415 us] (CI 99.9%), Margin = 11.078 us (1.98% of Mean)
+Skewness = 0.33, Kurtosis = 2.07, MValue = 2
+-------------------- Histogram --------------------
+[535.546 us ; 556.260 us) | @@@@@@@@@
+[556.260 us ; 571.728 us) | @@@@@
+[571.728 us ; 584.153 us) | @@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8457/25H2/2025Update/HudsonValley2)
+Intel Core Ultra 9 275HX 2.70GHz, 1 CPU, 24 logical and 24 physical cores
+.NET SDK 10.0.300
+  [Host]    : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3
+  JIT       : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v3
+  NativeAOT : .NET 10.0.8, X64 NativeAOT x86-64-v3
+
+
+| Method                       | Job       | Runtime        | Rows | Mean     | Error    | StdDev   | Median   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|----------------------------- |---------- |--------------- |----- |---------:|---------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| 'Socigy (.sql procedure)'    | JIT       | .NET 10.0      | 1    | 317.8 us |  6.31 us | 18.20 us | 312.5 us |  1.00 |    0.08 |      - |   3.47 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | JIT       | .NET 10.0      | 1    | 301.9 us |  6.02 us | 13.59 us | 303.0 us |  0.95 |    0.07 |      - |   2.59 KB |        0.75 |
+|                              |           |                |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (.sql procedure)'    | NativeAOT | NativeAOT 10.0 | 1    | 302.7 us |  5.51 us |  7.91 us | 303.3 us |  1.00 |    0.04 |      - |   3.49 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 1    | 298.5 us |  5.87 us |  9.14 us | 299.5 us |  0.99 |    0.04 |      - |   2.62 KB |        0.75 |
+|                              |           |                |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (.sql procedure)'    | JIT       | .NET 10.0      | 100  | 363.6 us |  5.48 us |  5.12 us | 364.6 us |  1.00 |    0.02 |      - |  15.62 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | JIT       | .NET 10.0      | 100  | 361.5 us |  6.87 us |  7.36 us | 362.1 us |  0.99 |    0.02 |      - |  14.71 KB |        0.94 |
+|                              |           |                |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (.sql procedure)'    | NativeAOT | NativeAOT 10.0 | 100  | 359.5 us |  7.04 us |  9.15 us | 360.1 us |  1.00 |    0.04 |      - |  15.62 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 100  | 347.9 us |  5.57 us |  4.65 us | 347.1 us |  0.97 |    0.03 |      - |  14.71 KB |        0.94 |
+|                              |           |                |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (.sql procedure)'    | JIT       | .NET 10.0      | 1000 | 593.0 us | 10.82 us | 10.12 us | 594.1 us |  1.00 |    0.02 | 1.9531 | 121.28 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | JIT       | .NET 10.0      | 1000 | 559.2 us | 11.12 us | 22.20 us | 559.9 us |  0.94 |    0.04 | 1.9531 | 120.43 KB |        0.99 |
+|                              |           |                |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (.sql procedure)'    | NativeAOT | NativeAOT 10.0 | 1000 | 627.8 us | 12.05 us | 15.67 us | 628.3 us |  1.00 |    0.03 | 1.9531 | 121.28 KB |        1.00 |
+| 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 1000 | 559.3 us | 11.08 us | 10.88 us | 554.9 us |  0.89 |    0.03 | 1.9531 | 120.45 KB |        0.99 |
+
+// * Warnings *
+MultimodalDistribution
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT -> It seems that the distribution can have several modes (mValue = 2.86)
+
+// * Hints *
+Outliers
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT          -> 2 outliers were removed (375.46 us, 376.40 us)
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT    -> 1 outlier  was  removed, 4 outliers were detected (282.69 us..288.55 us, 321.95 us)
+  AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> 1 outlier  was  removed, 2 outliers were detected (278.38 us, 328.75 us)
+  AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': JIT       -> 2 outliers were removed, 3 outliers were detected (338.56 us, 400.18 us, 418.97 us)
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT    -> 2 outliers were removed, 3 outliers were detected (340.25 us, 385.02 us, 393.84 us)
+  AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> 2 outliers were removed (372.70 us, 381.71 us)
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': JIT          -> 1 outlier  was  detected (568.69 us)
+  AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': JIT       -> 3 outliers were removed (662.46 us..719.85 us)
+  AotProcedureBenchmarks.'Socigy (.sql procedure)': NativeAOT    -> 3 outliers were removed (684.63 us..712.07 us)
+  AotProcedureBenchmarks.'Raw ADO.NET (hand-written)': NativeAOT -> 1 outlier  was  removed (601.90 us)
+// * Config Issues *
+
+// * Warnings *
+Configuration
+  Summary -> The exporter MarkdownExporter-github is already present in configuration. There may be unexpected results.
+
+// * Legends *
+  Rows        : Value of the 'Rows' parameter
+  Mean        : Arithmetic mean of all measurements
+  Error       : Half of 99.9% confidence interval
+  StdDev      : Standard deviation of all measurements
+  Median      : Value separating the higher half of all measurements (50th percentile)
+  Ratio       : Mean of the ratio distribution ([Current]/[Baseline])
+  RatioSD     : Standard deviation of the ratio distribution ([Current]/[Baseline])
+  Gen0        : GC Generation 0 collects per 1000 operations
+  Allocated   : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  Alloc Ratio : Allocated memory ratio distribution ([Current]/[Baseline])
+  1 us        : 1 Microsecond (0.000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *

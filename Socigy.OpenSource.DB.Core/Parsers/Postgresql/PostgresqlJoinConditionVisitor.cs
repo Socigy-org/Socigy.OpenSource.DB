@@ -152,11 +152,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private bool IsNullConstant(Expression exp) =>
             exp is ConstantExpression c && c.Value == null;
 
-        private object? Evaluate(Expression e)
-        {
-            if (e is ConstantExpression c) return c.Value;
-            return Expression.Lambda(e).Compile().DynamicInvoke();
-        }
+        private object? Evaluate(Expression e) => ExpressionEvaluator.Evaluate(e);
 
         private bool TryEvaluate(Expression e, out object? result)
         {

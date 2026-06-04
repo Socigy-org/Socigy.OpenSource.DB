@@ -16,6 +16,14 @@
     <Project Path="Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj" />
     <Project Path="Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj" />
   </Folder>
+  <Folder Name="/Benchmarks/">
+    <Project Path="Benchmarks/Benchmarks.csproj">
+      <BuildType Solution="DB_Migration|*" Project="Release" />
+    </Project>
+    <Project Path="Benchmarks.Aot/Benchmarks.Aot.csproj">
+      <BuildType Solution="DB_Migration|*" Project="Release" />
+    </Project>
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
   </Folder>

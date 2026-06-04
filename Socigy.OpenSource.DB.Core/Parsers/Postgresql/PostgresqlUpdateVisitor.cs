@@ -60,6 +60,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
+        /// <summary>Not shape-cached; delegates to <see cref="Parse"/> (parameters are added as a side effect).</summary>
+        public void BindParameters(Expression expression) => Parse(expression);
+
         /// <summary>
         /// Walks the expression and returns the C# property names of every column
         /// referenced on the row parameter — without touching SQL or parameters.
@@ -166,10 +169,11 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (IsDependentOnParam(test))
             {
+                // Predicate over the entity instance — requires a compiled delegate with the row parameter.
                 var lambda = Expression.Lambda(test, _rowParam);
                 return lambda.Compile().DynamicInvoke(_Entity) is true;
             }
-            return Expression.Lambda(test).Compile().DynamicInvoke() is true;
+            return ExpressionEvaluator.Evaluate(test) is true;
         }
 
         private bool IsDependentOnParam(Expression e)

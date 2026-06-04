@@ -30,6 +30,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
+        /// <summary>Not shape-cached; delegates to <see cref="Parse"/> (parameters are added as a side effect).</summary>
+        public void BindParameters(Expression expression) => Parse(expression);
+
         // Handle the "new object[] { ... }" array initialization
         protected override Expression VisitNewArray(NewArrayExpression node)
         {
@@ -239,13 +242,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             _Sql.Append(paramName);
         }
 
-        // Helper to evaluate simple closures (like "wailed" or local vars)
-        private object? Evaluate(Expression e)
-        {
-            if (e is ConstantExpression c) return c.Value;
-            var lambda = Expression.Lambda(e);
-            return lambda.Compile().DynamicInvoke();
-        }
+        // Reflection-light evaluation of parameter-independent closures (constants / captured vars).
+        private object? Evaluate(Expression e) => ExpressionEvaluator.Evaluate(e);
 
         private bool TryEvaluate(Expression e, out object? result)
         {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using Npgsql;
@@ -124,6 +125,36 @@ namespace Socigy.OpenSource.DB.UnitTests
         public void UnsupportedStringMethod_Throws()
         {
             Assert.Throws<NotSupportedException>(() => Where(x => x.Name.PadLeft(3) == "abc"));
+        }
+
+        // ---- Reflection-light closure evaluation (no Expression.Compile on the hot path) ----
+
+        [Test]
+        public void CapturedLocalVariable_IsParameterized()
+        {
+            var name = "alice";
+            var (sql, ps) = Where(x => x.Name == name);
+            Assert.That(sql, Does.Contain("\"Name\" = @p0"));
+            Assert.That(ps[0].Value, Is.EqualTo("alice"));
+        }
+
+        [Test]
+        public void CapturedPropertyChain_IsParameterized()
+        {
+            var holder = new { Threshold = 10 };
+            var (sql, ps) = Where(x => x.Age!.Value > holder.Threshold);
+            Assert.That(sql, Does.Contain("\"Age\" > @p0"));
+            Assert.That(ps[0].Value, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void CollectionContains_CapturedList_EmitsTypedArray()
+        {
+            var ids = new List<int> { 1, 2, 3 };
+            var (sql, ps) = Where(x => ids.Contains(x.Id));
+            Assert.That(sql, Does.Contain("\"Id\" = ANY(@p0)"));
+            Assert.That(ps[0].Value, Is.AssignableTo<int[]>());
+            Assert.That((int[])ps[0].Value!, Is.EqualTo(new[] { 1, 2, 3 }));
         }
     }
 }

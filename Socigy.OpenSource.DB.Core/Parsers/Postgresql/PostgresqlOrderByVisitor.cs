@@ -34,6 +34,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
+        /// <summary>Not shape-cached; delegates to <see cref="Parse"/> (parameters are added as a side effect).</summary>
+        public void BindParameters(Expression expression) => Parse(expression);
+
         private void AddParameter(object? value)
         {
             string paramName = $"@p{_Command.Parameters.Count}";
@@ -211,8 +214,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             {
                 if (!IsDependentOnParam(e))
                 {
-                    var lambda = Expression.Lambda(e);
-                    result = lambda.Compile().DynamicInvoke();
+                    result = ExpressionEvaluator.Evaluate(e);
                     return true;
                 }
             }

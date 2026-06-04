@@ -107,7 +107,7 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
             private readonly DbCommand _command;
             private readonly string _operation;
             private readonly Activity? _activity;
-            private readonly Stopwatch _stopwatch;
+            private readonly long _startTimestamp;
             private readonly SocigyDbDiagnosticsOptions _options;
             private readonly ILogger? _logger;
 
@@ -124,7 +124,7 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                 _activity = activity;
                 _options = options;
                 _logger = logger;
-                _stopwatch = Stopwatch.StartNew();
+                _startTimestamp = Stopwatch.GetTimestamp(); // allocation-free timing
             }
 
             public static Scope Start(DbCommand command, string operation, DbDiagnosticsContext? diagnostics)
@@ -169,7 +169,8 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                         { "exception.stacktrace", ex.ToString() },
                     }));
                 }
-                SocigyDbInstrumentation.ErrorCounter.Add(1, OperationTag());
+                if (SocigyDbInstrumentation.ErrorCounter.Enabled)
+                    SocigyDbInstrumentation.ErrorCounter.Add(1, OperationTag());
                 Finish();
             }
 
@@ -178,33 +179,47 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                 if (_finished) return;
                 _finished = true;
 
-                _stopwatch.Stop();
-                double seconds = _stopwatch.Elapsed.TotalSeconds;
+                bool hasActivity = _activity != null && _activity.IsAllDataRequested;
+                bool hasLog = _logger != null && _logger.IsEnabled(_options.LogLevel);
+                bool durationEnabled = SocigyDbInstrumentation.DurationHistogram.Enabled;
+                bool counterEnabled = SocigyDbInstrumentation.CommandCounter.Enabled;
 
-                SocigyDbInstrumentation.DurationHistogram.Record(seconds, OperationTag());
-                SocigyDbInstrumentation.CommandCounter.Add(1, OperationTag());
+                // Fast path: when nothing is subscribed (no trace listener, no logger, no meter listener)
+                // skip all emission — including the elapsed computation and tag/parameter allocations.
+                if (!hasActivity && !hasLog && !durationEnabled && !counterEnabled)
+                    return;
 
-                if (_activity != null && _activity.IsAllDataRequested)
+                double seconds = ElapsedSeconds();
+
+                if (durationEnabled)
+                    SocigyDbInstrumentation.DurationHistogram.Record(seconds, OperationTag());
+                if (counterEnabled)
+                    SocigyDbInstrumentation.CommandCounter.Add(1, OperationTag());
+
+                if (hasActivity)
                 {
-                    if (_rowsAffected >= 0) _activity.SetTag("db.response.affected_rows", _rowsAffected);
-                    if (_returnedRows >= 0) _activity.SetTag("db.response.returned_rows", _returnedRows);
-                    _activity.SetTag("db.query.parameters", ParameterSerializer.Serialize(_command.Parameters, _options));
+                    if (_rowsAffected >= 0) _activity!.SetTag("db.response.affected_rows", _rowsAffected);
+                    if (_returnedRows >= 0) _activity!.SetTag("db.response.returned_rows", _returnedRows);
+                    _activity!.SetTag("db.query.parameters", ParameterSerializer.Serialize(_command.Parameters, _options));
                 }
 
-                if (_logger != null && _logger.IsEnabled(_options.LogLevel))
+                if (hasLog)
                 {
                     long rows = _returnedRows >= 0 ? _returnedRows : _rowsAffected;
-                    _logger.Log(
+                    _logger!.Log(
                         _options.LogLevel,
                         _error,
                         "SQL {Operation} ({DurationMs} ms) rows~{Rows}: {Sql} | params: {Parameters}",
                         _operation,
-                        _stopwatch.Elapsed.TotalMilliseconds,
+                        seconds * 1000.0,
                         rows,
                         _options.CaptureCommandText ? _command.CommandText : "(suppressed)",
                         ParameterSerializer.Serialize(_command.Parameters, _options));
                 }
             }
+
+            private double ElapsedSeconds()
+                => (Stopwatch.GetTimestamp() - _startTimestamp) / (double)Stopwatch.Frequency;
 
             private System.Collections.Generic.KeyValuePair<string, object?> OperationTag()
                 => new System.Collections.Generic.KeyValuePair<string, object?>("db.operation.name", _operation);

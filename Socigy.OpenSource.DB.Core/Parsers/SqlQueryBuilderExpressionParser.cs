@@ -63,6 +63,33 @@ namespace Socigy.OpenSource.DB.Core.Parsers
 
         public string ProcessWhere(Expression<Func<T, bool>> where)
         {
+            // Shape cache: translate a given predicate shape once, then on subsequent calls reuse the SQL
+            // and only re-bind the parameter values. Only safe when WHERE is the first param-producing
+            // clause (so @pN numbering starts at 0 and matches the cached SQL) and the shape is cacheable
+            // (no Query.Custom raw SQL / unmodelled nodes).
+            if (_Command.Parameters.Count == 0
+                && ExpressionStructure.TryComputeHash(where.Body, where.Parameters[0], out long hash))
+            {
+                var type = typeof(T);
+                if (QueryShapeCache.TryGet(type, hash, out string cachedSql, out int expectedParams))
+                {
+                    _NewWhere(where.Parameters[0], _GetColumName, _Command).BindParameters(where);
+
+                    if (_Command.Parameters.Count == expectedParams)
+                        return cachedSql;
+
+                    // Param-count mismatch ⇒ a (vanishingly rare) hash collision against a different shape.
+                    // Discard what we bound and fall back to a fresh, correct translation.
+                    for (int i = _Command.Parameters.Count - 1; i >= 0; i--)
+                        _Command.Parameters.RemoveAt(i);
+                    return _NewWhere(where.Parameters[0], _GetColumName, _Command).Parse(where);
+                }
+
+                string sql = _NewWhere(where.Parameters[0], _GetColumName, _Command).Parse(where);
+                QueryShapeCache.Add(type, hash, sql, _Command.Parameters.Count);
+                return sql;
+            }
+
             return _NewWhere(where.Parameters[0], _GetColumName, _Command)
               .Parse(where);
         }

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Surface AOT/trim analyzer warnings at build time so the AOT boundary is visible. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <!-- Wire socigy.json + the .sql procedure so the generator emits the typed API for BenchUser -->
+  <ItemGroup>
+    <AdditionalFiles Include="socigy.json" Condition="Exists('socigy.json')" />
+    <AdditionalFiles Include="..\Benchmarks\Socigy\Procedures\GetUsersUnderAge.sql" />
+  </ItemGroup>
+
+  <!-- Reuse the models + seed helper from the JIT benchmark project (no EF/Dapper here). -->
+  <ItemGroup>
+    <Compile Include="..\Benchmarks\BenchUser.cs" Link="BenchUser.cs" />
+    <Compile Include="..\Benchmarks\BenchWrite.cs" Link="BenchWrite.cs" />
+    <Compile Include="..\Benchmarks\BenchSupport.cs" Link="BenchSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageReference Include="Npgsql" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
+    <ProjectReference Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>Analyzer</OutputItemType>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

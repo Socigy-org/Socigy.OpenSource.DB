@@ -107,6 +107,60 @@ namespace <#= Namespace #>
         {
             return new <#= ClassName #>(reader, columnOverrides);
         }
+
+        // ── Fast materialization path ───────────────────────────────────────────────
+        // Column ordinals are resolved once per result set (not per row), and values are read with the
+        // typed, allocation-free GetFieldValue<T> instead of (T)GetValue(...) which boxes value types.
+        private static int GetColumnDbIndexSafe(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides)
+        {
+            if (columnOverrides != null && columnOverrides.TryGetValue(columnName, out var __mapped))
+                columnName = __mapped;
+            try { return reader.GetOrdinal(columnName); } catch { return -1; }
+        }
+
+        /// <summary>Resolves the column ordinals for the current result set once, for reuse across all rows.</summary>
+        public static int[] GetColumnOrdinals(DbDataReader reader, Dictionary<string, string>? columnOverrides = null)
+        {
+            return new int[]
+            {
+<#
+            foreach(var column in Columns)
+            {
+#>              GetColumnDbIndexSafe(reader, <#= column.SourceName #>ColumnName, columnOverrides),
+<#
+            }
+#>
+            };
+        }
+
+        /// <summary>Materializes a row using pre-resolved ordinals (see <see cref="GetColumnOrdinals"/>).</summary>
+        public static <#= ClassName #> ConvertFrom(DbDataReader reader, int[] ordinals)
+        {
+            var __row = new <#= ClassName #>();
+<#
+            int __ci = 0;
+            foreach(var column in Columns)
+            {
+                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                {
+#>          { int __o = ordinals[<#= __ci #>]; if (__o >= 0 && !reader.IsDBNull(__o)) { var __json = reader.GetFieldValue<string>(__o); __row.<#= column.SourceName #> = global::System.Text.Json.JsonSerializer.Deserialize<<#= column.TypeName.TrimEnd('?') #>>(__json, <#= column.JsonContextType #>.Default.Options); } }
+<#
+                }
+                else if (string.IsNullOrEmpty(column.Converter))
+                {
+#>          { int __o = ordinals[<#= __ci #>]; __row.<#= column.SourceName #> = (__o < 0 || reader.IsDBNull(__o)) ? default(<#= column.TypeName #>) : (<#= column.TypeName #>)reader.GetFieldValue<<#= column.TypeName.TrimEnd('?') #>>(__o); }
+<#
+                }
+                else
+                {
+#>          { int __o = ordinals[<#= __ci #>]; if (__o >= 0 && !reader.IsDBNull(__o)) { __row.<#= column.SourceName #> = new <#= column.Converter #>().ConvertFromDbValue(reader.GetValue(__o)); } }
+<#
+                }
+                __ci++;
+            }
+#>
+            return __row;
+        }
         #endregion
 
         /// <summary>Returns a new insert command builder for this instance.</summary>
@@ -541,9 +595,11 @@ namespace <#= Namespace #>
 
                 await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), default, _Diagnostics);
                 var reader = __instr.Reader;
+                int[]? __ordinals = null;
                 while (await __instr.ReadAsync())
                 {
-                    yield return <#= ClassName #>.ConvertFrom(reader);
+                    __ordinals ??= <#= ClassName #>.GetColumnOrdinals(reader);
+                    yield return <#= ClassName #>.ConvertFrom(reader, __ordinals);
                 }
             }
 
