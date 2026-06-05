@@ -658,6 +658,74 @@ namespace <#= Namespace #>
                 return parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
             }
 
+            // ── Scalar / aggregate queries ─────────────────────────────────────────────
+            // Builds "SELECT <expr> FROM \"table\" [WHERE ...]" reusing the WHERE visitor, then ExecuteScalar.
+            private async Task<object?> RunScalarAsync(string selectExpr)
+            {
+                if (_Connection == null)
+                    throw new InvalidOperationException("Cannot execute, no DbConnection was provided. Call WithConnection()/WithTransaction() first.");
+                if (_Connection.State != System.Data.ConnectionState.Open)
+                    await _Connection.OpenAsync();
+                await using var command = _Connection.CreateCommand();
+                if (_Transaction != null)
+                    command.Transaction = _Transaction;
+                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
+                string whereSql = _WhereClause == null ? "" : parser.ProcessWhere(_WhereClause);
+                command.CommandText = "SELECT " + selectExpr + " FROM \"" + <#= ClassName #>.TableName + "\"" + whereSql;
+                return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "SELECT", ct => command.ExecuteScalarAsync(ct), default, _Diagnostics);
+            }
+
+            // Resolves a single-column selector (x => x.Amount, possibly boxed to object) to its DB column name.
+            private static string ScalarColumn(LambdaExpression selector)
+            {
+                var __body = selector.Body;
+                if (__body is UnaryExpression __u && (__u.NodeType == ExpressionType.Convert || __u.NodeType == ExpressionType.ConvertChecked))
+                    __body = __u.Operand;
+                if (__body is MemberExpression __m && __m.Expression is ParameterExpression)
+                {
+                    var __col = <#= ClassName #>.GetColumnDbName(__m.Member.Name);
+                    if (__col != null) return __col;
+                }
+                throw new NotSupportedException("Aggregate/scalar selector must be a single mapped column, e.g. x => x.Amount.");
+            }
+
+            private async Task<TResult?> AggregateAsync<TResult>(string func, Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+            {
+                var __r = await RunScalarAsync(func + "(\"" + ScalarColumn(selector) + "\")");
+                if (__r == null || __r is DBNull) return null;
+                var __t = typeof(TResult);
+                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+            }
+
+            /// <summary>Returns <c>COUNT(*)</c> over the current filter (a real SQL count, not a client-side drain).</summary>
+            public async Task<long> CountAsync()
+            {
+                var __r = await RunScalarAsync("COUNT(*)");
+                return __r == null || __r is DBNull ? 0L : Convert.ToInt64(__r);
+            }
+
+            /// <summary>Returns <c>SUM(column)</c>, or <see langword="null"/> when no rows match.</summary>
+            public Task<TResult?> SumAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>("SUM", selector);
+            /// <summary>Returns <c>AVG(column)</c>, or <see langword="null"/> when no rows match.</summary>
+            public Task<TResult?> AvgAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>("AVG", selector);
+            /// <summary>Returns <c>MIN(column)</c>, or <see langword="null"/> when no rows match.</summary>
+            public Task<TResult?> MinAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>("MIN", selector);
+            /// <summary>Returns <c>MAX(column)</c>, or <see langword="null"/> when no rows match.</summary>
+            public Task<TResult?> MaxAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>("MAX", selector);
+
+            /// <summary>Returns a single column's value from the first matching row (or <c>default</c> if none).</summary>
+            public async Task<TResult?> ScalarAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector)
+            {
+                var __r = await RunScalarAsync("\"" + ScalarColumn(selector) + "\"");
+                if (__r == null || __r is DBNull) return default;
+                var __t = typeof(TResult);
+                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+            }
+
             // ── Set-operation factory methods ─────────────────────────────────────────
             public PostgresqlSetQueryCommandBuilder<<#= ClassName #>> Union(TableQueryBuilder rhs)
                 => new PostgresqlSetQueryCommandBuilder<<#= ClassName #>>(this, rhs, "UNION");

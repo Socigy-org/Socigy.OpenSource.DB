@@ -145,7 +145,18 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        Task<bool> ExistsAsync({pred} predicate);");
             sb.AppendLine($"        Task<{e}?> FirstOrDefaultAsync({pred} predicate);");
             sb.AppendLine($"        Task<List<{e}>> ToListAsync({pred}? predicate = null);");
+            sb.AppendLine($"        /// <summary>Real <c>SELECT COUNT(*)</c> over the optional filter.</summary>");
             sb.AppendLine($"        Task<long> CountAsync({pred}? predicate = null);");
+            sb.AppendLine($"        /// <summary><c>SUM(column)</c> over the optional filter; <see langword=\"null\"/> when no rows match.</summary>");
+            sb.AppendLine($"        Task<TResult?> SumAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null) where TResult : struct;");
+            sb.AppendLine($"        /// <summary><c>AVG(column)</c> over the optional filter.</summary>");
+            sb.AppendLine($"        Task<TResult?> AvgAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null) where TResult : struct;");
+            sb.AppendLine($"        /// <summary><c>MIN(column)</c> over the optional filter.</summary>");
+            sb.AppendLine($"        Task<TResult?> MinAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null) where TResult : struct;");
+            sb.AppendLine($"        /// <summary><c>MAX(column)</c> over the optional filter.</summary>");
+            sb.AppendLine($"        Task<TResult?> MaxAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null) where TResult : struct;");
+            sb.AppendLine($"        /// <summary>A single column's value from the first matching row (<c>default</c> if none).</summary>");
+            sb.AppendLine($"        Task<TResult?> ScalarAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null);");
             sb.AppendLine($"        /// <summary>Inserts one entity. Pass <c>includeAutoFields: true</c> to also write auto-increment columns (supply your own values).</summary>");
             sb.AppendLine($"        Task<bool> InsertAsync({e} entity, bool includeAutoFields = false);");
             sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Pass <c>includeAutoFields: true</c> to also write auto-increment columns. Returns the total rows inserted.</summary>");
@@ -206,7 +217,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("            => await FirstOrDefaultAsync(predicate) != null;");
             sb.AppendLine();
 
-            // CountAsync (v1: drain-count)
+            // CountAsync — real SELECT COUNT(*) (not a client-side drain)
             sb.AppendLine($"        public async Task<long> CountAsync({pred}? predicate = null)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -214,13 +225,30 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("            {");
             sb.AppendLine($"                var __q = predicate == null ? {e}.Query() : {e}.Query(predicate);");
             EmitEnlist(sb, "__q");
-            sb.AppendLine("                long __count = 0;");
-            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync()) __count++;");
-            sb.AppendLine("                return __count;");
+            sb.AppendLine("                return await __q.CountAsync();");
             sb.AppendLine("            }");
             sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
             sb.AppendLine("        }");
             sb.AppendLine();
+
+            // Aggregates (SUM/AVG/MIN/MAX) + single-value ScalarAsync — each builds a filtered query and
+            // delegates to the query builder's scalar methods.
+            foreach (var agg in new[] { "SumAsync", "AvgAsync", "MinAsync", "MaxAsync", "ScalarAsync" })
+            {
+                string constraint = agg == "ScalarAsync" ? "" : " where TResult : struct";
+                sb.AppendLine($"        public async Task<TResult?> {agg}<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null){constraint}");
+                sb.AppendLine("        {");
+                sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
+                sb.AppendLine("            try");
+                sb.AppendLine("            {");
+                sb.AppendLine($"                var __q = predicate == null ? {e}.Query() : {e}.Query(predicate);");
+                EmitEnlist(sb, "__q");
+                sb.AppendLine($"                return await __q.{agg}<TResult>(selector);");
+                sb.AppendLine("            }");
+                sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
 
             // InsertAsync
             sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, bool includeAutoFields = false)");

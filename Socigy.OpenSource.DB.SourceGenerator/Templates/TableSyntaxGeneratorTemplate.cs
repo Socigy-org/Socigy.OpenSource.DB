@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class TableSyntaxGeneratorTemplate : TableSyntaxGeneratorTemplateBase {
         
         
-        #line 723 "TableSyntaxGeneratorTemplate.tt"
+        #line 791 "TableSyntaxGeneratorTemplate.tt"
 
 	public string Namespace { get; set; }
 	public string ClassName { get; set; }
@@ -3701,158 +3701,347 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             this.Write(@".TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
             }
 
+            // ── Scalar / aggregate queries ─────────────────────────────────────────────
+            // Builds ""SELECT <expr> FROM \""table\"" [WHERE ...]"" reusing the WHERE visitor, then ExecuteScalar.
+            private async Task<object?> RunScalarAsync(string selectExpr)
+            {
+                if (_Connection == null)
+                    throw new InvalidOperationException(""Cannot execute, no DbConnection was provided. Call WithConnection()/WithTransaction() first."");
+                if (_Connection.State != System.Data.ConnectionState.Open)
+                    await _Connection.OpenAsync();
+                await using var command = _Connection.CreateCommand();
+                if (_Transaction != null)
+                    command.Transaction = _Transaction;
+                var parser = new SqlQueryBuilderExpressionParser<");
+            
+            #line default
+            #line hidden
+            
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(">(command, ");
+            
+            #line default
+            #line hidden
+            
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(".GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);\r\n       " +
+                    "         string whereSql = _WhereClause == null ? \"\" : parser.ProcessWhere(_Wher" +
+                    "eClause);\r\n                command.CommandText = \"SELECT \" + selectExpr + \" FROM" +
+                    " \\\"\" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 692 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 692 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@".TableName + ""\"""" + whereSql;
+                return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, ""SELECT"", ct => command.ExecuteScalarAsync(ct), default, _Diagnostics);
+            }
+
+            // Resolves a single-column selector (x => x.Amount, possibly boxed to object) to its DB column name.
+            private static string ScalarColumn(LambdaExpression selector)
+            {
+                var __body = selector.Body;
+                if (__body is UnaryExpression __u && (__u.NodeType == ExpressionType.Convert || __u.NodeType == ExpressionType.ConvertChecked))
+                    __body = __u.Operand;
+                if (__body is MemberExpression __m && __m.Expression is ParameterExpression)
+                {
+                    var __col = ");
+            
+            #line default
+            #line hidden
+            
+            #line 704 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 704 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@".GetColumnDbName(__m.Member.Name);
+                    if (__col != null) return __col;
+                }
+                throw new NotSupportedException(""Aggregate/scalar selector must be a single mapped column, e.g. x => x.Amount."");
+            }
+
+            private async Task<TResult?> AggregateAsync<TResult>(string func, Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 710 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 710 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector) where TResult : struct
+            {
+                var __r = await RunScalarAsync(func + ""(\"""" + ScalarColumn(selector) + ""\"")"");
+                if (__r == null || __r is DBNull) return null;
+                var __t = typeof(TResult);
+                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+            }
+
+            /// <summary>Returns <c>COUNT(*)</c> over the current filter (a real SQL count, not a client-side drain).</summary>
+            public async Task<long> CountAsync()
+            {
+                var __r = await RunScalarAsync(""COUNT(*)"");
+                return __r == null || __r is DBNull ? 0L : Convert.ToInt64(__r);
+            }
+
+            /// <summary>Returns <c>SUM(column)</c>, or <see langword=""null""/> when no rows match.</summary>
+            public Task<TResult?> SumAsync<TResult>(Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 726 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 726 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>(""SUM"", selector);
+            /// <summary>Returns <c>AVG(column)</c>, or <see langword=""null""/> when no rows match.</summary>
+            public Task<TResult?> AvgAsync<TResult>(Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 729 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 729 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>(""AVG"", selector);
+            /// <summary>Returns <c>MIN(column)</c>, or <see langword=""null""/> when no rows match.</summary>
+            public Task<TResult?> MinAsync<TResult>(Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 732 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 732 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>(""MIN"", selector);
+            /// <summary>Returns <c>MAX(column)</c>, or <see langword=""null""/> when no rows match.</summary>
+            public Task<TResult?> MaxAsync<TResult>(Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 735 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 735 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector) where TResult : struct
+                => AggregateAsync<TResult>(""MAX"", selector);
+
+            /// <summary>Returns a single column's value from the first matching row (or <c>default</c> if none).</summary>
+            public async Task<TResult?> ScalarAsync<TResult>(Expression<Func<");
+            
+            #line default
+            #line hidden
+            
+            #line 739 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 739 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@", object?>> selector)
+            {
+                var __r = await RunScalarAsync(""\"""" + ScalarColumn(selector) + ""\"""");
+                if (__r == null || __r is DBNull) return default;
+                var __t = typeof(TResult);
+                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+            }
+
             // ── Set-operation factory methods ─────────────────────────────────────────
             public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 680 "TableSyntaxGeneratorTemplate.tt"
+            #line 748 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 680 "TableSyntaxGeneratorTemplate.tt"
+            #line 748 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Union(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandB" +
                     "uilder<");
             
             #line default
             #line hidden
             
-            #line 681 "TableSyntaxGeneratorTemplate.tt"
+            #line 749 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 681 "TableSyntaxGeneratorTemplate.tt"
+            #line 749 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"UNION\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 682 "TableSyntaxGeneratorTemplate.tt"
+            #line 750 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 682 "TableSyntaxGeneratorTemplate.tt"
+            #line 750 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> UnionAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComma" +
                     "ndBuilder<");
             
             #line default
             #line hidden
             
-            #line 683 "TableSyntaxGeneratorTemplate.tt"
+            #line 751 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 683 "TableSyntaxGeneratorTemplate.tt"
+            #line 751 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"UNION ALL\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 684 "TableSyntaxGeneratorTemplate.tt"
+            #line 752 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 684 "TableSyntaxGeneratorTemplate.tt"
+            #line 752 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Intersect(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComm" +
                     "andBuilder<");
             
             #line default
             #line hidden
             
-            #line 685 "TableSyntaxGeneratorTemplate.tt"
+            #line 753 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 685 "TableSyntaxGeneratorTemplate.tt"
+            #line 753 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"INTERSECT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 686 "TableSyntaxGeneratorTemplate.tt"
+            #line 754 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 686 "TableSyntaxGeneratorTemplate.tt"
+            #line 754 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> IntersectAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryC" +
                     "ommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 687 "TableSyntaxGeneratorTemplate.tt"
+            #line 755 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 687 "TableSyntaxGeneratorTemplate.tt"
+            #line 755 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"INTERSECT ALL\");\r\n            public PostgresqlSetQueryCommandBuild" +
                     "er<");
             
             #line default
             #line hidden
             
-            #line 688 "TableSyntaxGeneratorTemplate.tt"
+            #line 756 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 688 "TableSyntaxGeneratorTemplate.tt"
+            #line 756 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Except(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommand" +
                     "Builder<");
             
             #line default
             #line hidden
             
-            #line 689 "TableSyntaxGeneratorTemplate.tt"
+            #line 757 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 689 "TableSyntaxGeneratorTemplate.tt"
+            #line 757 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"EXCEPT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            #line 758 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 690 "TableSyntaxGeneratorTemplate.tt"
+            #line 758 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> ExceptAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComm" +
                     "andBuilder<");
             
             #line default
             #line hidden
             
-            #line 691 "TableSyntaxGeneratorTemplate.tt"
+            #line 759 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 691 "TableSyntaxGeneratorTemplate.tt"
+            #line 759 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"EXCEPT ALL\");\r\n\r\n            // ── Join factory methods ───────────" +
                     "────────────────────────────────────────\r\n            public PostgresqlJoinQuery" +
                     "CommandBuilder<");
@@ -3860,25 +4049,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 694 "TableSyntaxGeneratorTemplate.tt"
+            #line 762 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 694 "TableSyntaxGeneratorTemplate.tt"
+            #line 762 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> Join<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 695 "TableSyntaxGeneratorTemplate.tt"
+            #line 763 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 695 "TableSyntaxGeneratorTemplate.tt"
+            #line 763 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3886,38 +4075,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 697 "TableSyntaxGeneratorTemplate.tt"
+            #line 765 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 697 "TableSyntaxGeneratorTemplate.tt"
+            #line 765 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);\r\n          " +
                     "  public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 698 "TableSyntaxGeneratorTemplate.tt"
+            #line 766 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 698 "TableSyntaxGeneratorTemplate.tt"
+            #line 766 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> LeftJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 699 "TableSyntaxGeneratorTemplate.tt"
+            #line 767 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 699 "TableSyntaxGeneratorTemplate.tt"
+            #line 767 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3925,38 +4114,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 701 "TableSyntaxGeneratorTemplate.tt"
+            #line 769 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 701 "TableSyntaxGeneratorTemplate.tt"
+            #line 769 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);\r\n           " +
                     " public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 702 "TableSyntaxGeneratorTemplate.tt"
+            #line 770 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 702 "TableSyntaxGeneratorTemplate.tt"
+            #line 770 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> RightJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 703 "TableSyntaxGeneratorTemplate.tt"
+            #line 771 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 703 "TableSyntaxGeneratorTemplate.tt"
+            #line 771 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3964,38 +4153,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 705 "TableSyntaxGeneratorTemplate.tt"
+            #line 773 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 705 "TableSyntaxGeneratorTemplate.tt"
+            #line 773 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);\r\n          " +
                     "  public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 706 "TableSyntaxGeneratorTemplate.tt"
+            #line 774 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 706 "TableSyntaxGeneratorTemplate.tt"
+            #line 774 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> FullOuterJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 707 "TableSyntaxGeneratorTemplate.tt"
+            #line 775 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 707 "TableSyntaxGeneratorTemplate.tt"
+            #line 775 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -4003,26 +4192,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 709 "TableSyntaxGeneratorTemplate.tt"
+            #line 777 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 709 "TableSyntaxGeneratorTemplate.tt"
+            #line 777 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);\r\n           " +
                     " public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 710 "TableSyntaxGeneratorTemplate.tt"
+            #line 778 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 710 "TableSyntaxGeneratorTemplate.tt"
+            #line 778 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> NaturalJoin<TJoin>()\r\n                where TJoin : class, global::Socig" +
                     "y.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new Postgres" +
                     "qlJoinQueryCommandBuilder<");
@@ -4030,26 +4219,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 712 "TableSyntaxGeneratorTemplate.tt"
+            #line 780 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 712 "TableSyntaxGeneratorTemplate.tt"
+            #line 780 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);\r\n      " +
                     "      public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 713 "TableSyntaxGeneratorTemplate.tt"
+            #line 781 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 713 "TableSyntaxGeneratorTemplate.tt"
+            #line 781 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> CrossJoin<TJoin>()\r\n                where TJoin : class, global::Socigy." +
                     "OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new Postgresql" +
                     "JoinQueryCommandBuilder<");
@@ -4057,26 +4246,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 715 "TableSyntaxGeneratorTemplate.tt"
+            #line 783 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 715 "TableSyntaxGeneratorTemplate.tt"
+            #line 783 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);\r\n        " +
                     "}\r\n        ");
             
             #line default
             #line hidden
             
-            #line 717 "TableSyntaxGeneratorTemplate.tt"
+            #line 785 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 717 "TableSyntaxGeneratorTemplate.tt"
+            #line 785 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\r\n\t}\r\n}\r\n\r\n#nullable disable\r\n\r\n");
             
             #line default

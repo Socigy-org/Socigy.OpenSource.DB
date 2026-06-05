@@ -47,6 +47,42 @@ public class ContextIntegrationTests : BaseUnitTest
     }
 
     [Test]
+    public async Task Aggregates_Count_Sum_Avg_Min_Max_Scalar_OnContext()
+    {
+        var factory = NewFactory();
+        await factory.ExecuteAsync(async db =>
+        {
+            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = true,  Amount = 10m, NullableValue = 1 });
+            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = true,  Amount = 30m, NullableValue = 3 });
+            await db.TestTypes.InsertAsync(new TestType { Id = Guid.NewGuid(), IsActive = false, Amount = 100m, NullableValue = 9 });
+        });
+
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.CountAsync()), Is.EqualTo(3));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.CountAsync(x => x.IsActive)), Is.EqualTo(2));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.SumAsync<decimal>(x => x.Amount, x => x.IsActive)), Is.EqualTo(40m));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.AvgAsync<decimal>(x => x.Amount, x => x.IsActive)), Is.EqualTo(20m));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.MinAsync<decimal>(x => x.Amount)), Is.EqualTo(10m));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.MaxAsync<decimal>(x => x.Amount)), Is.EqualTo(100m));
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.ScalarAsync<int>(x => x.NullableValue, x => x.Amount == 100m)), Is.EqualTo(9));
+
+        // No matching rows → NULL aggregate surfaces as null.
+        Assert.That(await factory.ExecuteAsync(db => db.TestTypes.SumAsync<decimal>(x => x.Amount, x => x.Amount > 1000m)), Is.Null);
+    }
+
+    [Test]
+    public async Task Aggregates_OnQueryBuilder()
+    {
+        await using var conn = UnitCore.CreateConnection();
+        await conn.OpenAsync();
+        var id = Guid.NewGuid();
+        await TestType.InsertAsync(new TestType { Id = id, Amount = 5m, IsActive = true }, conn);
+
+        Assert.That(await TestType.Query(x => x.Id == id).WithConnection(conn).CountAsync(), Is.EqualTo(1));
+        Assert.That(await TestType.Query(x => x.Id == id).WithConnection(conn).SumAsync<decimal>(x => x.Amount), Is.EqualTo(5m));
+        Assert.That(await TestType.Query(x => x.Id == id).WithConnection(conn).MaxAsync<decimal>(x => x.Amount), Is.EqualTo(5m));
+    }
+
+    [Test]
     public async Task ExecuteTransactionAsync_Commits_OnSuccess()
     {
         var factory = NewFactory();

@@ -12,21 +12,22 @@
   </Folder>
   <Folder Name="/Socigy.OpenSource/">
     <Project Path="Socigy.OpenSource.DB.Core/Socigy.OpenSource.DB.Core.csproj" Id="ad375276-6c17-44cb-8596-62492b36c3a4" />
+    <Project Path="Socigy.OpenSource.DB.HashiCorp/Socigy.OpenSource.DB.HashiCorp.csproj" />
     <Project Path="Socigy.OpenSource.DB.SourceGenerator/Socigy.OpenSource.DB.SourceGenerator.csproj" />
     <Project Path="Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj" />
     <Project Path="Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj" />
-    <Project Path="Socigy.OpenSource.DB.HashiCorp/Socigy.OpenSource.DB.HashiCorp.csproj" />
   </Folder>
   <Folder Name="/Benchmarks/">
-    <Project Path="Benchmarks/Benchmarks.csproj">
+    <Project Path="Benchmarks.Aot/Benchmarks.Aot.csproj">
       <BuildType Solution="DB_Migration|*" Project="Release" />
     </Project>
-    <Project Path="Benchmarks.Aot/Benchmarks.Aot.csproj">
+    <Project Path="Benchmarks/Benchmarks.csproj">
       <BuildType Solution="DB_Migration|*" Project="Release" />
     </Project>
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
   </Folder>
   <Folder Name="/Unit Tests/">
     <Project Path="Socigy.OpenSource.DB.UnitTests/Socigy.OpenSource.DB.UnitTests.csproj">
