@@ -4,6 +4,19 @@
 | 'Dapper (ExecuteAsync)'       | 2.059 ms | 0.0698 ms | 0.2015 ms |  1.02 |    0.14 |   3.72 KB |        0.88 |
 | 'EF Core (Add + SaveChanges)' | 2.743 ms | 0.1078 ms | 0.3179 ms |  1.36 |    0.21 |  66.01 KB |       15.56 |
 
+
+| Method                             | Rows | Mean         | Error      | StdDev     | Median       | Ratio  | RatioSD | Allocated  | Alloc Ratio |
+|----------------------------------- |----- |-------------:|-----------:|-----------:|-------------:|-------:|--------:|-----------:|------------:|
+| 'Socigy (InsertMultipleAsync)'     | 100  |     2.882 ms |  0.0993 ms |  0.2897 ms |     2.874 ms |   1.01 |    0.14 |  135.98 KB |        1.00 |
+| 'Socigy (per-row loop, 1 tx)'      | 100  |    30.857 ms |  0.6089 ms |  1.4588 ms |    30.934 ms |  10.81 |    1.18 |  232.94 KB |        1.71 |
+| 'Dapper (ExecuteAsync over list)'  | 100  |   141.808 ms |  2.5344 ms |  3.2954 ms |   142.512 ms |  49.68 |    5.02 |  154.29 KB |        1.13 |
+| 'EF Core (AddRange + SaveChanges)' | 100  |     7.001 ms |  0.2512 ms |  0.7248 ms |     6.882 ms |   2.45 |    0.35 |  707.25 KB |        5.20 |
+|                                    |      |              |            |            |              |        |         |            |             |
+| 'Socigy (InsertMultipleAsync)'     | 1000 |     6.669 ms |  0.1757 ms |  0.5071 ms |     6.593 ms |   1.01 |    0.11 | 1431.84 KB |        1.00 |
+| 'Socigy (per-row loop, 1 tx)'      | 1000 |   262.262 ms |  4.8929 ms | 12.6301 ms |   259.746 ms |  39.54 |    3.49 | 2314.19 KB |        1.62 |
+| 'Dapper (ExecuteAsync over list)'  | 1000 | 1,526.935 ms | 29.8312 ms | 70.3157 ms | 1,508.931 ms | 230.23 |   20.06 | 1525.29 KB |        1.07 |
+| 'EF Core (AddRange + SaveChanges)' | 1000 |    23.868 ms |  4.1996 ms | 12.3825 ms |    16.015 ms |   3.60 |    1.88 | 6295.18 KB |        4.40 |
+
 | Method                                    | Mean     | Error   | StdDev  | Gen0   | Allocated |
 |------------------------------------------ |---------:|--------:|--------:|-------:|----------:|
 | 'Socigy: expression -> parameterized SQL' | 447.0 ns | 8.51 ns | 8.74 ns | 0.0319 |   1.78 KB |

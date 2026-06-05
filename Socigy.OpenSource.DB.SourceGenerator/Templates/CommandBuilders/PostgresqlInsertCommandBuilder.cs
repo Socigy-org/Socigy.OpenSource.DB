@@ -277,52 +277,55 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
                     "/// <summary>\r\n        /// Inserts many rows efficiently as batched multi-row IN" +
                     "SERTs — one command per chunk of up to\r\n        /// ~65535/columns rows (Postgre" +
                     "SQL\'s per-command parameter limit) instead of a command per row.\r\n        /// Au" +
-                    "to-increment columns are skipped (the default insert plan). Returns the total ro" +
-                    "ws inserted.\r\n        /// </summary>\r\n        public static async Task<int> Inse" +
-                    "rtMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? tra" +
-                    "nsaction = null, System.Threading.CancellationToken cancellationToken = default)" +
-                    "\r\n        {\r\n            if (rows == null) throw new ArgumentNullException(nameo" +
-                    "f(rows));\r\n            if (connection == null) throw new ArgumentNullException(n" +
-                    "ameof(connection));\r\n\r\n            var list = rows as IList<T> ?? new List<T>(ro" +
-                    "ws);\r\n            if (list.Count == 0) return 0;\r\n\r\n            if (list[0] is n" +
-                    "ot IInsertPlanProvider __planProvider)\r\n                throw new InvalidOperati" +
-                    "onException($\"{typeof(T).Name} does not provide an insert plan (IInsertPlanProvi" +
-                    "der).\");\r\n\r\n            var plan = __planProvider.GetInsertPlan();\r\n            " +
-                    "var cols = plan.Columns;\r\n            int colCount = cols.Length;\r\n            i" +
-                    "f (colCount == 0) return 0;\r\n\r\n            string tableName = ((IDbTable)list[0]" +
-                    "!).GetTableName();\r\n\r\n            // Column name = parameter name without the le" +
-                    "ading \'@\'.\r\n            var colNames = new string[colCount];\r\n            for (i" +
-                    "nt i = 0; i < colCount; i++)\r\n                colNames[i] = \"\\\"\" + cols[i].Param" +
-                    "eterName.Substring(1) + \"\\\"\";\r\n            string columnList = string.Join(\", \"," +
-                    " colNames);\r\n\r\n            bool shouldClose = connection.State != System.Data.Co" +
-                    "nnectionState.Open;\r\n            if (shouldClose) await connection.OpenAsync(can" +
-                    "cellationToken);\r\n            try\r\n            {\r\n                // PostgreSQL " +
-                    "caps a command at 65535 parameters; chunk rows so each command stays under it.\r\n" +
-                    "                int maxRowsPerBatch = Math.Max(1, 65535 / colCount);\r\n          " +
-                    "      int total = 0;\r\n\r\n                for (int start = 0; start < list.Count; " +
-                    "start += maxRowsPerBatch)\r\n                {\r\n                    int end = Math" +
-                    ".Min(start + maxRowsPerBatch, list.Count);\r\n                    await using var " +
-                    "command = connection.CreateCommand() as NpgsqlCommand;\r\n                    if (" +
-                    "command == null)\r\n                        throw new InvalidOperationException(\"E" +
-                    "xpected an NpgsqlConnection.\");\r\n                    if (transaction != null)\r\n " +
-                    "                       command.Transaction = transaction as NpgsqlTransaction;\r\n" +
-                    "\r\n                    var sb = new StringBuilder();\r\n                    sb.Appe" +
-                    "nd(\"INSERT INTO \\\"\").Append(tableName).Append(\"\\\" (\").Append(columnList).Append(" +
-                    "\") VALUES \");\r\n                    for (int r = start; r < end; r++)\r\n          " +
-                    "          {\r\n                        if (r > start) sb.Append(\", \");\r\n          " +
-                    "              sb.Append(\'(\');\r\n                        for (int c = 0; c < colCo" +
-                    "unt; c++)\r\n                        {\r\n                            if (c > 0) sb." +
-                    "Append(\", \");\r\n                            string paramName = \"@p\" + r + \"_\" + c" +
-                    ";\r\n                            sb.Append(paramName);\r\n                          " +
-                    "  AddInsertParameter(command, paramName, cols[c].GetValue(list[r]!), cols[c].Typ" +
-                    "e, cols[c].IsJson, cols[c].IsEncrypted);\r\n                        }\r\n           " +
-                    "             sb.Append(\')\');\r\n                    }\r\n\r\n                    comma" +
-                    "nd.CommandText = sb.ToString();\r\n                    total += await global::Soci" +
-                    "gy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(\r\n         " +
-                    "               command, \"INSERT\", ct => command.ExecuteNonQueryAsync(ct), cancel" +
-                    "lationToken);\r\n                }\r\n                return total;\r\n            }\r\n" +
-                    "            finally\r\n            {\r\n                if (shouldClose) await conne" +
-                    "ction.CloseAsync();\r\n            }\r\n        }\r\n    }\r\n}\r\n\r\n#nullable disable\r\n");
+                    "to-increment columns are skipped by default (the database generates them); pass\r" +
+                    "\n        /// <paramref name=\"includeAutoFields\"/> = <see langword=\"true\"/> to in" +
+                    "sert them too (supply your own\r\n        /// values). Returns the total rows inse" +
+                    "rted.\r\n        /// </summary>\r\n        public static async Task<int> InsertMulti" +
+                    "pleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transactio" +
+                    "n = null, bool includeAutoFields = false, System.Threading.CancellationToken can" +
+                    "cellationToken = default)\r\n        {\r\n            if (rows == null) throw new Ar" +
+                    "gumentNullException(nameof(rows));\r\n            if (connection == null) throw ne" +
+                    "w ArgumentNullException(nameof(connection));\r\n\r\n            var list = rows as I" +
+                    "List<T> ?? new List<T>(rows);\r\n            if (list.Count == 0) return 0;\r\n\r\n   " +
+                    "         if (list[0] is not IInsertPlanProvider __planProvider)\r\n               " +
+                    " throw new InvalidOperationException($\"{typeof(T).Name} does not provide an inse" +
+                    "rt plan (IInsertPlanProvider).\");\r\n\r\n            var plan = __planProvider.GetIn" +
+                    "sertPlan(includeAutoFields);\r\n            var cols = plan.Columns;\r\n            " +
+                    "int colCount = cols.Length;\r\n            if (colCount == 0) return 0;\r\n\r\n       " +
+                    "     string tableName = ((IDbTable)list[0]!).GetTableName();\r\n\r\n            // C" +
+                    "olumn name = parameter name without the leading \'@\'.\r\n            var colNames =" +
+                    " new string[colCount];\r\n            for (int i = 0; i < colCount; i++)\r\n        " +
+                    "        colNames[i] = \"\\\"\" + cols[i].ParameterName.Substring(1) + \"\\\"\";\r\n       " +
+                    "     string columnList = string.Join(\", \", colNames);\r\n\r\n            bool should" +
+                    "Close = connection.State != System.Data.ConnectionState.Open;\r\n            if (s" +
+                    "houldClose) await connection.OpenAsync(cancellationToken);\r\n            try\r\n   " +
+                    "         {\r\n                // PostgreSQL caps a command at 65535 parameters; ch" +
+                    "unk rows so each command stays under it.\r\n                int maxRowsPerBatch = " +
+                    "Math.Max(1, 65535 / colCount);\r\n                int total = 0;\r\n\r\n              " +
+                    "  for (int start = 0; start < list.Count; start += maxRowsPerBatch)\r\n           " +
+                    "     {\r\n                    int end = Math.Min(start + maxRowsPerBatch, list.Cou" +
+                    "nt);\r\n                    await using var command = connection.CreateCommand() a" +
+                    "s NpgsqlCommand;\r\n                    if (command == null)\r\n                    " +
+                    "    throw new InvalidOperationException(\"Expected an NpgsqlConnection.\");\r\n     " +
+                    "               if (transaction != null)\r\n                        command.Transac" +
+                    "tion = transaction as NpgsqlTransaction;\r\n\r\n                    var sb = new Str" +
+                    "ingBuilder();\r\n                    sb.Append(\"INSERT INTO \\\"\").Append(tableName)" +
+                    ".Append(\"\\\" (\").Append(columnList).Append(\") VALUES \");\r\n                    for" +
+                    " (int r = start; r < end; r++)\r\n                    {\r\n                        i" +
+                    "f (r > start) sb.Append(\", \");\r\n                        sb.Append(\'(\');\r\n       " +
+                    "                 for (int c = 0; c < colCount; c++)\r\n                        {\r\n" +
+                    "                            if (c > 0) sb.Append(\", \");\r\n                       " +
+                    "     string paramName = \"@p\" + r + \"_\" + c;\r\n                            sb.Appe" +
+                    "nd(paramName);\r\n                            AddInsertParameter(command, paramNam" +
+                    "e, cols[c].GetValue(list[r]!), cols[c].Type, cols[c].IsJson, cols[c].IsEncrypted" +
+                    ");\r\n                        }\r\n                        sb.Append(\')\');\r\n        " +
+                    "            }\r\n\r\n                    command.CommandText = sb.ToString();\r\n     " +
+                    "               total += await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDi" +
+                    "agnostics.ExecuteNonQueryAsync(\r\n                        command, \"INSERT\", ct =" +
+                    "> command.ExecuteNonQueryAsync(ct), cancellationToken);\r\n                }\r\n    " +
+                    "            return total;\r\n            }\r\n            finally\r\n            {\r\n  " +
+                    "              if (shouldClose) await connection.CloseAsync();\r\n            }\r\n  " +
+                    "      }\r\n    }\r\n}\r\n\r\n#nullable disable\r\n");
             
             #line default
             #line hidden

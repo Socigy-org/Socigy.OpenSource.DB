@@ -228,8 +228,8 @@ namespace <#= Namespace #>
         /// Inserts many instances efficiently as batched multi-row INSERT commands (one command per chunk,
         /// not one per row). Returns the total number of rows inserted.
         /// </summary>
-        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::System.Threading.CancellationToken cancellationToken = default)
-            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, cancellationToken);
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, global::System.Threading.CancellationToken cancellationToken = default)
+            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, cancellationToken);
 
         /// <summary>Returns a new update command builder for this instance.</summary>
         public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()

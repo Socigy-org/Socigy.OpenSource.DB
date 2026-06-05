@@ -436,9 +436,11 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <summary>
         /// Inserts many rows efficiently as batched multi-row INSERTs — one command per chunk of up to
         /// ~65535/columns rows (PostgreSQL's per-command parameter limit) instead of a command per row.
-        /// Auto-increment columns are skipped (the default insert plan). Returns the total rows inserted.
+        /// Auto-increment columns are skipped by default (the database generates them); pass
+        /// <paramref name="includeAutoFields"/> = <see langword="true"/> to insert them too (supply your own
+        /// values). Returns the total rows inserted.
         /// </summary>
-        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, System.Threading.CancellationToken cancellationToken = default)
+        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, bool includeAutoFields = false, System.Threading.CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -449,7 +451,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (list[0] is not IInsertPlanProvider __planProvider)
                 throw new InvalidOperationException($"{typeof(T).Name} does not provide an insert plan (IInsertPlanProvider).");
 
-            var plan = __planProvider.GetInsertPlan();
+            var plan = __planProvider.GetInsertPlan(includeAutoFields);
             var cols = plan.Columns;
             int colCount = cols.Length;
             if (colCount == 0) return 0;

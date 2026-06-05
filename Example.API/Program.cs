@@ -118,10 +118,13 @@ await app.StartAsync();
 
 var testo = app.Services.GetRequiredService<ISocigyDatabaseFactory<IAuthDb>>();
 await testo.ExecuteTransactionAsync(async ctx =>
+{
+    ctx.Users.;
+
     await ctx.Users.ForEachAsync(u => u.IsChild == true, async u =>
     {
         Console.WriteLine("User is child");
-    }
-));
+    });
+});
 
 await app.WaitForShutdownAsync();

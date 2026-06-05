@@ -146,10 +146,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        Task<{e}?> FirstOrDefaultAsync({pred} predicate);");
             sb.AppendLine($"        Task<List<{e}>> ToListAsync({pred}? predicate = null);");
             sb.AppendLine($"        Task<long> CountAsync({pred}? predicate = null);");
-            sb.AppendLine($"        Task<bool> InsertAsync({e} entity);");
+            sb.AppendLine($"        /// <summary>Inserts one entity. Pass <c>includeAutoFields: true</c> to also write auto-increment columns (supply your own values).</summary>");
+            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, bool includeAutoFields = false);");
+            sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Pass <c>includeAutoFields: true</c> to also write auto-increment columns. Returns the total rows inserted.</summary>");
+            sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, bool includeAutoFields = false, CancellationToken cancellationToken = default);");
             sb.AppendLine($"        Task<int> UpdateAsync({e} entity);");
             sb.AppendLine($"        Task<int> DeleteAsync({pred} predicate);");
             sb.AppendLine($"        Task ForEachAsync({pred}? predicate, Func<{e}, Task> onRow, CancellationToken cancellationToken = default);");
+            sb.AppendLine($"        /// <summary>Streams matching rows, projects each through <paramref name=\"onRow\"/>, and returns the projected results (materialized within the scope).</summary>");
+            sb.AppendLine($"        Task<List<TResult>> ForEachAsync<TResult>({pred}? predicate, Func<{e}, Task<TResult>> onRow, CancellationToken cancellationToken = default);");
             sb.AppendLine("    }");
             sb.AppendLine();
         }
@@ -218,14 +223,28 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine();
 
             // InsertAsync
-            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity)");
+            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, bool includeAutoFields = false)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                var __b = entity.Insert();");
+            sb.AppendLine("                if (includeAutoFields) __b.WithAllFields();");
             EmitEnlist(sb, "__b");
             sb.AppendLine("                return await __b.ExecuteAsync();");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            // InsertMultipleAsync (batched multi-row INSERT)
+            sb.AppendLine($"        public async Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, bool includeAutoFields = false, CancellationToken cancellationToken = default)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var __tx = _scope.HasAmbientTransaction ? _scope.AmbientTransaction : null;");
+            sb.AppendLine($"                return await {e}.InsertMultipleAsync(entities, __acq.Connection, __tx, includeAutoFields, cancellationToken);");
             sb.AppendLine("            }");
             sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
             sb.AppendLine("        }");
@@ -273,6 +292,28 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("                    cancellationToken.ThrowIfCancellationRequested();");
             sb.AppendLine("                    await onRow(__row);");
             sb.AppendLine("                }");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { _scope.EndStream(); }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            // ForEachAsync<TResult> — projects each streamed row and returns the results (materialized in-scope,
+            // so nothing lazy escapes the open connection).
+            sb.AppendLine($"        public async Task<List<TResult>> ForEachAsync<TResult>({pred}? predicate, Func<{e}, Task<TResult>> onRow, CancellationToken cancellationToken = default)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var __conn = await _scope.BeginStreamAsync(cancellationToken);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var __q = predicate == null ? {e}.Query() : {e}.Query(predicate);");
+            sb.AppendLine("                if (_scope.HasAmbientTransaction) __q.WithTransaction(_scope.AmbientTransaction!); else __q.WithConnection(__conn);");
+            sb.AppendLine("                __q.WithDiagnostics(_scope.Diagnostics);");
+            sb.AppendLine("                var __results = new List<TResult>();");
+            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync())");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    cancellationToken.ThrowIfCancellationRequested();");
+            sb.AppendLine("                    __results.Add(await onRow(__row));");
+            sb.AppendLine("                }");
+            sb.AppendLine("                return __results;");
             sb.AppendLine("            }");
             sb.AppendLine("            finally { _scope.EndStream(); }");
             sb.AppendLine("        }");

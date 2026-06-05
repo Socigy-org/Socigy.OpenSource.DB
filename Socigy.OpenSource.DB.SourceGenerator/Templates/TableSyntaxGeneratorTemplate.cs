@@ -1282,8 +1282,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line 242 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transa" +
-                    "ction = null, global::System.Threading.CancellationToken cancellationToken = def" +
-                    "ault)\r\n            => ");
+                    "ction = null, bool includeAutoFields = false, global::System.Threading.Cancellat" +
+                    "ionToken cancellationToken = default)\r\n            => ");
             
             #line default
             #line hidden
@@ -1307,9 +1307,9 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 243 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(">.InsertMultipleAsync(rows, connection, transaction, cancellationToken);\r\n\r\n     " +
-                    "   /// <summary>Returns a new update command builder for this instance.</summary" +
-                    ">\r\n        public ");
+            this.Write(">.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, cancellat" +
+                    "ionToken);\r\n\r\n        /// <summary>Returns a new update command builder for this" +
+                    " instance.</summary>\r\n        public ");
             
             #line default
             #line hidden

@@ -11,7 +11,15 @@ namespace Socigy.OpenSource.DB.Core.Interfaces
     /// </summary>
     public interface IInsertPlanProvider
     {
+        /// <summary>The default insert plan: all columns except auto-increment (the database generates those).</summary>
         InsertPlan GetInsertPlan();
+
+        /// <summary>
+        /// The insert plan, optionally including auto-increment columns. Pass <see langword="true"/> to insert
+        /// every column (e.g. to supply your own identity/sequence values) — the equivalent of the insert
+        /// builder's <c>WithAllFields()</c>.
+        /// </summary>
+        InsertPlan GetInsertPlan(bool includeAutoIncrement);
     }
 #nullable disable
 }

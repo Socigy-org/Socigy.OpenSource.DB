@@ -106,31 +106,25 @@ namespace <#= Namespace #>
         }
 
         private static global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan? __InsertPlan;
+        private static global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan? __InsertPlanAll;
         /// <summary>Cached plan for the default INSERT (all columns except auto-increment), reused per call.</summary>
-        public global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan GetInsertPlan()
+        public global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan GetInsertPlan() => GetInsertPlan(false);
+        /// <summary>Cached INSERT plan; pass <c>true</c> to also include auto-increment columns (supply your own values).</summary>
+        public global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan GetInsertPlan(bool includeAutoIncrement)
         {
+            if (includeAutoIncrement)
+                return __InsertPlanAll ??= new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan(
+                    "INSERT INTO \"<#= TableName #>\" (<#= InsertColList(Columns) #>) VALUES (<#= InsertParamList(Columns) #>)",
+                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[]
+                    {
+<# EmitInsertDescriptors(Columns); #>
+                    });
             return __InsertPlan ??= new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan(
-                "INSERT INTO \"<#= TableName #>\" (<#= string.Join(", ", Columns.Where(c => !c.IsAutoIncrement).Select(c => "\\\"" + c.DatabaseName + "\\\"")) #>) VALUES (<#= string.Join(", ", Columns.Where(c => !c.IsAutoIncrement).Select(c => "@" + c.DatabaseName)) #>)",
+                "INSERT INTO \"<#= TableName #>\" (<#= InsertColList(Columns.Where(c => !c.IsAutoIncrement)) #>) VALUES (<#= InsertParamList(Columns.Where(c => !c.IsAutoIncrement)) #>)",
                 new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[]
                 {
-<#
-            foreach(var col in Columns.Where(c => !c.IsAutoIncrement))
-            {
-                bool isTypedJson2 = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
-                bool hasConvertor2 = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
-                string encType2 = col.Type.Replace("?", "");
-                string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
-                string valueExpr = col.IsEncrypted
-                    ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)((" + ClassName + ")o)." + col.Name + ", typeof(" + encType2 + "))"
-                    : isTypedJson2
-                        ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
-                    : hasConvertor2
-                        ? "new " + col.Converter + "().ConvertToDbValue(((" + ClassName + ")o)." + col.Name + ")"
-                    : "(object?)((" + ClassName + ")o)." + col.Name;
-#>                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor("@<#= col.DatabaseName #>", typeof(<#= typeExpr #>), <#= col.IsJsonColumn ? "true" : "false" #>, o => <#= valueExpr #>, <#= col.IsEncrypted ? "true" : "false" #>),
-<#
-            }
-#>                });
+<# EmitInsertDescriptors(Columns.Where(c => !c.IsAutoIncrement)); #>
+                });
         }
 
         public Dictionary<string, ColumnInfo> GetPrimaryColumns()
@@ -241,5 +235,29 @@ namespace <#= Namespace #>
         public string Converter { get; set; }
         public bool IsEncrypted { get; set; }
         public bool EncryptAutoDecrypt { get; set; } = true;
+    }
+
+    // Shared emit helpers for GetInsertPlan(bool) so the default and include-all plans stay identical.
+    string InsertColList(System.Collections.Generic.IEnumerable<ColumnInfo> cols)
+        => string.Join(", ", cols.Select(c => "\\\"" + c.DatabaseName + "\\\""));
+    string InsertParamList(System.Collections.Generic.IEnumerable<ColumnInfo> cols)
+        => string.Join(", ", cols.Select(c => "@" + c.DatabaseName));
+    void EmitInsertDescriptors(System.Collections.Generic.IEnumerable<ColumnInfo> cols)
+    {
+        foreach (var col in cols)
+        {
+            bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+            bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
+            string encType = col.Type.Replace("?", "");
+            string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
+            string valueExpr = col.IsEncrypted
+                ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)((" + ClassName + ")o)." + col.Name + ", typeof(" + encType + "))"
+                : isTypedJson
+                    ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
+                : hasConvertor
+                    ? "new " + col.Converter + "().ConvertToDbValue(((" + ClassName + ")o)." + col.Name + ")"
+                : "(object?)((" + ClassName + ")o)." + col.Name;
+            WriteLine("                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor(\"@" + col.DatabaseName + "\", typeof(" + typeExpr + "), " + (col.IsJsonColumn ? "true" : "false") + ", o => " + valueExpr + ", " + (col.IsEncrypted ? "true" : "false") + "),");
+        }
     }
 #>

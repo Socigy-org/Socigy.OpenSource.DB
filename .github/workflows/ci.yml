@@ -57,6 +57,7 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     permissions:
+      id-token: write   # required for NuGet.org Trusted Publishing (OIDC)
       packages: write
       contents: read
 
@@ -143,11 +144,21 @@ jobs:
         if: steps.version_check.outputs.publish_hashicorp == 'true'
         run: dotnet pack Socigy.OpenSource.DB.HashiCorp/Socigy.OpenSource.DB.HashiCorp.csproj -c Release --no-build -o ./nupkgs -p:GeneratePackageOnBuild=false /p:EnableWindowsTargeting=true
 
+      # Exchange the workflow's GitHub OIDC token for a short-lived NuGet.org API key via the
+      # Trusted Publishing policy. This authorizes the package owner to push ANY of their packages
+      # (including new ids like Socigy.OpenSource.DB.HashiCorp) — no per-name API-key glob needed.
+      - name: NuGet trusted-publishing login (OIDC)
+        id: nuget_login
+        if: steps.version_check.outputs.should_run == 'true'
+        uses: NuGet/login@v1
+        with:
+          user: PatrikStohanzl   # the NuGet.org account that owns the Trusted Publishing policy
+
       - name: Publish to NuGet
         if: steps.version_check.outputs.should_run == 'true'
         run: |
           dotnet nuget push ./nupkgs/*.nupkg \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
