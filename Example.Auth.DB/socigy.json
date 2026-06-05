@@ -1,6 +1,8 @@
 {
   "database": {
     "platform": "postgresql",
-    "databaseName": "AuthDb"
+    "databaseName": "AuthDb",
+    "generateDbConnectionFactory": true,
+    "generateWebAppExtensions": true
   }
 }

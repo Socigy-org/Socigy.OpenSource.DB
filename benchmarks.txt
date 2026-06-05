@@ -4,7 +4,6 @@
 | 'Dapper (ExecuteAsync)'       | 2.059 ms | 0.0698 ms | 0.2015 ms |  1.02 |    0.14 |   3.72 KB |        0.88 |
 | 'EF Core (Add + SaveChanges)' | 2.743 ms | 0.1078 ms | 0.3179 ms |  1.36 |    0.21 |  66.01 KB |       15.56 |
 
-
 | Method                             | Rows | Mean         | Error      | StdDev     | Median       | Ratio  | RatioSD | Allocated  | Alloc Ratio |
 |----------------------------------- |----- |-------------:|-----------:|-----------:|-------------:|-------:|--------:|-----------:|------------:|
 | 'Socigy (InsertMultipleAsync)'     | 100  |     2.882 ms |  0.0993 ms |  0.2897 ms |     2.874 ms |   1.01 |    0.14 |  135.98 KB |        1.00 |

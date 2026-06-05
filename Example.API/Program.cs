@@ -1,14 +1,18 @@
 using Example.Auth.DB;
-using Example.Auth.DB.Socigy.Generated;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
-using Socigy.OpenSource.DB.AuthDb.Extensions;
-using Socigy.OpenSource.DB.AuthDb.Context;
+
+using Example.Auth.DB.Socigy.Generated;
+
 using Socigy.OpenSource.DB.Core;
 using Socigy.OpenSource.DB.Core.Context;
 using Socigy.OpenSource.DB.Core.SyntaxHelper;
-using Socigy.OpenSource.DB.SharedDb.Extensions;
+
+using Socigy.OpenSource.DB.AuthDb.Extensions;
+using Socigy.OpenSource.DB.AuthDb.Context;
+
 using Socigy.OpenSource.DB.UserDb.Extensions;
+using Socigy.OpenSource.DB.SharedDb.Extensions;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -28,11 +32,14 @@ builder.WebHost.UseKestrelHttpsConfiguration();
 builder.Configuration.AddJsonFile("appsettings.json");
 
 builder.AddSharedDb();
+builder.Services.AddSharedDbContext();
+
+builder.AddUserDb();
+builder.Services.AddUserDbContext();
 
 builder.AddAuthDb();
 builder.Services.AddAuthDbContext();
 
-builder.AddUserDb();
 
 var app = builder.Build();
 
@@ -119,8 +126,6 @@ await app.StartAsync();
 var testo = app.Services.GetRequiredService<ISocigyDatabaseFactory<IAuthDb>>();
 await testo.ExecuteTransactionAsync(async ctx =>
 {
-    ctx.Users.;
-
     await ctx.Users.ForEachAsync(u => u.IsChild == true, async u =>
     {
         Console.WriteLine("User is child");

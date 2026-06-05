@@ -19,7 +19,6 @@
 		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
 		<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
 		<PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.2.0" />
 	</ItemGroup>
 
 	<ItemGroup>

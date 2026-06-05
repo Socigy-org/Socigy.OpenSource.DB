@@ -17,7 +17,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Socigy.OpenSource.DB" Version="0.2.0" />
+		<PackageReference Include="Socigy.OpenSource.DB" Version="0.3.1" />
 	</ItemGroup>
 
 	<ItemGroup>
