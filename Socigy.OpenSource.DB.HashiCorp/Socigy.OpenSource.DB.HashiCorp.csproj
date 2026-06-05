@@ -14,7 +14,7 @@
 		<!-- Version comes from Directory.Build.props (single source of truth). -->
 		<PackageVersion>$(Version)</PackageVersion>
 		<Company>Socigy s.r.o.</Company>
-		<Description>Optional HashiCorp Vault integration for Socigy.OpenSource.DB: field encryption (Transit envelope) and rotating DB credentials (Database secrets engine).</Description>
+		<Description>Optional HashiCorp Vault integration for Socigy.OpenSource.DB: field encryption (key from Vault KV-v2) and rotating DB credentials (Database secrets engine).</Description>
 		<PackageTags>db;postgresql;hashicorp;vault;encryption;credentials;socigy</PackageTags>
 		<Authors>Socigy, PatrikStohanzl</Authors>
 		<Copyright>Copyright © 2024 Socigy s.r.o.</Copyright>
@@ -46,12 +46,13 @@
 		</None>
 	</ItemGroup>
 
-	<!-- Declare the runtime dependency on the main package (which carries the Core DLL) without making NuGet
-	     restore it during in-repo builds (it may be unpublished at this version). -->
-	<Target Name="AddSocigyMainDependency" BeforeTargets="GenerateNuspec">
-		<ItemGroup>
-			<_PackageDependency Include="Socigy.OpenSource.DB" Version="$(Version)" />
-		</ItemGroup>
-	</Target>
+	<!-- A ProjectReference to the main packable project makes NuGet emit a <dependency> on
+	     Socigy.OpenSource.DB (at the same version) in this package's nuspec at pack time — without needing that
+	     (possibly-unpublished) version to be restorable. The main project produces no lib output
+	     (IncludeBuildOutput=false), so nothing is bundled; the Core types come from the Core ProjectReference
+	     above. The main project's build assembly is empty (no source), so referencing it is harmless. -->
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB\Socigy.OpenSource.DB.csproj" />
+	</ItemGroup>
 
 </Project>
