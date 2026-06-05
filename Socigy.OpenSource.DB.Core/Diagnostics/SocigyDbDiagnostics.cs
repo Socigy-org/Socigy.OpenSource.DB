@@ -13,7 +13,7 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
     /// </summary>
     public static class SocigyDbDiagnostics
     {
-        private static volatile SocigyDbDiagnosticsOptions _options = new SocigyDbDiagnosticsOptions();
+        private static volatile SocigyDbDiagnosticsOptions _options = new();
 
         /// <summary>The current ambient options. Never <see langword="null"/>.</summary>
         public static SocigyDbDiagnosticsOptions Options => _options;
@@ -33,9 +33,14 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
         // Cache the logger so we don't call CreateLogger per command. Re-created only when the factory changes.
         private static ILoggerFactory? _loggerFactoryCache;
         private static ILogger? _loggerCache;
-        private static readonly object _loggerLock = new object();
+        private static readonly object _loggerLock = new();
 
-        internal static ILogger? GetLogger()
+        /// <summary>
+        /// The cached ambient SQL logger (category <c>Socigy.OpenSource.DB.Sql</c>), or <see langword="null"/>
+        /// when no <see cref="SocigyDbDiagnosticsOptions.LoggerFactory"/> is configured. Public so optional
+        /// add-on packages can log background actions to the same pipeline.
+        /// </summary>
+        public static ILogger? GetLogger()
         {
             var factory = _options.LoggerFactory;
             if (factory == null) return null;

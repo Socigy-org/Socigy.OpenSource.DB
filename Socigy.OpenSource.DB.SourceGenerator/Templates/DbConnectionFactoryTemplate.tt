@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
 using Socigy.OpenSource.DB.Core;
+using Socigy.OpenSource.DB.Core.Credentials;
 using System.Data.Common;
 using System.Security;
 <#
@@ -30,11 +31,15 @@ namespace <#= BaseNamespace #>
 
         private readonly ILogger _Logger;
         private readonly string? _ConnectionString;
-        public PostgresqlConnectionFactory(ILogger<PostgresqlConnectionFactory> logger, IConfiguration configuration, [ServiceKey] object? key)
+        // Optional: when a credential provider is registered (e.g. HashiCorp Vault), it supplies a
+        // dynamically-rotated base connection string; otherwise the static config string is used.
+        private readonly IDbCredentialsProvider? _Credentials;
+        public PostgresqlConnectionFactory(ILogger<PostgresqlConnectionFactory> logger, IConfiguration configuration, [ServiceKey] object? key, IDbCredentialsProvider? credentials = null)
         {
             _Configuration = configuration;
             _ServiceKey = key as string;
             _Logger = logger;
+            _Credentials = credentials;
 
             var connStrings = _Configuration.GetRequiredSection("ConnectionStrings");
             if (!string.IsNullOrEmpty(_ServiceKey))
@@ -56,12 +61,6 @@ namespace <#= BaseNamespace #>
 
         public async Task<bool> EnsureDbExists()
         {
-            if (_ConnectionString == null)
-            {
-                string message = $"Failed to ensure that the {_ServiceKey} database exists, because no ConnectionString was provided!";
-                _Logger.LogCritical(message);
-                throw new InvalidDataException(message);
-            }
             if (_ServiceKey == null)
             {
                 string message = "No service key (database name) was provided to this connection factory instance. Unable to ensure that the database exist!";
@@ -69,8 +68,23 @@ namespace <#= BaseNamespace #>
                 throw new InvalidDataException(message);
             }
 
+            // Prime/refresh dynamic credentials (e.g. Vault) before resolving the connection string.
+            if (_Credentials != null)
+            {
+                _Logger.LogInformation("Refreshing rotating credentials for database {Database} via {Provider}", _ServiceKey, _Credentials.GetType().Name);
+                await _Credentials.RefreshAsync(_ServiceKey, null);
+            }
+
+            var baseConnectionString = ResolveBaseConnectionString(null);
+            if (baseConnectionString == null)
+            {
+                string message = $"Failed to ensure that the {_ServiceKey} database exists, because no ConnectionString was provided!";
+                _Logger.LogCritical(message);
+                throw new InvalidDataException(message);
+            }
+
             // Connect to the default 'postgres' database to check/create the new database
-            var masterConnectionBuilder = new NpgsqlConnectionStringBuilder(_ConnectionString)
+            var masterConnectionBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)
             {
                 Database = "postgres"
             };
@@ -112,13 +126,31 @@ namespace <#= BaseNamespace #>
             return connStrings[key];
         }
 
+        // Resolves the base connection string (without Database=...): the credential provider wins when
+        // present (rotating creds), then a named config key, then the default config string.
+        private string? ResolveBaseConnectionString(string? connectionKey)
+        {
+            if (_Credentials != null)
+            {
+                var fromProvider = _Credentials.GetConnectionString(_ServiceKey ?? string.Empty, connectionKey);
+                if (!string.IsNullOrEmpty(fromProvider))
+                    return fromProvider;
+            }
+
+            if (connectionKey != null)
+            {
+                var named = GetConnectionString(connectionKey);
+                if (!string.IsNullOrEmpty(named))
+                    return named;
+            }
+
+            return _ConnectionString;
+        }
+
         public DbConnection Create(string? connectionKey = null)
         {
-            string? connectionString = null;
-            if (connectionKey != null)
-                connectionString = GetConnectionString(connectionKey);
-
-            connectionString ??= _ConnectionString ?? throw new InvalidDataException("Unable to create DbConnection without a ConnectionString. Please provide a connection string and try again!");
+            string connectionString = ResolveBaseConnectionString(connectionKey)
+                ?? throw new InvalidDataException("Unable to create DbConnection without a ConnectionString. Please provide a connection string (or register an IDbCredentialsProvider) and try again!");
 
             // Connecting to the correct database
             connectionString = connectionString.TrimEnd().TrimEnd(';') + $";Database={_ServiceKey}";
@@ -128,7 +160,7 @@ namespace <#= BaseNamespace #>
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            if (_ServiceKey != null && _ConnectionString != null)
+            if (_ServiceKey != null && (_ConnectionString != null || _Credentials != null))
                 await EnsureDbExists();
         }
 

@@ -13,13 +13,15 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         public string ParameterName { get; }
         public Type Type { get; }
         public bool IsJson { get; }
+        public bool IsEncrypted { get; }
         public Func<object, object?> GetValue { get; }
 
-        public InsertColumnDescriptor(string parameterName, Type type, bool isJson, Func<object, object?> getValue)
+        public InsertColumnDescriptor(string parameterName, Type type, bool isJson, Func<object, object?> getValue, bool isEncrypted = false)
         {
             ParameterName = parameterName;
             Type = type;
             IsJson = isJson;
+            IsEncrypted = isEncrypted;
             GetValue = getValue;
         }
     }

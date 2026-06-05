@@ -162,7 +162,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             if (string.IsNullOrWhiteSpace(platform))
                 return null;
 
-            return platform.Trim().ToLowerInvariant() switch
+            return platform!.Trim().ToLowerInvariant() switch
             {
                 "postgresql" or "postgre" or "postgres" => DatabasePrefixes.Postgresql,
                 _ => null,

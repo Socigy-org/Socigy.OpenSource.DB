@@ -15,6 +15,7 @@
     <Project Path="Socigy.OpenSource.DB.SourceGenerator/Socigy.OpenSource.DB.SourceGenerator.csproj" />
     <Project Path="Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj" />
     <Project Path="Socigy.OpenSource.DB/Socigy.OpenSource.DB.csproj" />
+    <Project Path="Socigy.OpenSource.DB.HashiCorp/Socigy.OpenSource.DB.HashiCorp.csproj" />
   </Folder>
   <Folder Name="/Benchmarks/">
     <Project Path="Benchmarks/Benchmarks.csproj">

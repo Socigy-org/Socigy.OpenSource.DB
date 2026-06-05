@@ -42,9 +42,18 @@ namespace <#= Namespace #>
 <#
             foreach(var col in Columns)
             {
+                if (col.IsEncrypted)
+                {
+#>
+                "<#= col.Name #>" => throw new global::System.NotSupportedException("Column '<#= col.Name #>' is [Encrypted] and cannot be used in a WHERE / ORDER BY / SELECT-projection / LIKE clause — encryption is non-deterministic. Filter by a non-encrypted key instead."),
+<#
+                }
+                else
+                {
 #>
                 "<#= col.Name #>" => <#= col.Name #>ColumnName,
 <#
+                }
             }
         #>
                 _ => null
@@ -62,17 +71,32 @@ namespace <#= Namespace #>
                 {
                     bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
                     bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
+                    string encType = col.Type.Replace("?", "");
+                    string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
+                    string valueExpr = col.IsEncrypted
+                        ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "))"
+                        : isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)"
+                        : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")"
+                        : col.Name;
+                    string setExpr = col.IsEncrypted
+                        ? (col.EncryptAutoDecrypt
+                            ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + ")) ?? default(" + col.Type + "))"
+                            : "v => { " + col.Name + "RawEncrypted = v as byte[]; _" + col.Name + "Decrypted = false; }")
+                        : isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)"
+                        : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))"
+                        : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)";
 #>              {
                     <#= col.Name #>ColumnName,
                     new ColumnInfo()
                     {
-                        Type = typeof(<#= col.IsJsonColumn ? "string " : col.Type.Replace("?", " ") #>),
-                        Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")" : col.Name #>,
+                        Type = typeof(<#= typeExpr #>),
+                        Value = <#= valueExpr #>,
                         IsJson = <#= col.IsJsonColumn ? "true" : "false" #>,
+                        IsEncrypted = <#= col.IsEncrypted ? "true" : "false" #>,
                         IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
                         IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
                         HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
-                        SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
+                        SetValue = <#= setExpr #>
                     }
                 },
 <#
@@ -94,13 +118,16 @@ namespace <#= Namespace #>
             {
                 bool isTypedJson2 = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
                 bool hasConvertor2 = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
-                string typeExpr = col.IsJsonColumn ? "string " : col.Type.Replace("?", " ");
-                string valueExpr = isTypedJson2
-                    ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
+                string encType2 = col.Type.Replace("?", "");
+                string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
+                string valueExpr = col.IsEncrypted
+                    ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)((" + ClassName + ")o)." + col.Name + ", typeof(" + encType2 + "))"
+                    : isTypedJson2
+                        ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
                     : hasConvertor2
                         ? "new " + col.Converter + "().ConvertToDbValue(((" + ClassName + ")o)." + col.Name + ")"
-                        : "(object?)((" + ClassName + ")o)." + col.Name;
-#>                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor("@<#= col.DatabaseName #>", typeof(<#= typeExpr #>), <#= col.IsJsonColumn ? "true" : "false" #>, o => <#= valueExpr #>),
+                    : "(object?)((" + ClassName + ")o)." + col.Name;
+#>                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor("@<#= col.DatabaseName #>", typeof(<#= typeExpr #>), <#= col.IsJsonColumn ? "true" : "false" #>, o => <#= valueExpr #>, <#= col.IsEncrypted ? "true" : "false" #>),
 <#
             }
 #>                });
@@ -140,19 +167,34 @@ namespace <#= Namespace #>
                {
                    bool isTypedJson = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
                    bool hasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
+                   string encType = col.Type.Replace("?", "");
+                   string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
+                   string valueExpr = col.IsEncrypted
+                       ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "))"
+                       : isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)"
+                       : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")"
+                       : col.Name;
+                   string setExpr = col.IsEncrypted
+                       ? (col.EncryptAutoDecrypt
+                           ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + ")) ?? default(" + col.Type + "))"
+                           : "v => { " + col.Name + "RawEncrypted = v as byte[]; _" + col.Name + "Decrypted = false; }")
+                       : isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)"
+                       : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))"
+                       : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)";
 #>
                 case <#= col.Name #>ColumnName:
                     return (
                         <#= col.Name #>ColumnName,
                         new ColumnInfo()
                         {
-                            Type = typeof(<#= col.IsJsonColumn ? "string " : col.Type.Replace("?", " ") #>),
-                            Value = <#= isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")" : col.Name #>,
+                            Type = typeof(<#= typeExpr #>),
+                            Value = <#= valueExpr #>,
                             IsJson = <#= col.IsJsonColumn ? "true" : "false" #>,
+                            IsEncrypted = <#= col.IsEncrypted ? "true" : "false" #>,
                             IsPrimaryKey = <#= col.IsPrimaryKey ? "true" : "false" #>,
                             IsAutoIncrement = <#= col.IsAutoIncrement ? "true" : "false" #>,
                             HasDbDefault = <#= col.HasDbDefault ? "true" : "false" #>,
-                            SetValue = <#= isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)" : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))" : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)" #>
+                            SetValue = <#= setExpr #>
                         }
                     );
 <#
@@ -197,5 +239,7 @@ namespace <#= Namespace #>
         public bool IsJsonColumn { get; set; }
         public string JsonContextType { get; set; }
         public string Converter { get; set; }
+        public bool IsEncrypted { get; set; }
+        public bool EncryptAutoDecrypt { get; set; } = true;
     }
 #>

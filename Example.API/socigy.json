@@ -1,0 +1,9 @@
+{
+  "database": {
+    "migrationNameTemplate": "${Name}",
+    "platform": "postgresql",
+    "generateDbConnectionFactory": true,
+    "generateWebAppExtensions": true
+  },
+  "shouldShowMessageOnEmptyMigrationGeneration": true
+}

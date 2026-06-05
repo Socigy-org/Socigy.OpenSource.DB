@@ -39,6 +39,33 @@ namespace <#= Namespace #>
             return new TableQueryBuilder();
         }
 
+<#
+        // [Encrypted(AutoDecrypt = false)] columns: expose the raw ciphertext + a lazy, caching decrypt accessor.
+        foreach(var column in Columns.Where(c => c.IsEncrypted && !c.EncryptAutoDecrypt))
+        {
+            string encType = column.TypeName.TrimEnd('?');
+#>
+        /// <summary>Raw encrypted bytes for <c><#= column.SourceName #></c> (automatic decryption is disabled). Read-only; filled when the row is read.</summary>
+        public byte[]? <#= column.SourceName #>RawEncrypted { get; private set; }
+
+        private bool _<#= column.SourceName #>Decrypted;
+
+        /// <summary>Decrypts <c><#= column.SourceName #></c> on first access and caches the plaintext into the <c><#= column.SourceName #></c> property.</summary>
+        public <#= column.TypeName #> <#= column.SourceName #>Decrypted
+        {
+            get
+            {
+                if (!_<#= column.SourceName #>Decrypted)
+                {
+                    <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(<#= column.SourceName #>RawEncrypted, typeof(<#= encType #>)) ?? default(<#= column.TypeName #>));
+                    _<#= column.SourceName #>Decrypted = true;
+                }
+                return <#= column.SourceName #>;
+            }
+        }
+<#
+        }
+#>
         #region Object <-> DB Conversion
         public T? ReadValue<T>(DbDataReader reader, string columnName, Dictionary<string, string>? columnOverrides = null)
         {
@@ -84,7 +111,17 @@ namespace <#= Namespace #>
         <#
             foreach(var column in Columns)
             {
-                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                if (column.IsEncrypted && column.EncryptAutoDecrypt)
+                {
+#>          { var __enc = ReadValue<byte[]?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>)) ?? default(<#= column.TypeName #>)); }
+<#
+                }
+                else if (column.IsEncrypted)
+                {
+#>          { <#= column.SourceName #>RawEncrypted = ReadValue<byte[]?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); _<#= column.SourceName #>Decrypted = false; }
+<#
+                }
+                else if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
                 {
 #>          { var __json = ReadValue<string?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); <#= column.SourceName #> = __json == null ? null : global::System.Text.Json.JsonSerializer.Deserialize<<#= column.TypeName.TrimEnd('?') #>>(__json, <#= column.JsonContextType #>.Default.Options); }
 <#
@@ -141,7 +178,17 @@ namespace <#= Namespace #>
             int __ci = 0;
             foreach(var column in Columns)
             {
-                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                if (column.IsEncrypted && column.EncryptAutoDecrypt)
+                {
+#>          { int __o = ordinals[<#= __ci #>]; var __enc = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<byte[]>(__o); __row.<#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>)) ?? default(<#= column.TypeName #>)); }
+<#
+                }
+                else if (column.IsEncrypted)
+                {
+#>          { int __o = ordinals[<#= __ci #>]; __row.<#= column.SourceName #>RawEncrypted = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<byte[]>(__o); }
+<#
+                }
+                else if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
                 {
 #>          { int __o = ordinals[<#= __ci #>]; if (__o >= 0 && !reader.IsDBNull(__o)) { var __json = reader.GetFieldValue<string>(__o); __row.<#= column.SourceName #> = global::System.Text.Json.JsonSerializer.Deserialize<<#= column.TypeName.TrimEnd('?') #>>(__json, <#= column.JsonContextType #>.Default.Options); } }
 <#
@@ -176,6 +223,13 @@ namespace <#= Namespace #>
                 .WithConnection(connection)
                 .ExecuteAsync();
         }
+
+        /// <summary>
+        /// Inserts many instances efficiently as batched multi-row INSERT commands (one command per chunk,
+        /// not one per row). Returns the total number of rows inserted.
+        /// </summary>
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::System.Threading.CancellationToken cancellationToken = default)
+            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, cancellationToken);
 
         /// <summary>Returns a new update command builder for this instance.</summary>
         public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()
@@ -657,7 +711,7 @@ namespace <#= Namespace #>
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt)> Columns { get; set; } = [];
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 

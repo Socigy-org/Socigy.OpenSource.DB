@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class TableSyntaxGeneratorTemplate : TableSyntaxGeneratorTemplateBase {
         
         
-        #line 665 "TableSyntaxGeneratorTemplate.tt"
+        #line 723 "TableSyntaxGeneratorTemplate.tt"
 
 	public string Namespace { get; set; }
 	public string ClassName { get; set; }
@@ -27,7 +27,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt)> Columns { get; set; } = [];
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 
@@ -138,126 +138,474 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 31 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", bool>> where)\r\n        {\r\n            return new TableQueryBuilder().Where(wher" +
-                    "e);\r\n        }\r\n\r\n        /// <summary>Returns a new query builder for this tabl" +
-                    "e.</summary>\r\n        public static TableQueryBuilder Query()\r\n        {\r\n      " +
-                    "      return new TableQueryBuilder();\r\n        }\r\n\r\n        #region Object <-> D" +
-                    "B Conversion\r\n        public T? ReadValue<T>(DbDataReader reader, string columnN" +
-                    "ame, Dictionary<string, string>? columnOverrides = null)\r\n        {\r\n           " +
-                    " int index = GetColumnDbIndex(reader, columnName, columnOverrides);\r\n           " +
-                    " if (index < 0 || reader.IsDBNull(index))\r\n                return default;\r\n\r\n  " +
-                    "          return (T)reader.GetValue(index);\r\n        }\r\n\r\n        public T? Read" +
-                    "ValueConvertor<T, TConvertor>(DbDataReader reader, int index)\r\n            where" +
-                    " TConvertor : IDbValueConvertor<T>, new()\r\n        {\r\n            if (index < 0 " +
-                    "|| reader.IsDBNull(index))\r\n                return default;\r\n\r\n            var c" +
-                    "onvertor = new TConvertor();\r\n            return convertor.ConvertFromDbValue(re" +
-                    "ader.GetValue(index));\r\n        }\r\n\r\n        public T? ReadValueConvertor<T, TCo" +
-                    "nvertor>(DbDataReader reader, string columnName, Dictionary<string, string>? col" +
-                    "umnOverrides = null)\r\n            where TConvertor : IDbValueConvertor<T>, new()" +
-                    "\r\n        {\r\n            int index = GetColumnDbIndex(reader, columnName, column" +
-                    "Overrides);\r\n            if (index < 0 || reader.IsDBNull(index))\r\n             " +
-                    "   return default;\r\n\r\n            var convertor = new TConvertor();\r\n           " +
-                    " return convertor.ConvertFromDbValue(reader.GetValue(index));\r\n        }\r\n\r\n    " +
-                    "    public int GetColumnDbIndex(DbDataReader reader, string columnName, Dictiona" +
-                    "ry<string, string>? columnOverrides = null)\r\n        {\r\n            if (columnOv" +
-                    "errides != null && columnOverrides.ContainsKey(columnName))\r\n                col" +
-                    "umnName = columnOverrides[columnName];\r\n\r\n            return reader.GetOrdinal(c" +
-                    "olumnName);\r\n        }\r\n\r\n        public ");
+            this.Write(@", bool>> where)
+        {
+            return new TableQueryBuilder().Where(where);
+        }
+
+        /// <summary>Returns a new query builder for this table.</summary>
+        public static TableQueryBuilder Query()
+        {
+            return new TableQueryBuilder();
+        }
+
+");
             
             #line default
             #line hidden
             
-            #line 81 "TableSyntaxGeneratorTemplate.tt"
+            #line 42 "TableSyntaxGeneratorTemplate.tt"
+
+        // [Encrypted(AutoDecrypt = false)] columns: expose the raw ciphertext + a lazy, caching decrypt accessor.
+        foreach(var column in Columns.Where(c => c.IsEncrypted && !c.EncryptAutoDecrypt))
+        {
+            string encType = column.TypeName.TrimEnd('?');
+
+            
+            #line default
+            #line hidden
+            
+            #line 48 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("        /// <summary>Raw encrypted bytes for <c>");
+            
+            #line default
+            #line hidden
+            
+            #line 48 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 48 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("</c> (automatic decryption is disabled). Read-only; filled when the row is read.<" +
+                    "/summary>\r\n        public byte[]? ");
+            
+            #line default
+            #line hidden
+            
+            #line 49 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 49 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("RawEncrypted { get; private set; }\r\n\r\n        private bool _");
+            
+            #line default
+            #line hidden
+            
+            #line 51 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 51 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("Decrypted;\r\n\r\n        /// <summary>Decrypts <c>");
+            
+            #line default
+            #line hidden
+            
+            #line 53 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 53 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("</c> on first access and caches the plaintext into the <c>");
+            
+            #line default
+            #line hidden
+            
+            #line 53 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 53 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("</c> property.</summary>\r\n        public ");
+            
+            #line default
+            #line hidden
+            
+            #line 54 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 54 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(" ");
+            
+            #line default
+            #line hidden
+            
+            #line 54 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 54 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("Decrypted\r\n        {\r\n            get\r\n            {\r\n                if (!_");
+            
+            #line default
+            #line hidden
+            
+            #line 58 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 58 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("Decrypted)\r\n                {\r\n                    ");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(" = (");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("RawEncrypted, typeof(");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( encType ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")) ?? default(");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("));\r\n                    _");
+            
+            #line default
+            #line hidden
+            
+            #line 61 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 61 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("Decrypted = true;\r\n                }\r\n                return ");
+            
+            #line default
+            #line hidden
+            
+            #line 63 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 63 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(";\r\n            }\r\n        }\r\n");
+            
+            #line default
+            #line hidden
+            
+            #line 66 "TableSyntaxGeneratorTemplate.tt"
+
+        }
+
+            
+            #line default
+            #line hidden
+            
+            #line 69 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("        #region Object <-> DB Conversion\r\n        public T? ReadValue<T>(DbDataRe" +
+                    "ader reader, string columnName, Dictionary<string, string>? columnOverrides = nu" +
+                    "ll)\r\n        {\r\n            int index = GetColumnDbIndex(reader, columnName, col" +
+                    "umnOverrides);\r\n            if (index < 0 || reader.IsDBNull(index))\r\n          " +
+                    "      return default;\r\n\r\n            return (T)reader.GetValue(index);\r\n        " +
+                    "}\r\n\r\n        public T? ReadValueConvertor<T, TConvertor>(DbDataReader reader, in" +
+                    "t index)\r\n            where TConvertor : IDbValueConvertor<T>, new()\r\n        {\r" +
+                    "\n            if (index < 0 || reader.IsDBNull(index))\r\n                return de" +
+                    "fault;\r\n\r\n            var convertor = new TConvertor();\r\n            return conv" +
+                    "ertor.ConvertFromDbValue(reader.GetValue(index));\r\n        }\r\n\r\n        public T" +
+                    "? ReadValueConvertor<T, TConvertor>(DbDataReader reader, string columnName, Dict" +
+                    "ionary<string, string>? columnOverrides = null)\r\n            where TConvertor : " +
+                    "IDbValueConvertor<T>, new()\r\n        {\r\n            int index = GetColumnDbIndex" +
+                    "(reader, columnName, columnOverrides);\r\n            if (index < 0 || reader.IsDB" +
+                    "Null(index))\r\n                return default;\r\n\r\n            var convertor = new" +
+                    " TConvertor();\r\n            return convertor.ConvertFromDbValue(reader.GetValue(" +
+                    "index));\r\n        }\r\n\r\n        public int GetColumnDbIndex(DbDataReader reader, " +
+                    "string columnName, Dictionary<string, string>? columnOverrides = null)\r\n        " +
+                    "{\r\n            if (columnOverrides != null && columnOverrides.ContainsKey(column" +
+                    "Name))\r\n                columnName = columnOverrides[columnName];\r\n\r\n           " +
+                    " return reader.GetOrdinal(columnName);\r\n        }\r\n\r\n        public ");
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 81 "TableSyntaxGeneratorTemplate.tt"
+            #line 108 "TableSyntaxGeneratorTemplate.tt"
             this.Write("() {}\r\n        public ");
             
             #line default
             #line hidden
             
-            #line 82 "TableSyntaxGeneratorTemplate.tt"
+            #line 109 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 82 "TableSyntaxGeneratorTemplate.tt"
+            #line 109 "TableSyntaxGeneratorTemplate.tt"
             this.Write("(DbDataReader reader, Dictionary<string, string>? columnOverrides = null)\r\n      " +
                     "  {\r\n        ");
             
             #line default
             #line hidden
             
-            #line 84 "TableSyntaxGeneratorTemplate.tt"
+            #line 111 "TableSyntaxGeneratorTemplate.tt"
 
             foreach(var column in Columns)
             {
-                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                if (column.IsEncrypted && column.EncryptAutoDecrypt)
                 {
 
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
-            this.Write("          { var __json = ReadValue<string?>(reader, ");
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("          { var __enc = ReadValue<byte[]?>(reader, ");
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
             this.Write("ColumnName, columnOverrides); ");
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(" = __json == null ? null : global::System.Text.Json.JsonSerializer.Deserialize<");
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(" = (");
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(" +
+                    "");
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName.TrimEnd('?') ));
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")) ?? default(");
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")); }\r\n");
+            
+            #line default
+            #line hidden
+            
+            #line 118 "TableSyntaxGeneratorTemplate.tt"
+
+                }
+                else if (column.IsEncrypted)
+                {
+
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("          { ");
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("RawEncrypted = ReadValue<byte[]?>(reader, ");
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("ColumnName, columnOverrides); _");
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 123 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("Decrypted = false; }\r\n");
+            
+            #line default
+            #line hidden
+            
+            #line 124 "TableSyntaxGeneratorTemplate.tt"
+
+                }
+                else if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                {
+
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("          { var __json = ReadValue<string?>(reader, ");
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("ColumnName, columnOverrides); ");
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(" = __json == null ? null : global::System.Text.Json.JsonSerializer.Deserialize<");
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName.TrimEnd('?') ));
+            
+            #line default
+            #line hidden
+            
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(__json, ");
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.JsonContextType ));
             
             #line default
             #line hidden
             
-            #line 90 "TableSyntaxGeneratorTemplate.tt"
+            #line 129 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".Default.Options); }\r\n");
             
             #line default
             #line hidden
             
-            #line 91 "TableSyntaxGeneratorTemplate.tt"
+            #line 130 "TableSyntaxGeneratorTemplate.tt"
 
                 }
                 else if (string.IsNullOrEmpty(column.Converter))
@@ -267,49 +615,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write("          ");
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" = ReadValue<");
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(reader, ");
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 96 "TableSyntaxGeneratorTemplate.tt"
+            #line 135 "TableSyntaxGeneratorTemplate.tt"
             this.Write("ColumnName, columnOverrides);\r\n");
             
             #line default
             #line hidden
             
-            #line 97 "TableSyntaxGeneratorTemplate.tt"
+            #line 136 "TableSyntaxGeneratorTemplate.tt"
 
                 }
                 else
@@ -319,61 +667,61 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write("          ");
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" = ReadValueConvertor<");
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(",");
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.Converter ));
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(reader, ");
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 102 "TableSyntaxGeneratorTemplate.tt"
+            #line 141 "TableSyntaxGeneratorTemplate.tt"
             this.Write("ColumnName, columnOverrides);\r\n");
             
             #line default
             #line hidden
             
-            #line 103 "TableSyntaxGeneratorTemplate.tt"
+            #line 142 "TableSyntaxGeneratorTemplate.tt"
 
                 }
             }
@@ -382,32 +730,32 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 107 "TableSyntaxGeneratorTemplate.tt"
+            #line 146 "TableSyntaxGeneratorTemplate.tt"
             this.Write("        }\r\n\r\n        public static ");
             
             #line default
             #line hidden
             
-            #line 109 "TableSyntaxGeneratorTemplate.tt"
+            #line 148 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 109 "TableSyntaxGeneratorTemplate.tt"
+            #line 148 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ConvertFrom(DbDataReader reader, Dictionary<string, string>? columnOverrides = n" +
                     "ull)\r\n        {\r\n            return new ");
             
             #line default
             #line hidden
             
-            #line 111 "TableSyntaxGeneratorTemplate.tt"
+            #line 150 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 111 "TableSyntaxGeneratorTemplate.tt"
+            #line 150 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"(reader, columnOverrides);
         }
 
@@ -431,7 +779,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 129 "TableSyntaxGeneratorTemplate.tt"
+            #line 168 "TableSyntaxGeneratorTemplate.tt"
 
             foreach(var column in Columns)
             {
@@ -440,25 +788,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 133 "TableSyntaxGeneratorTemplate.tt"
+            #line 172 "TableSyntaxGeneratorTemplate.tt"
             this.Write("              GetColumnDbIndexSafe(reader, ");
             
             #line default
             #line hidden
             
-            #line 133 "TableSyntaxGeneratorTemplate.tt"
+            #line 172 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 133 "TableSyntaxGeneratorTemplate.tt"
+            #line 172 "TableSyntaxGeneratorTemplate.tt"
             this.Write("ColumnName, columnOverrides),\r\n");
             
             #line default
             #line hidden
             
-            #line 134 "TableSyntaxGeneratorTemplate.tt"
+            #line 173 "TableSyntaxGeneratorTemplate.tt"
 
             }
 
@@ -466,7 +814,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 137 "TableSyntaxGeneratorTemplate.tt"
+            #line 176 "TableSyntaxGeneratorTemplate.tt"
             this.Write("            };\r\n        }\r\n\r\n        /// <summary>Materializes a row using pre-re" +
                     "solved ordinals (see <see cref=\"GetColumnOrdinals\"/>).</summary>\r\n        public" +
                     " static ");
@@ -474,99 +822,218 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 141 "TableSyntaxGeneratorTemplate.tt"
+            #line 180 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 141 "TableSyntaxGeneratorTemplate.tt"
+            #line 180 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ConvertFrom(DbDataReader reader, int[] ordinals)\r\n        {\r\n            var __r" +
                     "ow = new ");
             
             #line default
             #line hidden
             
-            #line 143 "TableSyntaxGeneratorTemplate.tt"
+            #line 182 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 143 "TableSyntaxGeneratorTemplate.tt"
+            #line 182 "TableSyntaxGeneratorTemplate.tt"
             this.Write("();\r\n");
             
             #line default
             #line hidden
             
-            #line 144 "TableSyntaxGeneratorTemplate.tt"
+            #line 183 "TableSyntaxGeneratorTemplate.tt"
 
             int __ci = 0;
             foreach(var column in Columns)
             {
-                if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                if (column.IsEncrypted && column.EncryptAutoDecrypt)
                 {
 
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
             this.Write("          { int __o = ordinals[");
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __ci ));
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("]; var __enc = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<by" +
+                    "te[]>(__o); __row.");
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(" = (");
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(" +
+                    "");
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName.TrimEnd('?') ));
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")) ?? default(");
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(")); }\r\n");
+            
+            #line default
+            #line hidden
+            
+            #line 191 "TableSyntaxGeneratorTemplate.tt"
+
+                }
+                else if (column.IsEncrypted)
+                {
+
+            
+            #line default
+            #line hidden
+            
+            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("          { int __o = ordinals[");
+            
+            #line default
+            #line hidden
+            
+            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( __ci ));
+            
+            #line default
+            #line hidden
+            
+            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("]; __row.");
+            
+            #line default
+            #line hidden
+            
+            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("RawEncrypted = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<by" +
+                    "te[]>(__o); }\r\n");
+            
+            #line default
+            #line hidden
+            
+            #line 197 "TableSyntaxGeneratorTemplate.tt"
+
+                }
+                else if (column.IsJsonColumn && !string.IsNullOrEmpty(column.JsonContextType))
+                {
+
+            
+            #line default
+            #line hidden
+            
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("          { int __o = ordinals[");
+            
+            #line default
+            #line hidden
+            
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( __ci ));
+            
+            #line default
+            #line hidden
+            
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write("]; if (__o >= 0 && !reader.IsDBNull(__o)) { var __json = reader.GetFieldValue<str" +
                     "ing>(__o); __row.");
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" = global::System.Text.Json.JsonSerializer.Deserialize<");
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName.TrimEnd('?') ));
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(__json, ");
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.JsonContextType ));
             
             #line default
             #line hidden
             
-            #line 151 "TableSyntaxGeneratorTemplate.tt"
+            #line 202 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".Default.Options); } }\r\n");
             
             #line default
             #line hidden
             
-            #line 152 "TableSyntaxGeneratorTemplate.tt"
+            #line 203 "TableSyntaxGeneratorTemplate.tt"
 
                 }
                 else if (string.IsNullOrEmpty(column.Converter))
@@ -576,73 +1043,73 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write("          { int __o = ordinals[");
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __ci ));
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write("]; __row.");
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" = (__o < 0 || reader.IsDBNull(__o)) ? default(");
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(") : (");
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName ));
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(")reader.GetFieldValue<");
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.TypeName.TrimEnd('?') ));
             
             #line default
             #line hidden
             
-            #line 157 "TableSyntaxGeneratorTemplate.tt"
+            #line 208 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(__o); }\r\n");
             
             #line default
             #line hidden
             
-            #line 158 "TableSyntaxGeneratorTemplate.tt"
+            #line 209 "TableSyntaxGeneratorTemplate.tt"
 
                 }
                 else
@@ -652,49 +1119,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write("          { int __o = ordinals[");
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __ci ));
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write("]; if (__o >= 0 && !reader.IsDBNull(__o)) { __row.");
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" = new ");
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.Converter ));
             
             #line default
             #line hidden
             
-            #line 163 "TableSyntaxGeneratorTemplate.tt"
+            #line 214 "TableSyntaxGeneratorTemplate.tt"
             this.Write("().ConvertFromDbValue(reader.GetValue(__o)); } }\r\n");
             
             #line default
             #line hidden
             
-            #line 164 "TableSyntaxGeneratorTemplate.tt"
+            #line 215 "TableSyntaxGeneratorTemplate.tt"
 
                 }
                 __ci++;
@@ -704,7 +1171,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 169 "TableSyntaxGeneratorTemplate.tt"
+            #line 220 "TableSyntaxGeneratorTemplate.tt"
             this.Write("            return __row;\r\n        }\r\n        #endregion\r\n\r\n        /// <summary>" +
                     "Returns a new insert command builder for this instance.</summary>\r\n        publi" +
                     "c ");
@@ -712,49 +1179,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 174 "TableSyntaxGeneratorTemplate.tt"
+            #line 225 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 174 "TableSyntaxGeneratorTemplate.tt"
+            #line 225 "TableSyntaxGeneratorTemplate.tt"
             this.Write("InsertCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 174 "TableSyntaxGeneratorTemplate.tt"
+            #line 225 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 174 "TableSyntaxGeneratorTemplate.tt"
+            #line 225 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Insert()\r\n        {\r\n            return new ");
             
             #line default
             #line hidden
             
-            #line 176 "TableSyntaxGeneratorTemplate.tt"
+            #line 227 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 176 "TableSyntaxGeneratorTemplate.tt"
+            #line 227 "TableSyntaxGeneratorTemplate.tt"
             this.Write("InsertCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 176 "TableSyntaxGeneratorTemplate.tt"
+            #line 227 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 176 "TableSyntaxGeneratorTemplate.tt"
+            #line 227 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this);\r\n        }\r\n\r\n        /// <summary>Inserts the given instance into the d" +
                     "atabase using the provided connection.</summary>\r\n        public static async Ta" +
                     "sk<bool> InsertAsync(");
@@ -762,99 +1229,146 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 180 "TableSyntaxGeneratorTemplate.tt"
+            #line 231 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 180 "TableSyntaxGeneratorTemplate.tt"
+            #line 231 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, DbConnection connection)\r\n        {\r\n            return await new ");
             
             #line default
             #line hidden
             
-            #line 182 "TableSyntaxGeneratorTemplate.tt"
+            #line 233 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 182 "TableSyntaxGeneratorTemplate.tt"
+            #line 233 "TableSyntaxGeneratorTemplate.tt"
             this.Write("InsertCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 182 "TableSyntaxGeneratorTemplate.tt"
+            #line 233 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 182 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(">(instance)\r\n                .WithConnection(connection)\r\n                .Execut" +
-                    "eAsync();\r\n        }\r\n\r\n        /// <summary>Returns a new update command builde" +
-                    "r for this instance.</summary>\r\n        public ");
+            #line 233 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(@">(instance)
+                .WithConnection(connection)
+                .ExecuteAsync();
+        }
+
+        /// <summary>
+        /// Inserts many instances efficiently as batched multi-row INSERT commands (one command per chunk,
+        /// not one per row). Returns the total number of rows inserted.
+        /// </summary>
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<");
             
             #line default
             #line hidden
             
-            #line 188 "TableSyntaxGeneratorTemplate.tt"
+            #line 242 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 242 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transa" +
+                    "ction = null, global::System.Threading.CancellationToken cancellationToken = def" +
+                    "ault)\r\n            => ");
+            
+            #line default
+            #line hidden
+            
+            #line 243 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 188 "TableSyntaxGeneratorTemplate.tt"
+            #line 243 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("InsertCommandBuilder<");
+            
+            #line default
+            #line hidden
+            
+            #line 243 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 188 "TableSyntaxGeneratorTemplate.tt"
+            #line 243 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(">.InsertMultipleAsync(rows, connection, transaction, cancellationToken);\r\n\r\n     " +
+                    "   /// <summary>Returns a new update command builder for this instance.</summary" +
+                    ">\r\n        public ");
+            
+            #line default
+            #line hidden
+            
+            #line 246 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
+            
+            #line default
+            #line hidden
+            
+            #line 246 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 246 "TableSyntaxGeneratorTemplate.tt"
             this.Write("UpdateCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 188 "TableSyntaxGeneratorTemplate.tt"
+            #line 246 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 188 "TableSyntaxGeneratorTemplate.tt"
+            #line 246 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Update()\r\n        {\r\n            return new ");
             
             #line default
             #line hidden
             
-            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            #line 248 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            #line 248 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            #line 248 "TableSyntaxGeneratorTemplate.tt"
             this.Write("UpdateCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            #line 248 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            #line 248 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this);\r\n        }\r\n\r\n        /// <summary>Updates all fields of the given insta" +
                     "nce in the database.</summary>\r\n        public static async Task<int> UpdateAsyn" +
                     "c(");
@@ -862,43 +1376,43 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 194 "TableSyntaxGeneratorTemplate.tt"
+            #line 252 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 194 "TableSyntaxGeneratorTemplate.tt"
+            #line 252 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, DbConnection connection)\r\n        {\r\n            return await new ");
             
             #line default
             #line hidden
             
-            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            #line 254 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            #line 254 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            #line 254 "TableSyntaxGeneratorTemplate.tt"
             this.Write("UpdateCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            #line 254 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 196 "TableSyntaxGeneratorTemplate.tt"
+            #line 254 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@">(instance)
                 .WithConnection(connection)
                 .WithAllFields()
@@ -911,128 +1425,128 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 203 "TableSyntaxGeneratorTemplate.tt"
+            #line 261 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 203 "TableSyntaxGeneratorTemplate.tt"
+            #line 261 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 203 "TableSyntaxGeneratorTemplate.tt"
+            #line 261 "TableSyntaxGeneratorTemplate.tt"
             this.Write("DeleteCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 203 "TableSyntaxGeneratorTemplate.tt"
+            #line 261 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 203 "TableSyntaxGeneratorTemplate.tt"
+            #line 261 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> DeleteNonInstance()\r\n        {\r\n            return new ");
             
             #line default
             #line hidden
             
-            #line 205 "TableSyntaxGeneratorTemplate.tt"
+            #line 263 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 205 "TableSyntaxGeneratorTemplate.tt"
+            #line 263 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 205 "TableSyntaxGeneratorTemplate.tt"
+            #line 263 "TableSyntaxGeneratorTemplate.tt"
             this.Write("DeleteCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 205 "TableSyntaxGeneratorTemplate.tt"
+            #line 263 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 205 "TableSyntaxGeneratorTemplate.tt"
+            #line 263 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n        }\r\n\r\n        /// <summary>Returns a new delete command builder scop" +
                     "ed to this instance\'s primary key.</summary>\r\n        public ");
             
             #line default
             #line hidden
             
-            #line 209 "TableSyntaxGeneratorTemplate.tt"
+            #line 267 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 209 "TableSyntaxGeneratorTemplate.tt"
+            #line 267 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 209 "TableSyntaxGeneratorTemplate.tt"
+            #line 267 "TableSyntaxGeneratorTemplate.tt"
             this.Write("DeleteCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 209 "TableSyntaxGeneratorTemplate.tt"
+            #line 267 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 209 "TableSyntaxGeneratorTemplate.tt"
+            #line 267 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Delete()\r\n        {\r\n            return new ");
             
             #line default
             #line hidden
             
-            #line 211 "TableSyntaxGeneratorTemplate.tt"
+            #line 269 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 211 "TableSyntaxGeneratorTemplate.tt"
+            #line 269 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 211 "TableSyntaxGeneratorTemplate.tt"
+            #line 269 "TableSyntaxGeneratorTemplate.tt"
             this.Write("DeleteCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 211 "TableSyntaxGeneratorTemplate.tt"
+            #line 269 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 211 "TableSyntaxGeneratorTemplate.tt"
+            #line 269 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this);\r\n        }\r\n\r\n");
             
             #line default
             #line hidden
             
-            #line 214 "TableSyntaxGeneratorTemplate.tt"
+            #line 272 "TableSyntaxGeneratorTemplate.tt"
 
         foreach(var column in Columns.Where(c => c.IsAutoIncrement))
         {
@@ -1041,43 +1555,43 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 218 "TableSyntaxGeneratorTemplate.tt"
+            #line 276 "TableSyntaxGeneratorTemplate.tt"
             this.Write("        /// <summary>Sequence accessor for the auto-increment column <c>");
             
             #line default
             #line hidden
             
-            #line 218 "TableSyntaxGeneratorTemplate.tt"
+            #line 276 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 218 "TableSyntaxGeneratorTemplate.tt"
+            #line 276 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c>.</summary>\r\n        public static class ");
             
             #line default
             #line hidden
             
-            #line 219 "TableSyntaxGeneratorTemplate.tt"
+            #line 277 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
             
             #line default
             #line hidden
             
-            #line 219 "TableSyntaxGeneratorTemplate.tt"
+            #line 277 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Sequence\r\n        {\r\n            private const string _Name = \"");
             
             #line default
             #line hidden
             
-            #line 221 "TableSyntaxGeneratorTemplate.tt"
+            #line 279 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( column.SequenceName ));
             
             #line default
             #line hidden
             
-            #line 221 "TableSyntaxGeneratorTemplate.tt"
+            #line 279 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\";\r\n\r\n            /// <summary>Advances the sequence and returns the next value.<" +
                     "/summary>\r\n            public static async Task<long> GetNextValueAsync(DbConnec" +
                     "tion connection)\r\n            {\r\n                bool shouldClose = connection.S" +
@@ -1106,7 +1620,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 259 "TableSyntaxGeneratorTemplate.tt"
+            #line 317 "TableSyntaxGeneratorTemplate.tt"
 
         }
 
@@ -1114,19 +1628,19 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 262 "TableSyntaxGeneratorTemplate.tt"
+            #line 320 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\r\n");
             
             #line default
             #line hidden
             
-            #line 263 "TableSyntaxGeneratorTemplate.tt"
+            #line 321 "TableSyntaxGeneratorTemplate.tt"
  if (FlaggedEnumProperties.Count > 0) { 
             
             #line default
             #line hidden
             
-            #line 264 "TableSyntaxGeneratorTemplate.tt"
+            #line 322 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"        // ---------------------------------------------------------------
         // Flagged-enum junction table join info (for WHERE visitor)
         // ---------------------------------------------------------------
@@ -1137,122 +1651,122 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 269 "TableSyntaxGeneratorTemplate.tt"
+            #line 327 "TableSyntaxGeneratorTemplate.tt"
  foreach (var fe in FlaggedEnumProperties) { 
             
             #line default
             #line hidden
             
-            #line 270 "TableSyntaxGeneratorTemplate.tt"
+            #line 328 "TableSyntaxGeneratorTemplate.tt"
             this.Write("            [\"");
             
             #line default
             #line hidden
             
-            #line 270 "TableSyntaxGeneratorTemplate.tt"
+            #line 328 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 270 "TableSyntaxGeneratorTemplate.tt"
+            #line 328 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"] = new global::Socigy.OpenSource.DB.Core.Parsers.FlaggedEnumJoinInfo\r\n         " +
                     "   {\r\n                JunctionTable = \"");
             
             #line default
             #line hidden
             
-            #line 272 "TableSyntaxGeneratorTemplate.tt"
+            #line 330 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 272 "TableSyntaxGeneratorTemplate.tt"
+            #line 330 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\",\r\n                MainTable = \"");
             
             #line default
             #line hidden
             
-            #line 273 "TableSyntaxGeneratorTemplate.tt"
+            #line 331 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.MainTable ));
             
             #line default
             #line hidden
             
-            #line 273 "TableSyntaxGeneratorTemplate.tt"
+            #line 331 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\",\r\n                PkMappings = [");
             
             #line default
             #line hidden
             
-            #line 274 "TableSyntaxGeneratorTemplate.tt"
+            #line 332 "TableSyntaxGeneratorTemplate.tt"
  for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; 
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
             this.Write("(\"");
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.MainPkCol ));
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\", \"");
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.JunctionFkCol ));
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\")");
             
             #line default
             #line hidden
             
-            #line 275 "TableSyntaxGeneratorTemplate.tt"
+            #line 333 "TableSyntaxGeneratorTemplate.tt"
  if (__i < fe.PkMappings.Count - 1) Write(", "); } 
             
             #line default
             #line hidden
             
-            #line 276 "TableSyntaxGeneratorTemplate.tt"
+            #line 334 "TableSyntaxGeneratorTemplate.tt"
             this.Write("],\r\n                EnumFkColumn = \"");
             
             #line default
             #line hidden
             
-            #line 277 "TableSyntaxGeneratorTemplate.tt"
+            #line 335 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumFkColumn ));
             
             #line default
             #line hidden
             
-            #line 277 "TableSyntaxGeneratorTemplate.tt"
+            #line 335 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\r\n            },\r\n");
             
             #line default
             #line hidden
             
-            #line 279 "TableSyntaxGeneratorTemplate.tt"
+            #line 337 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 280 "TableSyntaxGeneratorTemplate.tt"
+            #line 338 "TableSyntaxGeneratorTemplate.tt"
             this.Write("        };\r\n\r\n        // --------------------------------------------------------" +
                     "-------\r\n        // Flagged-enum flag management methods\r\n        // -----------" +
                     "----------------------------------------------------\r\n");
@@ -1260,62 +1774,62 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 285 "TableSyntaxGeneratorTemplate.tt"
+            #line 343 "TableSyntaxGeneratorTemplate.tt"
  foreach (var fe in FlaggedEnumProperties) { 
             
             #line default
             #line hidden
             
-            #line 286 "TableSyntaxGeneratorTemplate.tt"
+            #line 344 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\r\n        /// <summary>Inserts a single <paramref name=\"flag\"/> value into the <c" +
                     ">");
             
             #line default
             #line hidden
             
-            #line 287 "TableSyntaxGeneratorTemplate.tt"
+            #line 345 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 287 "TableSyntaxGeneratorTemplate.tt"
+            #line 345 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> junction table.</summary>\r\n        public static async Task Insert");
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(");
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, ");
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 288 "TableSyntaxGeneratorTemplate.tt"
+            #line 346 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@" flag, DbConnection connection)
         {
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -1328,109 +1842,109 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 295 "TableSyntaxGeneratorTemplate.tt"
+            #line 353 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 295 "TableSyntaxGeneratorTemplate.tt"
+            #line 353 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" (");
             
             #line default
             #line hidden
             
-            #line 295 "TableSyntaxGeneratorTemplate.tt"
+            #line 353 "TableSyntaxGeneratorTemplate.tt"
  Write(string.Join(", ", fe.PkMappings.Select(m => $"\"\"{m.JunctionFkCol}\"\"").Append($"\"\"{fe.EnumFkColumn}\"\""))); 
             
             #line default
             #line hidden
             
-            #line 296 "TableSyntaxGeneratorTemplate.tt"
+            #line 354 "TableSyntaxGeneratorTemplate.tt"
             this.Write(") VALUES (");
             
             #line default
             #line hidden
             
-            #line 296 "TableSyntaxGeneratorTemplate.tt"
+            #line 354 "TableSyntaxGeneratorTemplate.tt"
  Write(string.Join(", ", Enumerable.Range(0, fe.PkMappings.Count + 1).Select(i => $"@p{i}"))); 
             
             #line default
             #line hidden
             
-            #line 297 "TableSyntaxGeneratorTemplate.tt"
+            #line 355 "TableSyntaxGeneratorTemplate.tt"
             this.Write(")\";\r\n");
             
             #line default
             #line hidden
             
-            #line 298 "TableSyntaxGeneratorTemplate.tt"
+            #line 356 "TableSyntaxGeneratorTemplate.tt"
  for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; 
             
             #line default
             #line hidden
             
-            #line 299 "TableSyntaxGeneratorTemplate.tt"
+            #line 357 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 299 "TableSyntaxGeneratorTemplate.tt"
+            #line 357 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __i ));
             
             #line default
             #line hidden
             
-            #line 299 "TableSyntaxGeneratorTemplate.tt"
+            #line 357 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = (object?)instance.");
             
             #line default
             #line hidden
             
-            #line 299 "TableSyntaxGeneratorTemplate.tt"
+            #line 357 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.PropName ));
             
             #line default
             #line hidden
             
-            #line 299 "TableSyntaxGeneratorTemplate.tt"
+            #line 357 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
             
             #line default
             #line hidden
             
-            #line 300 "TableSyntaxGeneratorTemplate.tt"
+            #line 358 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 301 "TableSyntaxGeneratorTemplate.tt"
+            #line 359 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 301 "TableSyntaxGeneratorTemplate.tt"
+            #line 359 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.PkMappings.Count ));
             
             #line default
             #line hidden
             
-            #line 301 "TableSyntaxGeneratorTemplate.tt"
+            #line 359 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
             
             #line default
             #line hidden
             
-            #line 301 "TableSyntaxGeneratorTemplate.tt"
+            #line 359 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 301 "TableSyntaxGeneratorTemplate.tt"
+            #line 359 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"))); cmd.Parameters.Add(p); }
                 await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, ""INSERT"", ct => cmd.ExecuteNonQueryAsync(ct));
             }
@@ -1442,49 +1956,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 307 "TableSyntaxGeneratorTemplate.tt"
+            #line 365 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 307 "TableSyntaxGeneratorTemplate.tt"
+            #line 365 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> junction table.</summary>\r\n        public static async Task Delete");
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(");
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, ");
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 308 "TableSyntaxGeneratorTemplate.tt"
+            #line 366 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@" flag, DbConnection connection)
         {
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -1497,121 +2011,121 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 315 "TableSyntaxGeneratorTemplate.tt"
+            #line 373 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 315 "TableSyntaxGeneratorTemplate.tt"
+            #line 373 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" WHERE ");
             
             #line default
             #line hidden
             
-            #line 315 "TableSyntaxGeneratorTemplate.tt"
+            #line 373 "TableSyntaxGeneratorTemplate.tt"
  Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); 
             
             #line default
             #line hidden
             
-            #line 316 "TableSyntaxGeneratorTemplate.tt"
+            #line 374 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" AND \"\"");
             
             #line default
             #line hidden
             
-            #line 316 "TableSyntaxGeneratorTemplate.tt"
+            #line 374 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumFkColumn ));
             
             #line default
             #line hidden
             
-            #line 316 "TableSyntaxGeneratorTemplate.tt"
+            #line 374 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" = @p");
             
             #line default
             #line hidden
             
-            #line 316 "TableSyntaxGeneratorTemplate.tt"
+            #line 374 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.PkMappings.Count ));
             
             #line default
             #line hidden
             
-            #line 316 "TableSyntaxGeneratorTemplate.tt"
+            #line 374 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\";\r\n");
             
             #line default
             #line hidden
             
-            #line 317 "TableSyntaxGeneratorTemplate.tt"
+            #line 375 "TableSyntaxGeneratorTemplate.tt"
  for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; 
             
             #line default
             #line hidden
             
-            #line 318 "TableSyntaxGeneratorTemplate.tt"
+            #line 376 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 318 "TableSyntaxGeneratorTemplate.tt"
+            #line 376 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __i ));
             
             #line default
             #line hidden
             
-            #line 318 "TableSyntaxGeneratorTemplate.tt"
+            #line 376 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = (object?)instance.");
             
             #line default
             #line hidden
             
-            #line 318 "TableSyntaxGeneratorTemplate.tt"
+            #line 376 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.PropName ));
             
             #line default
             #line hidden
             
-            #line 318 "TableSyntaxGeneratorTemplate.tt"
+            #line 376 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
             
             #line default
             #line hidden
             
-            #line 319 "TableSyntaxGeneratorTemplate.tt"
+            #line 377 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 320 "TableSyntaxGeneratorTemplate.tt"
+            #line 378 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 320 "TableSyntaxGeneratorTemplate.tt"
+            #line 378 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.PkMappings.Count ));
             
             #line default
             #line hidden
             
-            #line 320 "TableSyntaxGeneratorTemplate.tt"
+            #line 378 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
             
             #line default
             #line hidden
             
-            #line 320 "TableSyntaxGeneratorTemplate.tt"
+            #line 378 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 320 "TableSyntaxGeneratorTemplate.tt"
+            #line 378 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"))); cmd.Parameters.Add(p); }
                 await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, ""DELETE"", ct => cmd.ExecuteNonQueryAsync(ct));
             }
@@ -1623,50 +2137,50 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 326 "TableSyntaxGeneratorTemplate.tt"
+            #line 384 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 326 "TableSyntaxGeneratorTemplate.tt"
+            #line 384 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> junction table for this instance.</summary>\r\n        public static async IAs" +
                     "yncEnumerable");
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( "<" + fe.EnumTypeFullName + ">" ));
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" Get");
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(");
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 327 "TableSyntaxGeneratorTemplate.tt"
+            #line 385 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@" instance, DbConnection connection)
         {
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -1679,85 +2193,85 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 334 "TableSyntaxGeneratorTemplate.tt"
+            #line 392 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumFkColumn ));
             
             #line default
             #line hidden
             
-            #line 334 "TableSyntaxGeneratorTemplate.tt"
+            #line 392 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" FROM \"\"");
             
             #line default
             #line hidden
             
-            #line 334 "TableSyntaxGeneratorTemplate.tt"
+            #line 392 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 334 "TableSyntaxGeneratorTemplate.tt"
+            #line 392 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" WHERE ");
             
             #line default
             #line hidden
             
-            #line 334 "TableSyntaxGeneratorTemplate.tt"
+            #line 392 "TableSyntaxGeneratorTemplate.tt"
  Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); 
             
             #line default
             #line hidden
             
-            #line 335 "TableSyntaxGeneratorTemplate.tt"
+            #line 393 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\";\r\n");
             
             #line default
             #line hidden
             
-            #line 336 "TableSyntaxGeneratorTemplate.tt"
+            #line 394 "TableSyntaxGeneratorTemplate.tt"
  for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; 
             
             #line default
             #line hidden
             
-            #line 337 "TableSyntaxGeneratorTemplate.tt"
+            #line 395 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 337 "TableSyntaxGeneratorTemplate.tt"
+            #line 395 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __i ));
             
             #line default
             #line hidden
             
-            #line 337 "TableSyntaxGeneratorTemplate.tt"
+            #line 395 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = (object?)instance.");
             
             #line default
             #line hidden
             
-            #line 337 "TableSyntaxGeneratorTemplate.tt"
+            #line 395 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.PropName ));
             
             #line default
             #line hidden
             
-            #line 337 "TableSyntaxGeneratorTemplate.tt"
+            #line 395 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
             
             #line default
             #line hidden
             
-            #line 338 "TableSyntaxGeneratorTemplate.tt"
+            #line 396 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 339 "TableSyntaxGeneratorTemplate.tt"
+            #line 397 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(cmd, ""SELECT"", ct => cmd.ExecuteReaderAsync(ct));
                 var reader = __instr.Reader;
                 while (await __instr.ReadAsync())
@@ -1766,25 +2280,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 342 "TableSyntaxGeneratorTemplate.tt"
+            #line 400 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 342 "TableSyntaxGeneratorTemplate.tt"
+            #line 400 "TableSyntaxGeneratorTemplate.tt"
             this.Write(")Convert.ChangeType(reader.GetValue(0), Enum.GetUnderlyingType(typeof(");
             
             #line default
             #line hidden
             
-            #line 342 "TableSyntaxGeneratorTemplate.tt"
+            #line 400 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 342 "TableSyntaxGeneratorTemplate.tt"
+            #line 400 "TableSyntaxGeneratorTemplate.tt"
             this.Write(")));\r\n            }\r\n            finally { if (shouldClose) await connection.Clos" +
                     "eAsync(); }\r\n        }\r\n\r\n        /// <summary>Returns <see langword=\"true\"/> if" +
                     " the given <paramref name=\"flag\"/> is present in the <c>");
@@ -1792,49 +2306,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 347 "TableSyntaxGeneratorTemplate.tt"
+            #line 405 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 347 "TableSyntaxGeneratorTemplate.tt"
+            #line 405 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> junction table.</summary>\r\n        public static async Task<bool> Has");
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write("FlagAsync(");
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, ");
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 348 "TableSyntaxGeneratorTemplate.tt"
+            #line 406 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@" flag, DbConnection connection)
         {
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -1847,121 +2361,121 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 355 "TableSyntaxGeneratorTemplate.tt"
+            #line 413 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 355 "TableSyntaxGeneratorTemplate.tt"
+            #line 413 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" WHERE ");
             
             #line default
             #line hidden
             
-            #line 355 "TableSyntaxGeneratorTemplate.tt"
+            #line 413 "TableSyntaxGeneratorTemplate.tt"
  Write(string.Join(" AND ", fe.PkMappings.Select((m, i) => $"\"\"{m.JunctionFkCol}\"\" = @p{i}"))); 
             
             #line default
             #line hidden
             
-            #line 356 "TableSyntaxGeneratorTemplate.tt"
+            #line 414 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" AND \"\"");
             
             #line default
             #line hidden
             
-            #line 356 "TableSyntaxGeneratorTemplate.tt"
+            #line 414 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumFkColumn ));
             
             #line default
             #line hidden
             
-            #line 356 "TableSyntaxGeneratorTemplate.tt"
+            #line 414 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"\" = @p");
             
             #line default
             #line hidden
             
-            #line 356 "TableSyntaxGeneratorTemplate.tt"
+            #line 414 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.PkMappings.Count ));
             
             #line default
             #line hidden
             
-            #line 356 "TableSyntaxGeneratorTemplate.tt"
+            #line 414 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" LIMIT 1\";\r\n");
             
             #line default
             #line hidden
             
-            #line 357 "TableSyntaxGeneratorTemplate.tt"
+            #line 415 "TableSyntaxGeneratorTemplate.tt"
  for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; 
             
             #line default
             #line hidden
             
-            #line 358 "TableSyntaxGeneratorTemplate.tt"
+            #line 416 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 358 "TableSyntaxGeneratorTemplate.tt"
+            #line 416 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __i ));
             
             #line default
             #line hidden
             
-            #line 358 "TableSyntaxGeneratorTemplate.tt"
+            #line 416 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = (object?)instance.");
             
             #line default
             #line hidden
             
-            #line 358 "TableSyntaxGeneratorTemplate.tt"
+            #line 416 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( __m.PropName ));
             
             #line default
             #line hidden
             
-            #line 358 "TableSyntaxGeneratorTemplate.tt"
+            #line 416 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" ?? DBNull.Value; cmd.Parameters.Add(p); }\r\n");
             
             #line default
             #line hidden
             
-            #line 359 "TableSyntaxGeneratorTemplate.tt"
+            #line 417 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 360 "TableSyntaxGeneratorTemplate.tt"
+            #line 418 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                { var p = cmd.CreateParameter(); p.ParameterName = \"@p");
             
             #line default
             #line hidden
             
-            #line 360 "TableSyntaxGeneratorTemplate.tt"
+            #line 418 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.PkMappings.Count ));
             
             #line default
             #line hidden
             
-            #line 360 "TableSyntaxGeneratorTemplate.tt"
+            #line 418 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\"; p.Value = Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(");
             
             #line default
             #line hidden
             
-            #line 360 "TableSyntaxGeneratorTemplate.tt"
+            #line 418 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 360 "TableSyntaxGeneratorTemplate.tt"
+            #line 418 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"))); cmd.Parameters.Add(p); }
                 return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(cmd, ""SELECT"", ct => cmd.ExecuteScalarAsync(ct)) != null;
             }
@@ -1974,13 +2488,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 367 "TableSyntaxGeneratorTemplate.tt"
+            #line 425 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 367 "TableSyntaxGeneratorTemplate.tt"
+            #line 425 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> junction table so it contains exactly <paramref name=\"newFlags\"/>.\r\n        " +
                     "/// Inserts missing values and removes stale ones.\r\n        /// </summary>\r\n    " +
                     "    public static async Task Sync");
@@ -1988,101 +2502,101 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(");
             
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance, IEnumerable<");
             
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 370 "TableSyntaxGeneratorTemplate.tt"
+            #line 428 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> newFlags, DbConnection connection)\r\n        {\r\n            var current = new Ha" +
                     "shSet<");
             
             #line default
             #line hidden
             
-            #line 372 "TableSyntaxGeneratorTemplate.tt"
+            #line 430 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 372 "TableSyntaxGeneratorTemplate.tt"
+            #line 430 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n            await foreach (var f in Get");
             
             #line default
             #line hidden
             
-            #line 373 "TableSyntaxGeneratorTemplate.tt"
+            #line 431 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 373 "TableSyntaxGeneratorTemplate.tt"
+            #line 431 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(instance, connection))\r\n                current.Add(f);\r\n            var d" +
                     "esired = new HashSet<");
             
             #line default
             #line hidden
             
-            #line 375 "TableSyntaxGeneratorTemplate.tt"
+            #line 433 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 375 "TableSyntaxGeneratorTemplate.tt"
+            #line 433 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(newFlags);\r\n            foreach (var add in desired.Except(current))\r\n         " +
                     "       await Insert");
             
             #line default
             #line hidden
             
-            #line 377 "TableSyntaxGeneratorTemplate.tt"
+            #line 435 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 377 "TableSyntaxGeneratorTemplate.tt"
+            #line 435 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(instance, add, connection);\r\n            foreach (var remove in current.Exc" +
                     "ept(desired))\r\n                await Delete");
             
             #line default
             #line hidden
             
-            #line 379 "TableSyntaxGeneratorTemplate.tt"
+            #line 437 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 379 "TableSyntaxGeneratorTemplate.tt"
+            #line 437 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(instance, remove, connection);\r\n        }\r\n\r\n        // --- Instance-level " +
                     "convenience wrappers ---\r\n\r\n        /// <summary>Inserts <paramref name=\"flag\"/>" +
                     " into the junction table for this instance.</summary>\r\n        public Task Inser" +
@@ -2091,37 +2605,37 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 385 "TableSyntaxGeneratorTemplate.tt"
+            #line 443 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 385 "TableSyntaxGeneratorTemplate.tt"
+            #line 443 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(");
             
             #line default
             #line hidden
             
-            #line 385 "TableSyntaxGeneratorTemplate.tt"
+            #line 443 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 385 "TableSyntaxGeneratorTemplate.tt"
+            #line 443 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" flag, DbConnection connection)\r\n            => Insert");
             
             #line default
             #line hidden
             
-            #line 386 "TableSyntaxGeneratorTemplate.tt"
+            #line 444 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 386 "TableSyntaxGeneratorTemplate.tt"
+            #line 444 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(this, flag, connection);\r\n\r\n        /// <summary>Removes <paramref name=\"fl" +
                     "ag\"/> from the junction table for this instance.</summary>\r\n        public Task " +
                     "Delete");
@@ -2129,37 +2643,37 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 389 "TableSyntaxGeneratorTemplate.tt"
+            #line 447 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 389 "TableSyntaxGeneratorTemplate.tt"
+            #line 447 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(");
             
             #line default
             #line hidden
             
-            #line 389 "TableSyntaxGeneratorTemplate.tt"
+            #line 447 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 389 "TableSyntaxGeneratorTemplate.tt"
+            #line 447 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" flag, DbConnection connection)\r\n            => Delete");
             
             #line default
             #line hidden
             
-            #line 390 "TableSyntaxGeneratorTemplate.tt"
+            #line 448 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 390 "TableSyntaxGeneratorTemplate.tt"
+            #line 448 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(this, flag, connection);\r\n\r\n        /// <summary>Returns all flags currentl" +
                     "y stored in the junction table for this instance.</summary>\r\n        public IAsy" +
                     "ncEnumerable<");
@@ -2167,37 +2681,37 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 393 "TableSyntaxGeneratorTemplate.tt"
+            #line 451 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 393 "TableSyntaxGeneratorTemplate.tt"
+            #line 451 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Get");
             
             #line default
             #line hidden
             
-            #line 393 "TableSyntaxGeneratorTemplate.tt"
+            #line 451 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 393 "TableSyntaxGeneratorTemplate.tt"
+            #line 451 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(DbConnection connection)\r\n            => Get");
             
             #line default
             #line hidden
             
-            #line 394 "TableSyntaxGeneratorTemplate.tt"
+            #line 452 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 394 "TableSyntaxGeneratorTemplate.tt"
+            #line 452 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(this, connection);\r\n\r\n        /// <summary>Returns <see langword=\"true\"/> " +
                     "if this instance has the given <paramref name=\"flag\"/> in the junction table.</s" +
                     "ummary>\r\n        public Task<bool> Has");
@@ -2205,184 +2719,184 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 397 "TableSyntaxGeneratorTemplate.tt"
+            #line 455 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 397 "TableSyntaxGeneratorTemplate.tt"
+            #line 455 "TableSyntaxGeneratorTemplate.tt"
             this.Write("FlagAsync(");
             
             #line default
             #line hidden
             
-            #line 397 "TableSyntaxGeneratorTemplate.tt"
+            #line 455 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 397 "TableSyntaxGeneratorTemplate.tt"
+            #line 455 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" flag, DbConnection connection)\r\n            => Has");
             
             #line default
             #line hidden
             
-            #line 398 "TableSyntaxGeneratorTemplate.tt"
+            #line 456 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 398 "TableSyntaxGeneratorTemplate.tt"
+            #line 456 "TableSyntaxGeneratorTemplate.tt"
             this.Write("FlagAsync(this, flag, connection);\r\n\r\n        // --- In-memory local cache ---\r\n\r" +
                     "\n        private HashSet<");
             
             #line default
             #line hidden
             
-            #line 402 "TableSyntaxGeneratorTemplate.tt"
+            #line 460 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 402 "TableSyntaxGeneratorTemplate.tt"
+            #line 460 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">? _");
             
             #line default
             #line hidden
             
-            #line 402 "TableSyntaxGeneratorTemplate.tt"
+            #line 460 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 402 "TableSyntaxGeneratorTemplate.tt"
+            #line 460 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache;\r\n\r\n        /// <summary>Adds <paramref name=\"flag\"/> to the local in-memor" +
                     "y cache. Call <see cref=\"Commit");
             
             #line default
             #line hidden
             
-            #line 404 "TableSyntaxGeneratorTemplate.tt"
+            #line 462 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 404 "TableSyntaxGeneratorTemplate.tt"
+            #line 462 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync\"/> to persist to the database.</summary>\r\n        public void Add");
             
             #line default
             #line hidden
             
-            #line 405 "TableSyntaxGeneratorTemplate.tt"
+            #line 463 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 405 "TableSyntaxGeneratorTemplate.tt"
+            #line 463 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Flag(");
             
             #line default
             #line hidden
             
-            #line 405 "TableSyntaxGeneratorTemplate.tt"
+            #line 463 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 405 "TableSyntaxGeneratorTemplate.tt"
+            #line 463 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" flag)\r\n        {\r\n            _");
             
             #line default
             #line hidden
             
-            #line 407 "TableSyntaxGeneratorTemplate.tt"
+            #line 465 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 407 "TableSyntaxGeneratorTemplate.tt"
+            #line 465 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache ??= new HashSet<");
             
             #line default
             #line hidden
             
-            #line 407 "TableSyntaxGeneratorTemplate.tt"
+            #line 465 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 407 "TableSyntaxGeneratorTemplate.tt"
+            #line 465 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n            _");
             
             #line default
             #line hidden
             
-            #line 408 "TableSyntaxGeneratorTemplate.tt"
+            #line 466 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 408 "TableSyntaxGeneratorTemplate.tt"
+            #line 466 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache.Add(flag);\r\n        }\r\n\r\n        /// <summary>Removes <paramref name=\"flag\"" +
                     "/> from the local in-memory cache. Call <see cref=\"Commit");
             
             #line default
             #line hidden
             
-            #line 411 "TableSyntaxGeneratorTemplate.tt"
+            #line 469 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 411 "TableSyntaxGeneratorTemplate.tt"
+            #line 469 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync\"/> to persist to the database.</summary>\r\n        public void Remove");
             
             #line default
             #line hidden
             
-            #line 412 "TableSyntaxGeneratorTemplate.tt"
+            #line 470 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 412 "TableSyntaxGeneratorTemplate.tt"
+            #line 470 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Flag(");
             
             #line default
             #line hidden
             
-            #line 412 "TableSyntaxGeneratorTemplate.tt"
+            #line 470 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 412 "TableSyntaxGeneratorTemplate.tt"
+            #line 470 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" flag)\r\n        {\r\n            _");
             
             #line default
             #line hidden
             
-            #line 414 "TableSyntaxGeneratorTemplate.tt"
+            #line 472 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 414 "TableSyntaxGeneratorTemplate.tt"
+            #line 472 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache?.Remove(flag);\r\n        }\r\n\r\n        /// <summary>Downloads the current fla" +
                     "gs from the database into the local in-memory cache.</summary>\r\n        public a" +
                     "sync Task Load");
@@ -2390,61 +2904,61 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 418 "TableSyntaxGeneratorTemplate.tt"
+            #line 476 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 418 "TableSyntaxGeneratorTemplate.tt"
+            #line 476 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(DbConnection connection)\r\n        {\r\n            _");
             
             #line default
             #line hidden
             
-            #line 420 "TableSyntaxGeneratorTemplate.tt"
+            #line 478 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 420 "TableSyntaxGeneratorTemplate.tt"
+            #line 478 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache = new HashSet<");
             
             #line default
             #line hidden
             
-            #line 420 "TableSyntaxGeneratorTemplate.tt"
+            #line 478 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 420 "TableSyntaxGeneratorTemplate.tt"
+            #line 478 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n            await foreach (var f in Get");
             
             #line default
             #line hidden
             
-            #line 421 "TableSyntaxGeneratorTemplate.tt"
+            #line 479 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 421 "TableSyntaxGeneratorTemplate.tt"
+            #line 479 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(this, connection))\r\n                _");
             
             #line default
             #line hidden
             
-            #line 422 "TableSyntaxGeneratorTemplate.tt"
+            #line 480 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 422 "TableSyntaxGeneratorTemplate.tt"
+            #line 480 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache.Add(f);\r\n        }\r\n\r\n        /// <summary>Persists the local in-memory cac" +
                     "he to the database by syncing the full desired set.</summary>\r\n        public Ta" +
                     "sk Commit");
@@ -2452,49 +2966,49 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 426 "TableSyntaxGeneratorTemplate.tt"
+            #line 484 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 426 "TableSyntaxGeneratorTemplate.tt"
+            #line 484 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(DbConnection connection)\r\n            => _");
             
             #line default
             #line hidden
             
-            #line 427 "TableSyntaxGeneratorTemplate.tt"
+            #line 485 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 427 "TableSyntaxGeneratorTemplate.tt"
+            #line 485 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache != null\r\n                ? Sync");
             
             #line default
             #line hidden
             
-            #line 428 "TableSyntaxGeneratorTemplate.tt"
+            #line 486 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 428 "TableSyntaxGeneratorTemplate.tt"
+            #line 486 "TableSyntaxGeneratorTemplate.tt"
             this.Write("sAsync(this, _");
             
             #line default
             #line hidden
             
-            #line 428 "TableSyntaxGeneratorTemplate.tt"
+            #line 486 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 428 "TableSyntaxGeneratorTemplate.tt"
+            #line 486 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Cache, connection)\r\n                : Task.CompletedTask;\r\n\r\n        /// <summary" +
                     ">Returns a fluent builder for batching flag additions and removals in a single c" +
                     "all.</summary>\r\n        public Edit");
@@ -2502,157 +3016,157 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder Edit");
             
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write("() => new Edit");
             
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 432 "TableSyntaxGeneratorTemplate.tt"
+            #line 490 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder(this);\r\n\r\n        /// <summary>Fluent builder for batching <c>");
             
             #line default
             #line hidden
             
-            #line 434 "TableSyntaxGeneratorTemplate.tt"
+            #line 492 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.JunctionTable ));
             
             #line default
             #line hidden
             
-            #line 434 "TableSyntaxGeneratorTemplate.tt"
+            #line 492 "TableSyntaxGeneratorTemplate.tt"
             this.Write("</c> flag additions and removals.</summary>\r\n        public class Edit");
             
             #line default
             #line hidden
             
-            #line 435 "TableSyntaxGeneratorTemplate.tt"
+            #line 493 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 435 "TableSyntaxGeneratorTemplate.tt"
+            #line 493 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder : SqlCommandBuilder<Edit");
             
             #line default
             #line hidden
             
-            #line 435 "TableSyntaxGeneratorTemplate.tt"
+            #line 493 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 435 "TableSyntaxGeneratorTemplate.tt"
+            #line 493 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder>\r\n        {\r\n            private readonly ");
             
             #line default
             #line hidden
             
-            #line 437 "TableSyntaxGeneratorTemplate.tt"
+            #line 495 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 437 "TableSyntaxGeneratorTemplate.tt"
+            #line 495 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" _instance;\r\n            private readonly List<");
             
             #line default
             #line hidden
             
-            #line 438 "TableSyntaxGeneratorTemplate.tt"
+            #line 496 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 438 "TableSyntaxGeneratorTemplate.tt"
+            #line 496 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> _toAdd = new List<");
             
             #line default
             #line hidden
             
-            #line 438 "TableSyntaxGeneratorTemplate.tt"
+            #line 496 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 438 "TableSyntaxGeneratorTemplate.tt"
+            #line 496 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n            private readonly List<");
             
             #line default
             #line hidden
             
-            #line 439 "TableSyntaxGeneratorTemplate.tt"
+            #line 497 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 439 "TableSyntaxGeneratorTemplate.tt"
+            #line 497 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> _toRemove = new List<");
             
             #line default
             #line hidden
             
-            #line 439 "TableSyntaxGeneratorTemplate.tt"
+            #line 497 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 439 "TableSyntaxGeneratorTemplate.tt"
+            #line 497 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">();\r\n\r\n            internal Edit");
             
             #line default
             #line hidden
             
-            #line 441 "TableSyntaxGeneratorTemplate.tt"
+            #line 499 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 441 "TableSyntaxGeneratorTemplate.tt"
+            #line 499 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder(");
             
             #line default
             #line hidden
             
-            #line 441 "TableSyntaxGeneratorTemplate.tt"
+            #line 499 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 441 "TableSyntaxGeneratorTemplate.tt"
+            #line 499 "TableSyntaxGeneratorTemplate.tt"
             this.Write(" instance) { _instance = instance; }\r\n\r\n            /// <summary>Schedules <param" +
                     "ref name=\"flags\"/> to be inserted into the junction table on execute.</summary>\r" +
                     "\n            public Edit");
@@ -2660,25 +3174,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 444 "TableSyntaxGeneratorTemplate.tt"
+            #line 502 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 444 "TableSyntaxGeneratorTemplate.tt"
+            #line 502 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder AddFlags(params ");
             
             #line default
             #line hidden
             
-            #line 444 "TableSyntaxGeneratorTemplate.tt"
+            #line 502 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 444 "TableSyntaxGeneratorTemplate.tt"
+            #line 502 "TableSyntaxGeneratorTemplate.tt"
             this.Write("[] flags) { _toAdd.AddRange(flags); return this; }\r\n\r\n            /// <summary>Sc" +
                     "hedules <paramref name=\"flags\"/> to be deleted from the junction table on execut" +
                     "e.</summary>\r\n            public Edit");
@@ -2686,25 +3200,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 447 "TableSyntaxGeneratorTemplate.tt"
+            #line 505 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 447 "TableSyntaxGeneratorTemplate.tt"
+            #line 505 "TableSyntaxGeneratorTemplate.tt"
             this.Write("CommandBuilder RemoveFlags(params ");
             
             #line default
             #line hidden
             
-            #line 447 "TableSyntaxGeneratorTemplate.tt"
+            #line 505 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.EnumTypeFullName ));
             
             #line default
             #line hidden
             
-            #line 447 "TableSyntaxGeneratorTemplate.tt"
+            #line 505 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"[] flags) { _toRemove.AddRange(flags); return this; }
 
             /// <summary>Executes all scheduled additions and removals against the database.</summary>
@@ -2718,68 +3232,68 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 455 "TableSyntaxGeneratorTemplate.tt"
+            #line 513 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 455 "TableSyntaxGeneratorTemplate.tt"
+            #line 513 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".Insert");
             
             #line default
             #line hidden
             
-            #line 455 "TableSyntaxGeneratorTemplate.tt"
+            #line 513 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 455 "TableSyntaxGeneratorTemplate.tt"
+            #line 513 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(_instance, flag, _Connection);\r\n                foreach (var flag in _toRem" +
                     "ove)\r\n                    await ");
             
             #line default
             #line hidden
             
-            #line 457 "TableSyntaxGeneratorTemplate.tt"
+            #line 515 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 457 "TableSyntaxGeneratorTemplate.tt"
+            #line 515 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".Delete");
             
             #line default
             #line hidden
             
-            #line 457 "TableSyntaxGeneratorTemplate.tt"
+            #line 515 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( fe.SourceName ));
             
             #line default
             #line hidden
             
-            #line 457 "TableSyntaxGeneratorTemplate.tt"
+            #line 515 "TableSyntaxGeneratorTemplate.tt"
             this.Write("Async(_instance, flag, _Connection);\r\n            }\r\n        }\r\n");
             
             #line default
             #line hidden
             
-            #line 460 "TableSyntaxGeneratorTemplate.tt"
+            #line 518 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 461 "TableSyntaxGeneratorTemplate.tt"
+            #line 519 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 462 "TableSyntaxGeneratorTemplate.tt"
+            #line 520 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\r\n        public class TableQueryBuilder : SqlCommandBuilder<TableQueryBuilder>, " +
                     "global::Socigy.OpenSource.DB.Core.Interfaces.ICompiledQuery\r\n        {\r\n        " +
                     "    private Expression<Func<");
@@ -2787,37 +3301,37 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 465 "TableSyntaxGeneratorTemplate.tt"
+            #line 523 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 465 "TableSyntaxGeneratorTemplate.tt"
+            #line 523 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", object?[]>> _SelectClause;\r\n            private Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 466 "TableSyntaxGeneratorTemplate.tt"
+            #line 524 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 466 "TableSyntaxGeneratorTemplate.tt"
+            #line 524 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", bool>> _WhereClause;\r\n\r\n            private Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 468 "TableSyntaxGeneratorTemplate.tt"
+            #line 526 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 468 "TableSyntaxGeneratorTemplate.tt"
+            #line 526 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", object?[]>>? _OrderByClause;\r\n            private bool _OrderByDescending = fal" +
                     "se;\r\n\r\n            private int _Limit = -1;\r\n            private int _Offset = -" +
                     "1;\r\n\r\n            public TableQueryBuilder()\r\n            {\r\n            }\r\n\r\n#i" +
@@ -2852,13 +3366,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 520 "TableSyntaxGeneratorTemplate.tt"
+            #line 578 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 520 "TableSyntaxGeneratorTemplate.tt"
+            #line 578 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@", object?[]>> select)
             {
                 _SelectClause = select;
@@ -2871,13 +3385,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 527 "TableSyntaxGeneratorTemplate.tt"
+            #line 585 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 527 "TableSyntaxGeneratorTemplate.tt"
+            #line 585 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@", bool>> where)
             {
                 _WhereClause = where;
@@ -2909,13 +3423,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 553 "TableSyntaxGeneratorTemplate.tt"
+            #line 611 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 553 "TableSyntaxGeneratorTemplate.tt"
+            #line 611 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@", object?[]>> clause)
             {
                 _OrderByClause = clause;
@@ -2928,13 +3442,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 560 "TableSyntaxGeneratorTemplate.tt"
+            #line 618 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 560 "TableSyntaxGeneratorTemplate.tt"
+            #line 618 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@", object?[]>> clause)
             {
                 _OrderByClause = clause;
@@ -2949,13 +3463,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 569 "TableSyntaxGeneratorTemplate.tt"
+            #line 627 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 569 "TableSyntaxGeneratorTemplate.tt"
+            #line 627 "TableSyntaxGeneratorTemplate.tt"
             this.Write("SelectVisitor(param, getColName, command);\r\n            }\r\n\r\n            private " +
                     "ISqlVisitor GetWhereVisitor(ParameterExpression param, GetColumnName getColName," +
                     " DbCommand command)\r\n            {\r\n");
@@ -2963,73 +3477,73 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 574 "TableSyntaxGeneratorTemplate.tt"
+            #line 632 "TableSyntaxGeneratorTemplate.tt"
  if (FlaggedEnumProperties.Count > 0) { 
             
             #line default
             #line hidden
             
-            #line 575 "TableSyntaxGeneratorTemplate.tt"
+            #line 633 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                return new ");
             
             #line default
             #line hidden
             
-            #line 575 "TableSyntaxGeneratorTemplate.tt"
+            #line 633 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 575 "TableSyntaxGeneratorTemplate.tt"
+            #line 633 "TableSyntaxGeneratorTemplate.tt"
             this.Write("WhereVisitor(param, getColName, command, ");
             
             #line default
             #line hidden
             
-            #line 575 "TableSyntaxGeneratorTemplate.tt"
+            #line 633 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 575 "TableSyntaxGeneratorTemplate.tt"
+            #line 633 "TableSyntaxGeneratorTemplate.tt"
             this.Write("._FlaggedEnumJoinInfos);\r\n");
             
             #line default
             #line hidden
             
-            #line 576 "TableSyntaxGeneratorTemplate.tt"
+            #line 634 "TableSyntaxGeneratorTemplate.tt"
  } else { 
             
             #line default
             #line hidden
             
-            #line 577 "TableSyntaxGeneratorTemplate.tt"
+            #line 635 "TableSyntaxGeneratorTemplate.tt"
             this.Write("                return new ");
             
             #line default
             #line hidden
             
-            #line 577 "TableSyntaxGeneratorTemplate.tt"
+            #line 635 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 577 "TableSyntaxGeneratorTemplate.tt"
+            #line 635 "TableSyntaxGeneratorTemplate.tt"
             this.Write("WhereVisitor(param, getColName, command);\r\n");
             
             #line default
             #line hidden
             
-            #line 578 "TableSyntaxGeneratorTemplate.tt"
+            #line 636 "TableSyntaxGeneratorTemplate.tt"
  } 
             
             #line default
             #line hidden
             
-            #line 579 "TableSyntaxGeneratorTemplate.tt"
+            #line 637 "TableSyntaxGeneratorTemplate.tt"
             this.Write("            }\r\n\r\n            private ISqlVisitor GetOrderByVisitor(ParameterExpre" +
                     "ssion param, GetColumnName getColName, DbCommand command, bool orderByDesc)\r\n   " +
                     "         {\r\n                return new ");
@@ -3037,13 +3551,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 583 "TableSyntaxGeneratorTemplate.tt"
+            #line 641 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DbEnginePrefix ));
             
             #line default
             #line hidden
             
-            #line 583 "TableSyntaxGeneratorTemplate.tt"
+            #line 641 "TableSyntaxGeneratorTemplate.tt"
             this.Write("OrderByVisitor(param, getColName, command, orderByDesc);\r\n            }\r\n\r\n      " +
                     "      /// <summary>Executes the query and returns results as an async stream.</s" +
                     "ummary>\r\n            public async IAsyncEnumerable<");
@@ -3051,13 +3565,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 587 "TableSyntaxGeneratorTemplate.tt"
+            #line 645 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 587 "TableSyntaxGeneratorTemplate.tt"
+            #line 645 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@"> ExecuteAsync()
             {
                 if (_Batch != null)
@@ -3077,38 +3591,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 601 "TableSyntaxGeneratorTemplate.tt"
+            #line 659 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 601 "TableSyntaxGeneratorTemplate.tt"
+            #line 659 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(command, ");
             
             #line default
             #line hidden
             
-            #line 601 "TableSyntaxGeneratorTemplate.tt"
+            #line 659 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 601 "TableSyntaxGeneratorTemplate.tt"
+            #line 659 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);\r\n       " +
                     "         command.CommandText = parser.BuildCommand(");
             
             #line default
             #line hidden
             
-            #line 602 "TableSyntaxGeneratorTemplate.tt"
+            #line 660 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 602 "TableSyntaxGeneratorTemplate.tt"
+            #line 660 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@".TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
 
                 await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, ""SELECT"", ct => command.ExecuteReaderAsync(ct), default, _Diagnostics);
@@ -3121,25 +3635,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 609 "TableSyntaxGeneratorTemplate.tt"
+            #line 667 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 609 "TableSyntaxGeneratorTemplate.tt"
+            #line 667 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".GetColumnOrdinals(reader);\r\n                    yield return ");
             
             #line default
             #line hidden
             
-            #line 610 "TableSyntaxGeneratorTemplate.tt"
+            #line 668 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 610 "TableSyntaxGeneratorTemplate.tt"
+            #line 668 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@".ConvertFrom(reader, __ordinals);
                 }
             }
@@ -3152,38 +3666,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 617 "TableSyntaxGeneratorTemplate.tt"
+            #line 675 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 617 "TableSyntaxGeneratorTemplate.tt"
+            #line 675 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(command, ");
             
             #line default
             #line hidden
             
-            #line 617 "TableSyntaxGeneratorTemplate.tt"
+            #line 675 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 617 "TableSyntaxGeneratorTemplate.tt"
+            #line 675 "TableSyntaxGeneratorTemplate.tt"
             this.Write(".GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);\r\n       " +
                     "         return parser.BuildCommand(");
             
             #line default
             #line hidden
             
-            #line 618 "TableSyntaxGeneratorTemplate.tt"
+            #line 676 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 618 "TableSyntaxGeneratorTemplate.tt"
+            #line 676 "TableSyntaxGeneratorTemplate.tt"
             this.Write(@".TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
             }
 
@@ -3193,152 +3707,152 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 622 "TableSyntaxGeneratorTemplate.tt"
+            #line 680 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 622 "TableSyntaxGeneratorTemplate.tt"
+            #line 680 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Union(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommandB" +
                     "uilder<");
             
             #line default
             #line hidden
             
-            #line 623 "TableSyntaxGeneratorTemplate.tt"
+            #line 681 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 623 "TableSyntaxGeneratorTemplate.tt"
+            #line 681 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"UNION\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 624 "TableSyntaxGeneratorTemplate.tt"
+            #line 682 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 624 "TableSyntaxGeneratorTemplate.tt"
+            #line 682 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> UnionAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComma" +
                     "ndBuilder<");
             
             #line default
             #line hidden
             
-            #line 625 "TableSyntaxGeneratorTemplate.tt"
+            #line 683 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 625 "TableSyntaxGeneratorTemplate.tt"
+            #line 683 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"UNION ALL\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 626 "TableSyntaxGeneratorTemplate.tt"
+            #line 684 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 626 "TableSyntaxGeneratorTemplate.tt"
+            #line 684 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Intersect(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComm" +
                     "andBuilder<");
             
             #line default
             #line hidden
             
-            #line 627 "TableSyntaxGeneratorTemplate.tt"
+            #line 685 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 627 "TableSyntaxGeneratorTemplate.tt"
+            #line 685 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"INTERSECT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 628 "TableSyntaxGeneratorTemplate.tt"
+            #line 686 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 628 "TableSyntaxGeneratorTemplate.tt"
+            #line 686 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> IntersectAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryC" +
                     "ommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 629 "TableSyntaxGeneratorTemplate.tt"
+            #line 687 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 629 "TableSyntaxGeneratorTemplate.tt"
+            #line 687 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"INTERSECT ALL\");\r\n            public PostgresqlSetQueryCommandBuild" +
                     "er<");
             
             #line default
             #line hidden
             
-            #line 630 "TableSyntaxGeneratorTemplate.tt"
+            #line 688 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 630 "TableSyntaxGeneratorTemplate.tt"
+            #line 688 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> Except(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryCommand" +
                     "Builder<");
             
             #line default
             #line hidden
             
-            #line 631 "TableSyntaxGeneratorTemplate.tt"
+            #line 689 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 631 "TableSyntaxGeneratorTemplate.tt"
+            #line 689 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"EXCEPT\");\r\n            public PostgresqlSetQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 632 "TableSyntaxGeneratorTemplate.tt"
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 632 "TableSyntaxGeneratorTemplate.tt"
+            #line 690 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> ExceptAll(TableQueryBuilder rhs)\r\n                => new PostgresqlSetQueryComm" +
                     "andBuilder<");
             
             #line default
             #line hidden
             
-            #line 633 "TableSyntaxGeneratorTemplate.tt"
+            #line 691 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 633 "TableSyntaxGeneratorTemplate.tt"
+            #line 691 "TableSyntaxGeneratorTemplate.tt"
             this.Write(">(this, rhs, \"EXCEPT ALL\");\r\n\r\n            // ── Join factory methods ───────────" +
                     "────────────────────────────────────────\r\n            public PostgresqlJoinQuery" +
                     "CommandBuilder<");
@@ -3346,25 +3860,25 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 636 "TableSyntaxGeneratorTemplate.tt"
+            #line 694 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 636 "TableSyntaxGeneratorTemplate.tt"
+            #line 694 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> Join<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 637 "TableSyntaxGeneratorTemplate.tt"
+            #line 695 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 637 "TableSyntaxGeneratorTemplate.tt"
+            #line 695 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3372,38 +3886,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 639 "TableSyntaxGeneratorTemplate.tt"
+            #line 697 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 639 "TableSyntaxGeneratorTemplate.tt"
+            #line 697 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);\r\n          " +
                     "  public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 640 "TableSyntaxGeneratorTemplate.tt"
+            #line 698 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 640 "TableSyntaxGeneratorTemplate.tt"
+            #line 698 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> LeftJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 641 "TableSyntaxGeneratorTemplate.tt"
+            #line 699 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 641 "TableSyntaxGeneratorTemplate.tt"
+            #line 699 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3411,38 +3925,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 643 "TableSyntaxGeneratorTemplate.tt"
+            #line 701 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 643 "TableSyntaxGeneratorTemplate.tt"
+            #line 701 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);\r\n           " +
                     " public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 644 "TableSyntaxGeneratorTemplate.tt"
+            #line 702 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 644 "TableSyntaxGeneratorTemplate.tt"
+            #line 702 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> RightJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 645 "TableSyntaxGeneratorTemplate.tt"
+            #line 703 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 645 "TableSyntaxGeneratorTemplate.tt"
+            #line 703 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3450,38 +3964,38 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 647 "TableSyntaxGeneratorTemplate.tt"
+            #line 705 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 647 "TableSyntaxGeneratorTemplate.tt"
+            #line 705 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);\r\n          " +
                     "  public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 648 "TableSyntaxGeneratorTemplate.tt"
+            #line 706 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 648 "TableSyntaxGeneratorTemplate.tt"
+            #line 706 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> FullOuterJoin<TJoin>(\r\n                Expression<Func<");
             
             #line default
             #line hidden
             
-            #line 649 "TableSyntaxGeneratorTemplate.tt"
+            #line 707 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 649 "TableSyntaxGeneratorTemplate.tt"
+            #line 707 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin, bool>> on)\r\n                where TJoin : class, global::Socigy.OpenSour" +
                     "ce.DB.Core.Interfaces.IDbTable, new()\r\n                => new PostgresqlJoinQuer" +
                     "yCommandBuilder<");
@@ -3489,26 +4003,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 651 "TableSyntaxGeneratorTemplate.tt"
+            #line 709 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 651 "TableSyntaxGeneratorTemplate.tt"
+            #line 709 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);\r\n           " +
                     " public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 652 "TableSyntaxGeneratorTemplate.tt"
+            #line 710 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 652 "TableSyntaxGeneratorTemplate.tt"
+            #line 710 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> NaturalJoin<TJoin>()\r\n                where TJoin : class, global::Socig" +
                     "y.OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new Postgres" +
                     "qlJoinQueryCommandBuilder<");
@@ -3516,26 +4030,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 654 "TableSyntaxGeneratorTemplate.tt"
+            #line 712 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 654 "TableSyntaxGeneratorTemplate.tt"
+            #line 712 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);\r\n      " +
                     "      public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
             
-            #line 655 "TableSyntaxGeneratorTemplate.tt"
+            #line 713 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 655 "TableSyntaxGeneratorTemplate.tt"
+            #line 713 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin> CrossJoin<TJoin>()\r\n                where TJoin : class, global::Socigy." +
                     "OpenSource.DB.Core.Interfaces.IDbTable, new()\r\n                => new Postgresql" +
                     "JoinQueryCommandBuilder<");
@@ -3543,26 +4057,26 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line default
             #line hidden
             
-            #line 657 "TableSyntaxGeneratorTemplate.tt"
+            #line 715 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 657 "TableSyntaxGeneratorTemplate.tt"
+            #line 715 "TableSyntaxGeneratorTemplate.tt"
             this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);\r\n        " +
                     "}\r\n        ");
             
             #line default
             #line hidden
             
-            #line 659 "TableSyntaxGeneratorTemplate.tt"
+            #line 717 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 659 "TableSyntaxGeneratorTemplate.tt"
+            #line 717 "TableSyntaxGeneratorTemplate.tt"
             this.Write("\r\n\t}\r\n}\r\n\r\n#nullable disable\r\n\r\n");
             
             #line default

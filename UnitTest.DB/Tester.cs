@@ -159,3 +159,36 @@ public partial class TestType
 
     public string? Note { get; set; }
 }
+
+/// <summary>
+/// Table exercising <c>[Encrypted]</c> columns across several CLR types. Each encrypted column is stored
+/// as <c>bytea</c> ciphertext and round-trips through the ambient <c>IFieldEncryptor</c>.
+/// </summary>
+[Table("test_secrets")]
+public partial class TestSecret
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    /// <summary>Plain (unencrypted) lookup key — encrypted columns can't be queried.</summary>
+    public string Owner { get; set; } = "";
+
+    [Encrypted]
+    public string Ssn { get; set; } = "";
+
+    [Encrypted]
+    public int Pin { get; set; }
+
+    [Encrypted]
+    public Guid Token { get; set; }
+
+    [Encrypted]
+    public DateTime IssuedAt { get; set; }
+
+    [Encrypted]
+    public string? Note { get; set; }
+
+    /// <summary>Encrypted but NOT auto-decrypted — exposes <c>ManualRawEncrypted</c> + lazy <c>ManualDecrypted</c>.</summary>
+    [Encrypted(AutoDecrypt = false)]
+    public string Manual { get; set; } = "";
+}

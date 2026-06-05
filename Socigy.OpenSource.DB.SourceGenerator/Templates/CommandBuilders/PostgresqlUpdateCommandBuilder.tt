@@ -247,6 +247,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 if (info.IsJson)
                     p.NpgsqlDbType = NpgsqlDbType.Jsonb;
 
+                if (info.IsEncrypted)
+                    p.NpgsqlDbType = NpgsqlDbType.Bytea;
+
                 command.Parameters.Add(p);
                 sb.Append($"\"{dbColumnName}\" = {paramName}");
             }

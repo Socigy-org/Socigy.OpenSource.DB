@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class DbConnectionFactoryTemplate : DbConnectionFactoryTemplateBase {
         
         
-        #line 159 "DbConnectionFactoryTemplate.tt"
+        #line 191 "DbConnectionFactoryTemplate.tt"
 
     public string BaseNamespace { get; set; }
 
@@ -39,6 +39,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
 using Socigy.OpenSource.DB.Core;
+using Socigy.OpenSource.DB.Core.Credentials;
 using System.Data.Common;
 using System.Security;
 ");
@@ -46,7 +47,7 @@ using System.Security;
             #line default
             #line hidden
             
-            #line 14 "DbConnectionFactoryTemplate.tt"
+            #line 15 "DbConnectionFactoryTemplate.tt"
 
     foreach (var usingString in Usings)
     {
@@ -55,25 +56,25 @@ using System.Security;
             #line default
             #line hidden
             
-            #line 18 "DbConnectionFactoryTemplate.tt"
+            #line 19 "DbConnectionFactoryTemplate.tt"
             this.Write("using ");
             
             #line default
             #line hidden
             
-            #line 18 "DbConnectionFactoryTemplate.tt"
+            #line 19 "DbConnectionFactoryTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( usingString ));
             
             #line default
             #line hidden
             
-            #line 18 "DbConnectionFactoryTemplate.tt"
+            #line 19 "DbConnectionFactoryTemplate.tt"
             this.Write(";\r\n");
             
             #line default
             #line hidden
             
-            #line 19 "DbConnectionFactoryTemplate.tt"
+            #line 20 "DbConnectionFactoryTemplate.tt"
 
     }
 
@@ -81,97 +82,118 @@ using System.Security;
             #line default
             #line hidden
             
-            #line 22 "DbConnectionFactoryTemplate.tt"
+            #line 23 "DbConnectionFactoryTemplate.tt"
             this.Write("\r\n#nullable enable\r\n\r\nnamespace ");
             
             #line default
             #line hidden
             
-            #line 25 "DbConnectionFactoryTemplate.tt"
+            #line 26 "DbConnectionFactoryTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( BaseNamespace ));
             
             #line default
             #line hidden
             
-            #line 25 "DbConnectionFactoryTemplate.tt"
+            #line 26 "DbConnectionFactoryTemplate.tt"
             this.Write("\r\n{\r\n    public class ");
             
             #line default
             #line hidden
             
-            #line 27 "DbConnectionFactoryTemplate.tt"
+            #line 28 "DbConnectionFactoryTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabasePrefix ));
             
             #line default
             #line hidden
             
-            #line 27 "DbConnectionFactoryTemplate.tt"
+            #line 28 "DbConnectionFactoryTemplate.tt"
             this.Write("ConnectionFactory : IDbConnectionFactory, IHostedLifecycleService\r\n    {\r\n       " +
                     " private readonly IConfiguration _Configuration;\r\n        private readonly strin" +
                     "g? _ServiceKey;\r\n\r\n        private readonly ILogger _Logger;\r\n        private re" +
-                    "adonly string? _ConnectionString;\r\n        public PostgresqlConnectionFactory(IL" +
-                    "ogger<PostgresqlConnectionFactory> logger, IConfiguration configuration, [Servic" +
-                    "eKey] object? key)\r\n        {\r\n            _Configuration = configuration;\r\n    " +
-                    "        _ServiceKey = key as string;\r\n            _Logger = logger;\r\n\r\n         " +
-                    "   var connStrings = _Configuration.GetRequiredSection(\"ConnectionStrings\");\r\n  " +
-                    "          if (!string.IsNullOrEmpty(_ServiceKey))\r\n                connStrings =" +
-                    " connStrings.GetSection(_ServiceKey);\r\n\r\n            var connectionString = conn" +
-                    "Strings[\"Default\"];\r\n            if (connectionString == null)\r\n            {\r\n " +
-                    "               if (key != null)\r\n                    logger.LogWarning($\"No defa" +
-                    "ult connection string for database {key} was found!\");\r\n                else\r\n  " +
-                    "                  logger.LogWarning(\"No default connection string was found!\");\r" +
-                    "\n\r\n                return;\r\n            }\r\n\r\n            _ConnectionString = con" +
-                    "nectionString;\r\n        }\r\n\r\n        public async Task<bool> EnsureDbExists()\r\n " +
-                    "       {\r\n            if (_ConnectionString == null)\r\n            {\r\n           " +
-                    "     string message = $\"Failed to ensure that the {_ServiceKey} database exists," +
-                    " because no ConnectionString was provided!\";\r\n                _Logger.LogCritica" +
-                    "l(message);\r\n                throw new InvalidDataException(message);\r\n         " +
-                    "   }\r\n            if (_ServiceKey == null)\r\n            {\r\n                strin" +
-                    "g message = \"No service key (database name) was provided to this connection fact" +
-                    "ory instance. Unable to ensure that the database exist!\";\r\n                _Logg" +
-                    "er.LogCritical(message);\r\n                throw new InvalidDataException(message" +
-                    ");\r\n            }\r\n\r\n            // Connect to the default \'postgres\' database t" +
-                    "o check/create the new database\r\n            var masterConnectionBuilder = new N" +
-                    "pgsqlConnectionStringBuilder(_ConnectionString)\r\n            {\r\n                " +
-                    "Database = \"postgres\"\r\n            };\r\n\r\n            bool databaseExists = false" +
-                    ";\r\n\r\n            using (var connection = new NpgsqlConnection(masterConnectionBu" +
-                    "ilder.ToString()))\r\n            {\r\n                await connection.OpenAsync();" +
-                    "\r\n\r\n                using (var command = connection.CreateCommand())\r\n          " +
-                    "      {\r\n                    command.CommandText = \"SELECT 1 FROM pg_database WH" +
-                    "ERE datname = @databaseName\";\r\n                    command.Parameters.Add(new Np" +
-                    "gsqlParameter(\"databaseName\", _ServiceKey));\r\n                    \r\n            " +
-                    "        var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagn" +
-                    "ostics.ExecuteScalarAsync(command, \"DDL\", ct => command.ExecuteScalarAsync(ct));" +
-                    "\r\n                    databaseExists = result != null;\r\n                }\r\n\r\n   " +
-                    "             if (!databaseExists)\r\n                {\r\n                    using " +
-                    "(var command = connection.CreateCommand())\r\n                    {\r\n             " +
-                    "           command.CommandText = $\"CREATE DATABASE \\\"{_ServiceKey}\\\"\";\r\n        " +
-                    "                await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostic" +
-                    "s.ExecuteNonQueryAsync(command, \"DDL\", ct => command.ExecuteNonQueryAsync(ct));\r" +
-                    "\n                    }\r\n                }\r\n            }\r\n\r\n            return d" +
-                    "atabaseExists;\r\n        }\r\n\r\n        private string? GetConnectionString(string " +
-                    "key)\r\n        {\r\n            var connStrings = _Configuration.GetRequiredSection" +
-                    "(\"ConnectionStrings\");\r\n            if (!string.IsNullOrEmpty(_ServiceKey))\r\n   " +
-                    "             connStrings = connStrings.GetSection(_ServiceKey);\r\n\r\n            r" +
-                    "eturn connStrings[key];\r\n        }\r\n\r\n        public DbConnection Create(string?" +
-                    " connectionKey = null)\r\n        {\r\n            string? connectionString = null;\r" +
-                    "\n            if (connectionKey != null)\r\n                connectionString = GetC" +
-                    "onnectionString(connectionKey);\r\n\r\n            connectionString ??= _ConnectionS" +
-                    "tring ?? throw new InvalidDataException(\"Unable to create DbConnection without a" +
-                    " ConnectionString. Please provide a connection string and try again!\");\r\n\r\n     " +
-                    "       // Connecting to the correct database\r\n            connectionString = con" +
-                    "nectionString.TrimEnd().TrimEnd(\';\') + $\";Database={_ServiceKey}\";\r\n\r\n          " +
-                    "  return new NpgsqlConnection(connectionString);\r\n        }\r\n\r\n        public as" +
-                    "ync Task StartAsync(CancellationToken cancellationToken)\r\n        {\r\n           " +
-                    " if (_ServiceKey != null && _ConnectionString != null)\r\n                await En" +
-                    "sureDbExists();\r\n        }\r\n\r\n        #region HostedLifeCycle\r\n        public as" +
-                    "ync Task StartedAsync(CancellationToken cancellationToken)\r\n        {\r\n        }" +
-                    "\r\n        public async Task StartingAsync(CancellationToken cancellationToken)\r\n" +
-                    "        {\r\n\r\n        }\r\n        public async Task StoppedAsync(CancellationToken" +
-                    " cancellationToken)\r\n        {\r\n        }\r\n        public async Task StoppingAsy" +
-                    "nc(CancellationToken cancellationToken)\r\n        {\r\n        }\r\n        public as" +
-                    "ync Task StopAsync(CancellationToken cancellationToken)\r\n        {\r\n        }\r\n " +
-                    "       #endregion\r\n    }\r\n}\r\n\r\n#nullable disable\r\n\r\n");
+                    "adonly string? _ConnectionString;\r\n        // Optional: when a credential provid" +
+                    "er is registered (e.g. HashiCorp Vault), it supplies a\r\n        // dynamically-r" +
+                    "otated base connection string; otherwise the static config string is used.\r\n    " +
+                    "    private readonly IDbCredentialsProvider? _Credentials;\r\n        public Postg" +
+                    "resqlConnectionFactory(ILogger<PostgresqlConnectionFactory> logger, IConfigurati" +
+                    "on configuration, [ServiceKey] object? key, IDbCredentialsProvider? credentials " +
+                    "= null)\r\n        {\r\n            _Configuration = configuration;\r\n            _Se" +
+                    "rviceKey = key as string;\r\n            _Logger = logger;\r\n            _Credentia" +
+                    "ls = credentials;\r\n\r\n            var connStrings = _Configuration.GetRequiredSec" +
+                    "tion(\"ConnectionStrings\");\r\n            if (!string.IsNullOrEmpty(_ServiceKey))\r" +
+                    "\n                connStrings = connStrings.GetSection(_ServiceKey);\r\n\r\n         " +
+                    "   var connectionString = connStrings[\"Default\"];\r\n            if (connectionStr" +
+                    "ing == null)\r\n            {\r\n                if (key != null)\r\n                 " +
+                    "   logger.LogWarning($\"No default connection string for database {key} was found" +
+                    "!\");\r\n                else\r\n                    logger.LogWarning(\"No default co" +
+                    "nnection string was found!\");\r\n\r\n                return;\r\n            }\r\n\r\n     " +
+                    "       _ConnectionString = connectionString;\r\n        }\r\n\r\n        public async " +
+                    "Task<bool> EnsureDbExists()\r\n        {\r\n            if (_ServiceKey == null)\r\n  " +
+                    "          {\r\n                string message = \"No service key (database name) wa" +
+                    "s provided to this connection factory instance. Unable to ensure that the databa" +
+                    "se exist!\";\r\n                _Logger.LogCritical(message);\r\n                thro" +
+                    "w new InvalidDataException(message);\r\n            }\r\n\r\n            // Prime/refr" +
+                    "esh dynamic credentials (e.g. Vault) before resolving the connection string.\r\n  " +
+                    "          if (_Credentials != null)\r\n            {\r\n                _Logger.LogI" +
+                    "nformation(\"Refreshing rotating credentials for database {Database} via {Provide" +
+                    "r}\", _ServiceKey, _Credentials.GetType().Name);\r\n                await _Credenti" +
+                    "als.RefreshAsync(_ServiceKey, null);\r\n            }\r\n\r\n            var baseConne" +
+                    "ctionString = ResolveBaseConnectionString(null);\r\n            if (baseConnection" +
+                    "String == null)\r\n            {\r\n                string message = $\"Failed to ens" +
+                    "ure that the {_ServiceKey} database exists, because no ConnectionString was prov" +
+                    "ided!\";\r\n                _Logger.LogCritical(message);\r\n                throw ne" +
+                    "w InvalidDataException(message);\r\n            }\r\n\r\n            // Connect to the" +
+                    " default \'postgres\' database to check/create the new database\r\n            var m" +
+                    "asterConnectionBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)" +
+                    "\r\n            {\r\n                Database = \"postgres\"\r\n            };\r\n\r\n      " +
+                    "      bool databaseExists = false;\r\n\r\n            using (var connection = new Np" +
+                    "gsqlConnection(masterConnectionBuilder.ToString()))\r\n            {\r\n            " +
+                    "    await connection.OpenAsync();\r\n\r\n                using (var command = connec" +
+                    "tion.CreateCommand())\r\n                {\r\n                    command.CommandTex" +
+                    "t = \"SELECT 1 FROM pg_database WHERE datname = @databaseName\";\r\n                " +
+                    "    command.Parameters.Add(new NpgsqlParameter(\"databaseName\", _ServiceKey));\r\n " +
+                    "                   \r\n                    var result = await global::Socigy.OpenS" +
+                    "ource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, \"DDL\", ct =>" +
+                    " command.ExecuteScalarAsync(ct));\r\n                    databaseExists = result !" +
+                    "= null;\r\n                }\r\n\r\n                if (!databaseExists)\r\n            " +
+                    "    {\r\n                    using (var command = connection.CreateCommand())\r\n   " +
+                    "                 {\r\n                        command.CommandText = $\"CREATE DATAB" +
+                    "ASE \\\"{_ServiceKey}\\\"\";\r\n                        await global::Socigy.OpenSource" +
+                    ".DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, \"DDL\", ct => co" +
+                    "mmand.ExecuteNonQueryAsync(ct));\r\n                    }\r\n                }\r\n    " +
+                    "        }\r\n\r\n            return databaseExists;\r\n        }\r\n\r\n        private st" +
+                    "ring? GetConnectionString(string key)\r\n        {\r\n            var connStrings = " +
+                    "_Configuration.GetRequiredSection(\"ConnectionStrings\");\r\n            if (!string" +
+                    ".IsNullOrEmpty(_ServiceKey))\r\n                connStrings = connStrings.GetSecti" +
+                    "on(_ServiceKey);\r\n\r\n            return connStrings[key];\r\n        }\r\n\r\n        /" +
+                    "/ Resolves the base connection string (without Database=...): the credential pro" +
+                    "vider wins when\r\n        // present (rotating creds), then a named config key, t" +
+                    "hen the default config string.\r\n        private string? ResolveBaseConnectionStr" +
+                    "ing(string? connectionKey)\r\n        {\r\n            if (_Credentials != null)\r\n  " +
+                    "          {\r\n                var fromProvider = _Credentials.GetConnectionString" +
+                    "(_ServiceKey ?? string.Empty, connectionKey);\r\n                if (!string.IsNul" +
+                    "lOrEmpty(fromProvider))\r\n                    return fromProvider;\r\n            }" +
+                    "\r\n\r\n            if (connectionKey != null)\r\n            {\r\n                var n" +
+                    "amed = GetConnectionString(connectionKey);\r\n                if (!string.IsNullOr" +
+                    "Empty(named))\r\n                    return named;\r\n            }\r\n\r\n            r" +
+                    "eturn _ConnectionString;\r\n        }\r\n\r\n        public DbConnection Create(string" +
+                    "? connectionKey = null)\r\n        {\r\n            string connectionString = Resolv" +
+                    "eBaseConnectionString(connectionKey)\r\n                ?? throw new InvalidDataEx" +
+                    "ception(\"Unable to create DbConnection without a ConnectionString. Please provid" +
+                    "e a connection string (or register an IDbCredentialsProvider) and try again!\");\r" +
+                    "\n\r\n            // Connecting to the correct database\r\n            connectionStri" +
+                    "ng = connectionString.TrimEnd().TrimEnd(\';\') + $\";Database={_ServiceKey}\";\r\n\r\n  " +
+                    "          return new NpgsqlConnection(connectionString);\r\n        }\r\n\r\n        p" +
+                    "ublic async Task StartAsync(CancellationToken cancellationToken)\r\n        {\r\n   " +
+                    "         if (_ServiceKey != null && (_ConnectionString != null || _Credentials !" +
+                    "= null))\r\n                await EnsureDbExists();\r\n        }\r\n\r\n        #region " +
+                    "HostedLifeCycle\r\n        public async Task StartedAsync(CancellationToken cancel" +
+                    "lationToken)\r\n        {\r\n        }\r\n        public async Task StartingAsync(Canc" +
+                    "ellationToken cancellationToken)\r\n        {\r\n\r\n        }\r\n        public async T" +
+                    "ask StoppedAsync(CancellationToken cancellationToken)\r\n        {\r\n        }\r\n   " +
+                    "     public async Task StoppingAsync(CancellationToken cancellationToken)\r\n     " +
+                    "   {\r\n        }\r\n        public async Task StopAsync(CancellationToken cancellat" +
+                    "ionToken)\r\n        {\r\n        }\r\n        #endregion\r\n    }\r\n}\r\n\r\n#nullable disab" +
+                    "le\r\n\r\n");
             
             #line default
             #line hidden

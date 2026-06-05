@@ -128,7 +128,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             if (!_firstAssignment) _Sql.Append(", ");
             _firstAssignment = false;
 
-            string column = _GetColumnName(memberName);
+            string column = _GetColumnName(memberName)
+                ?? throw new NotSupportedException($"No database column is mapped for member '{memberName}'.");
             object? value = NormalizeDbValue(ReadEntityValue(memberName));
             string paramName = $"@p{_Command.Parameters.Count}";
 

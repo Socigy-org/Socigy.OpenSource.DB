@@ -28,6 +28,13 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         public bool IsJson { get; set; }
 
         /// <summary>
+        /// True when this column is <c>[Encrypted]</c> and stored as <c>bytea</c>.
+        /// The insert/update builders use <c>NpgsqlDbType.Bytea</c> for this parameter; the value stored
+        /// here is already the encrypted ciphertext (or <see langword="null"/>).
+        /// </summary>
+        public bool IsEncrypted { get; set; }
+
+        /// <summary>
         /// Optional callback that writes a value read back from the database into the row instance.
         /// Used by <c>WithValuePropagation()</c> to fill auto-generated column values after INSERT.
         /// </summary>

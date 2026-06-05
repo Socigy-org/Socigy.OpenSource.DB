@@ -128,6 +128,13 @@ namespace Socigy.OpenSource.DB.Core.Context
         /// <summary>Ends a streaming read started with <see cref="BeginStreamAsync"/>.</summary>
         public void EndStream() => ReleasePinnedSlot();
 
+        /// <summary>
+        /// True while a command or <c>ForEachAsync</c> stream still holds the single-active-command slot on
+        /// the pinned connection. After a unit of work's delegate has been awaited this should be false;
+        /// if it isn't, a database call inside the delegate was not awaited (a forgotten <c>await</c>).
+        /// </summary>
+        internal bool IsPinnedBusy => Volatile.Read(ref _pinnedBusy) != 0;
+
         private void AcquirePinnedSlot()
         {
             if (Interlocked.CompareExchange(ref _pinnedBusy, 1, 0) != 0)

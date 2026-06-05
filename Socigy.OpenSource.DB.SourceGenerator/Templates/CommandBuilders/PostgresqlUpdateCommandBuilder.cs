@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
     public partial class PostgresqlUpdateCommandBuilder : PostgresqlUpdateCommandBuilderBase {
         
         
-        #line 380 "PostgresqlUpdateCommandBuilder.tt"
+        #line 383 "PostgresqlUpdateCommandBuilder.tt"
 
 	public string ClassName { get; set; }
 	public string Namespace { get; set; }
@@ -413,41 +413,43 @@ using ");
                     "\n                p.Value = dbValue ?? DBNull.Value;\r\n\r\n                if (dbVal" +
                     "ue == null || dbValue == DBNull.Value || IsEnumType(info.Type))\r\n               " +
                     "     p.NpgsqlDbType = GetDbType(info.Type);\r\n\r\n                if (info.IsJson)\r" +
-                    "\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;\r\n\r\n                com" +
-                    "mand.Parameters.Add(p);\r\n                sb.Append($\"\\\"{dbColumnName}\\\" = {param" +
-                    "Name}\");\r\n            }\r\n\r\n            return sb.ToString();\r\n        }\r\n\r\n     " +
-                    "   /// <summary>\r\n        /// Executes the update command asynchronously against" +
-                    " the database connection and returns the number of rows\r\n        /// affected.\r\n" +
-                    "        /// </summary>\r\n        /// <remarks>If the database connection is not a" +
-                    "lready open, this method opens it before executing\r\n        /// the command. The" +
-                    " update is performed using either the specified WHERE clause or the primary key " +
-                    "columns of\r\n        /// the table row.</remarks>\r\n        /// <returns>A task th" +
-                    "at represents the asynchronous operation. The task result contains the number of" +
-                    " rows affected by\r\n        /// the update command. Returns 0 if the command coul" +
-                    "d not be created.</returns>\r\n        /// <exception cref=\"InvalidOperationExcept" +
-                    "ion\">Thrown if a DbBatch was provided, or if no DbConnection is available.</exce" +
-                    "ption>\r\n        public async Task<int> ExecuteAsync()\r\n        {\r\n#if NET6_0_OR_" +
-                    "GREATER\r\n            if (_Batch != null)\r\n                throw new InvalidOpera" +
-                    "tionException(\"Cannot execute command when DbBatch was provided.\");\r\n#endif\r\n\r\n " +
-                    "           if (_Connection == null)\r\n                throw new InvalidOperationE" +
-                    "xception(\"No DbConnection provided.\");\r\n\r\n            if (_Connection.State != S" +
-                    "ystem.Data.ConnectionState.Open)\r\n                await _Connection.OpenAsync();" +
-                    "\r\n\r\n            await using var command = _Connection.CreateCommand() as NpgsqlC" +
-                    "ommand;\r\n            if (command == null) return 0;\r\n\r\n            if (_Transact" +
-                    "ion != null)\r\n                command.Transaction = _Transaction as NpgsqlTransa" +
-                    "ction;\r\n\r\n            string? where = null;\r\n            if (_WhereClause != nul" +
-                    "l)\r\n                where = GetWhereVisitor(_WhereClause.Parameters[0], ");
+                    "\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;\r\n\r\n                if " +
+                    "(info.IsEncrypted)\r\n                    p.NpgsqlDbType = NpgsqlDbType.Bytea;\r\n\r\n" +
+                    "                command.Parameters.Add(p);\r\n                sb.Append($\"\\\"{dbCol" +
+                    "umnName}\\\" = {paramName}\");\r\n            }\r\n\r\n            return sb.ToString();\r" +
+                    "\n        }\r\n\r\n        /// <summary>\r\n        /// Executes the update command asy" +
+                    "nchronously against the database connection and returns the number of rows\r\n    " +
+                    "    /// affected.\r\n        /// </summary>\r\n        /// <remarks>If the database " +
+                    "connection is not already open, this method opens it before executing\r\n        /" +
+                    "// the command. The update is performed using either the specified WHERE clause " +
+                    "or the primary key columns of\r\n        /// the table row.</remarks>\r\n        ///" +
+                    " <returns>A task that represents the asynchronous operation. The task result con" +
+                    "tains the number of rows affected by\r\n        /// the update command. Returns 0 " +
+                    "if the command could not be created.</returns>\r\n        /// <exception cref=\"Inv" +
+                    "alidOperationException\">Thrown if a DbBatch was provided, or if no DbConnection " +
+                    "is available.</exception>\r\n        public async Task<int> ExecuteAsync()\r\n      " +
+                    "  {\r\n#if NET6_0_OR_GREATER\r\n            if (_Batch != null)\r\n                thr" +
+                    "ow new InvalidOperationException(\"Cannot execute command when DbBatch was provid" +
+                    "ed.\");\r\n#endif\r\n\r\n            if (_Connection == null)\r\n                throw ne" +
+                    "w InvalidOperationException(\"No DbConnection provided.\");\r\n\r\n            if (_Co" +
+                    "nnection.State != System.Data.ConnectionState.Open)\r\n                await _Conn" +
+                    "ection.OpenAsync();\r\n\r\n            await using var command = _Connection.CreateC" +
+                    "ommand() as NpgsqlCommand;\r\n            if (command == null) return 0;\r\n\r\n      " +
+                    "      if (_Transaction != null)\r\n                command.Transaction = _Transact" +
+                    "ion as NpgsqlTransaction;\r\n\r\n            string? where = null;\r\n            if (" +
+                    "_WhereClause != null)\r\n                where = GetWhereVisitor(_WhereClause.Para" +
+                    "meters[0], ");
             
             #line default
             #line hidden
             
-            #line 288 "PostgresqlUpdateCommandBuilder.tt"
+            #line 291 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 288 "PostgresqlUpdateCommandBuilder.tt"
+            #line 291 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(".GetColumnDbName, command).Parse(_WhereClause);\r\n            else\r\n            {\r" +
                     "\n                var predicates = new List<string>();\r\n\r\n                Diction" +
                     "ary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();\r\n              " +
@@ -498,13 +500,13 @@ using ");
             #line default
             #line hidden
             
-            #line 375 "PostgresqlUpdateCommandBuilder.tt"
+            #line 378 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 375 "PostgresqlUpdateCommandBuilder.tt"
+            #line 378 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("\r\n}\r\n\r\n#nullable disable\r\n\r\n");
             
             #line default

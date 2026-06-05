@@ -25,14 +25,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         private static readonly string RawJsonColumnAttributeFullName = typeof(RawJsonColumnAttribute).FullName!;
         private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
         private static readonly string ValueConvertorAttributeFullName = typeof(ValueConvertorAttribute).FullName!;
-
-        private static readonly DiagnosticDescriptor AutoIncrementTypeError = new(
-            id: "SCGDB001",
-            title: "[AutoIncrement] on unsupported type",
-            messageFormat: "[AutoIncrement] can only be applied to short, int, or long — '{0}' is not supported",
-            category: "Socigy.DB",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
+        private static readonly string EncryptedAttributeFullName = typeof(EncryptedAttribute).FullName!;
 
         private static string GetNamespace(INamedTypeSymbol symbol)
         {
@@ -141,7 +134,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     {
                         Name = symbolInfo.Name,
                         Type = symbolInfo.Type.ToDisplayString(),
-                        DatabaseName = JsonNamingPolicy.SnakeCaseLower.ConvertName(symbolInfo.Name)
+                        DatabaseName = ColumnNaming.ResolveDbColumnName(symbolInfo, ColumnAttributeFullName)
                     };
 
                     if (member.AttributeLists.Count > 0)
@@ -149,10 +142,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         var attrs = symbolInfo.GetAttributes();
 
                         var columnAttribute = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == ColumnAttributeFullName);
+                        // SCGDB018 — an explicit but empty [Column("")] name; ColumnNaming already fell back to snake_case.
                         if (columnAttribute != null &&
                             columnAttribute.ConstructorArguments.Length > 0 &&
-                            columnAttribute.ConstructorArguments[0].Value != null)
-                            columnInfo.DatabaseName = columnAttribute.ConstructorArguments[0].Value!.ToString()!;
+                            columnAttribute.ConstructorArguments[0].Value is string colNameArg &&
+                            string.IsNullOrWhiteSpace(colNameArg))
+                            ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EmptyColumnName, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
 
                         columnInfo.IsPrimaryKey = attrs.Any(x => x.AttributeClass?.ToDisplayString() == PrimaryKeyAttributeFullName);
                         columnInfo.HasDbDefault = attrs.Any(x => x.AttributeClass?.ToDisplayString() == DefaultAttributeFullName);
@@ -169,7 +164,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                             if (!isValidType)
                             {
                                 ctx.ReportDiagnostic(Diagnostic.Create(
-                                    AutoIncrementTypeError,
+                                    Diagnostics.AutoIncrementTypeError,
                                     symbolInfo.Locations.FirstOrDefault(),
                                     typeStr));
                             }
@@ -219,6 +214,19 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                                     ?? vcNamedArg.Value.Value?.ToString();
                             }
                         }
+
+                        // [Encrypted] — stored as bytea, encrypted on write / decrypted on read.
+                        var encAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == EncryptedAttributeFullName);
+                        columnInfo.IsEncrypted = encAttr != null;
+                        if (encAttr != null)
+                        {
+                            var autoDecryptArg = encAttr.NamedArguments
+                                .FirstOrDefault(na => na.Key == nameof(EncryptedAttribute.AutoDecrypt));
+                            if (autoDecryptArg.Key != null && autoDecryptArg.Value.Value is bool ad)
+                                columnInfo.EncryptAutoDecrypt = ad;
+                        }
+                        if (columnInfo.IsEncrypted && (columnInfo.IsJsonColumn || !string.IsNullOrEmpty(columnInfo.Converter)))
+                            ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EncryptedComboError, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
                     }
 
                     tableColNameClassTemplate.Columns.Add(columnInfo);
@@ -230,7 +238,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         IsAutoIncrement: columnInfo.IsAutoIncrement,
                         SequenceName: columnInfo.SequenceName,
                         IsJsonColumn: columnInfo.IsJsonColumn,
-                        JsonContextType: columnInfo.JsonContextType
+                        JsonContextType: columnInfo.JsonContextType,
+                        IsEncrypted: columnInfo.IsEncrypted,
+                        EncryptAutoDecrypt: columnInfo.EncryptAutoDecrypt
                     ));
                 }
 
@@ -304,6 +314,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         EnumFkColumn = enumFkCol
                     });
                 }
+
+                // SCGDB017 / SCGDB016 — table definition quality checks.
+                if (tableColNameClassTemplate.Columns.Count == 0)
+                    ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.TableNoColumns, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name));
+                else if (!tableColNameClassTemplate.Columns.Any(c => c.IsPrimaryKey))
+                    ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.TableNoPrimaryKey, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name));
 
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}.table.g.cs", tableColNameClassTemplate.TransformText());
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());

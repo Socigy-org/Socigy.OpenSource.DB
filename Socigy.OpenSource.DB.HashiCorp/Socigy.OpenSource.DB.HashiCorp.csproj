@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Title>Socigy DB — HashiCorp Vault</Title>
+		<!-- Version comes from Directory.Build.props (single source of truth). -->
+		<PackageVersion>$(Version)</PackageVersion>
+		<Company>Socigy s.r.o.</Company>
+		<Description>Optional HashiCorp Vault integration for Socigy.OpenSource.DB: field encryption (Transit envelope) and rotating DB credentials (Database secrets engine).</Description>
+		<PackageTags>db;postgresql;hashicorp;vault;encryption;credentials;socigy</PackageTags>
+		<Authors>Socigy, PatrikStohanzl</Authors>
+		<Copyright>Copyright © 2024 Socigy s.r.o.</Copyright>
+		<RepositoryUrl>https://github.com/WailedParsley36/Socigy.OpenSource.DB</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageProjectUrl>https://docs.socigy.com/database/</PackageProjectUrl>
+		<PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+		<PackageIcon>icon.png</PackageIcon>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="VaultSharp" Version="1.17.5.1" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
+	</ItemGroup>
+
+	<!-- Compile-time access to the Core abstractions (IFieldEncryptor, IDbCredentialsProvider). The Core DLL
+	     is supplied to consumers by the main Socigy.OpenSource.DB package, which this package depends on once
+	     a matching version is published; declared via the nuspec dependency below at pack time. -->
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj">
+			<PrivateAssets>all</PrivateAssets>
+		</ProjectReference>
+	</ItemGroup>
+	<ItemGroup>
+		<None Update="icon.png">
+			<PackagePath>\</PackagePath>
+			<Pack>True</Pack>
+		</None>
+	</ItemGroup>
+
+	<!-- Declare the runtime dependency on the main package (which carries the Core DLL) without making NuGet
+	     restore it during in-repo builds (it may be unpublished at this version). -->
+	<Target Name="AddSocigyMainDependency" BeforeTargets="GenerateNuspec">
+		<ItemGroup>
+			<_PackageDependency Include="Socigy.OpenSource.DB" Version="$(Version)" />
+		</ItemGroup>
+	</Target>
+
+</Project>

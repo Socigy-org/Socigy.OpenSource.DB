@@ -77,6 +77,15 @@ namespace Socigy.OpenSource.DB.Core.Context
 
                 TResult result = await work(CreateContext(scope)).ConfigureAwait(false);
 
+                // A still-active command/stream after the delegate completed means a database call inside it
+                // was not awaited (e.g. `async ctx => ctx.Users.ForEachAsync(...)`). Surfacing this here turns
+                // an opaque "a command is already in progress" from the commit into actionable guidance.
+                if (scope.IsPinnedBusy)
+                    throw new InvalidOperationException(
+                        "A query or ForEachAsync stream was still active when the unit of work completed — a " +
+                        "database call inside ExecuteAsync/ExecuteTransactionAsync was not awaited. Use " +
+                        "`async ctx => await ctx.Users.ForEachAsync(...)` (await every database call in the delegate).");
+
                 if (transaction != null)
                 {
                     transaction.Commit();

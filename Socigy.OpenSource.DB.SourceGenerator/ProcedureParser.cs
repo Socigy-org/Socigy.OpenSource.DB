@@ -24,6 +24,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         /// <summary>Raw SQL body (everything after the header comment block).</summary>
         public string SqlBody { get; set; } = "";
+
+        /// <summary>True when the header contains a <c>-- @ignore warning</c> directive (suppresses SCGDB003).</summary>
+        public bool SuppressMissingPlaceholderWarning { get; set; }
+
+        /// <summary>Optional message following <c>-- @ignore warning:</c> documenting why the file opts out.</summary>
+        public string? SuppressionMessage { get; set; }
+
+        /// <summary>Raw <c>-- @param</c> lines that could not be parsed (drives SCGDB012).</summary>
+        public List<string> MalformedParamLines { get; set; } = new();
     }
 
     public class ProcedureParam
@@ -54,7 +63,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             if (!string.IsNullOrEmpty(proceduresRootPath))
             {
                 string dir = Path.GetDirectoryName(filePath) ?? "";
-                string rel = MakeRelative(dir, proceduresRootPath);
+                string rel = MakeRelative(dir, proceduresRootPath!);
                 if (!string.IsNullOrEmpty(rel))
                 {
                     info.NamespaceSegments = rel
@@ -92,6 +101,18 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                                 Type = rest.Substring(colon + 1).Trim()
                             });
                         }
+                        else
+                        {
+                            info.MalformedParamLines.Add(trimmed);
+                        }
+                    }
+                    else if (commentBody.StartsWith("@ignore warning", StringComparison.OrdinalIgnoreCase))
+                    {
+                        info.SuppressMissingPlaceholderWarning = true;
+                        string rest = commentBody.Substring("@ignore warning".Length);
+                        int idx = rest.IndexOf(':');
+                        if (idx >= 0)
+                            info.SuppressionMessage = rest.Substring(idx + 1).Trim();
                     }
                     // Skip non-directive comment lines (descriptions etc.)
                 }
@@ -104,9 +125,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
             info.SqlBody = string.Join("\n", sqlLines).Trim();
 
-            if (string.IsNullOrWhiteSpace(info.SqlBody))
-                return null;
-
+            // An empty body is returned (not nulled) so the generator can surface SCGDB014;
+            // a totally empty file is already handled by the IsNullOrWhiteSpace(content) guard above.
             return info;
         }
 

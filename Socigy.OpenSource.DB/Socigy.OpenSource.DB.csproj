@@ -13,7 +13,8 @@
 	<PropertyGroup>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Socigy DB</Title>
-		<PackageVersion>0.2.0</PackageVersion>
+		<!-- Version comes from Directory.Build.props (single source of truth) — bump it there. -->
+		<PackageVersion>$(Version)</PackageVersion>
 		<Company>Socigy s.r.o.</Company>
 		<Product>$(PackageTitle)</Product>
 		<Description>Automated cross-DB model generation and automation nuget. Auto-generates and propagates db model across multiple DB</Description>
@@ -30,6 +31,7 @@
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
 		<PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>icon.png</PackageIcon>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -42,8 +44,8 @@
 
 	<ItemGroup>
 		<None Include="..\LICENSE" Pack="true" PackagePath="\" />
-		<None Include="..\docs\**" Pack="true" PackagePath="\docs"/>
-		<None Include="..\README.md" Pack="true" PackagePath="\"/>
+		<None Include="..\docs\**" Pack="true" PackagePath="\docs" />
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
 		<None Include="build\Socigy.OpenSource.DB.targets" Pack="true" PackagePath="build\Socigy.OpenSource.DB.targets" />
 	</ItemGroup>
 
@@ -52,8 +54,8 @@
 	     propagate — they must be declared here on the packable project. On net6+ consumers these
 	     types are provided by the shared framework; declaring them is still correct for others. -->
 	<ItemGroup>
-		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -64,6 +66,13 @@
 			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
 			<OutputItemType>Analyzer</OutputItemType>
 		</ProjectReference>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="icon.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
 	</ItemGroup>
 
 	<Target Name="IncludeCoreDllInPackage" BeforeTargets="GenerateNuspec">

@@ -1,19 +1,37 @@
 using Example.Auth.DB;
 using Example.Auth.DB.Socigy.Generated;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using Socigy.OpenSource.DB.AuthDb.Extensions;
+using Socigy.OpenSource.DB.AuthDb.Context;
 using Socigy.OpenSource.DB.Core;
+using Socigy.OpenSource.DB.Core.Context;
+using Socigy.OpenSource.DB.Core.SyntaxHelper;
 using Socigy.OpenSource.DB.SharedDb.Extensions;
 using Socigy.OpenSource.DB.UserDb.Extensions;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
-builder.Services.AddLogging(logging => logging.AddConsole());
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t
+        .AddSource("Socigy.OpenSource.DB")
+        .AddOtlpExporter()
+        .AddConsoleExporter())
+    .WithMetrics(m => m
+        .AddMeter("Socigy.OpenSource.DB")
+        .AddOtlpExporter()
+        .AddConsoleExporter());
+
+//builder.Services.AddLogging(logging => logging.AddConsole());
 
 builder.WebHost.UseKestrelHttpsConfiguration();
 builder.Configuration.AddJsonFile("appsettings.json");
 
 builder.AddSharedDb();
+
 builder.AddAuthDb();
+builder.Services.AddAuthDbContext();
+
 builder.AddUserDb();
 
 var app = builder.Build();
@@ -96,4 +114,14 @@ app.MapGet("/auth/courses", async () =>
     return Results.Ok(results);
 });
 
-await app.RunAsync();
+await app.StartAsync();
+
+var testo = app.Services.GetRequiredService<ISocigyDatabaseFactory<IAuthDb>>();
+await testo.ExecuteTransactionAsync(async ctx =>
+    await ctx.Users.ForEachAsync(u => u.IsChild == true, async u =>
+    {
+        Console.WriteLine("User is child");
+    }
+));
+
+await app.WaitForShutdownAsync();

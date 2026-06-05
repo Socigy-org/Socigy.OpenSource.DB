@@ -162,6 +162,19 @@ namespace <#= BaseNamespace #>
                 try
                 {
                     using var connection = _ConnectionFactory.Create();
+                    if (connection.State != System.Data.ConnectionState.Open)
+                        await connection.OpenAsync();
+
+                    // On first run the migrations table doesn't exist yet. Probe with to_regclass
+                    // (returns NULL, never throws) instead of letting the query raise 42P01 — which the
+                    // debugger otherwise breaks on as a first-chance exception during normal startup.
+                    using (var probe = connection.CreateCommand())
+                    {
+                        probe.CommandText = "SELECT to_regclass('\"" + <#= DatabaseName #>.Migration.TableName + "\"')";
+                        var exists = await probe.ExecuteScalarAsync();
+                        if (exists is null || exists is DBNull)
+                            return null;
+                    }
 
                     var versions = <#= DatabaseName #>.Migration.Query()
                         .WithConnection(connection)

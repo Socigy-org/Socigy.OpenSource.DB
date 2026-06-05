@@ -249,6 +249,7 @@ namespace Socigy.OpenSource.DB.Tool
         private static readonly string DescriptionAttributeFullName = typeof(DescriptionAttribute).FullName!;
         private static readonly string RawJsonColumnAttributeFullName = typeof(RawJsonColumnAttribute).FullName!;
         private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
+        private static readonly string EncryptedAttributeFullName = typeof(EncryptedAttribute).FullName!;
 
         private static DbTable? ProcessEnumTable(Type enumTableType)
         {
@@ -751,6 +752,11 @@ namespace Socigy.OpenSource.DB.Tool
                         column.JsonContextType = ctxType.FullName;
                     else if (ctxTypeArg is string ctxStr)
                         column.JsonContextType = ctxStr;
+                }
+                // [Encrypted] — stored as bytea ciphertext (encrypted on write / decrypted on read at runtime)
+                else if (attribute.AttributeType.FullName == EncryptedAttributeFullName)
+                {
+                    column.DatabaseType = "bytea";
                 }
                 // Comparison constraints
                 else if (attribute.AttributeType.FullName == MinAttributeFullName)

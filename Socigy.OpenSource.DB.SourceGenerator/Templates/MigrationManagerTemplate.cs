@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class MigrationManagerTemplate : MigrationManagerTemplateBase {
         
         
-        #line 184 "MigrationManagerTemplate.tt"
+        #line 197 "MigrationManagerTemplate.tt"
 
     public string DatabaseName { get; set; }
     public string BaseNamespace { get; set; }
@@ -276,43 +276,55 @@ namespace ");
             #line hidden
             
             #line 142 "MigrationManagerTemplate.tt"
-            this.Write(@".Migration
-                        {
-                            HumanId = migToApply.Id,
-                            AppliedAt = DateTime.UtcNow,
-                            ExecutedBy = $""{Environment.UserName} - {Environment.MachineName}"",
-                            IsRollback = true
-                        }, connection);
+            this.Write(".Migration\r\n                        {\r\n                            HumanId = migT" +
+                    "oApply.Id,\r\n                            AppliedAt = DateTime.UtcNow,\r\n          " +
+                    "                  ExecutedBy = $\"{Environment.UserName} - {Environment.MachineNa" +
+                    "me}\",\r\n                            IsRollback = true\r\n                        }," +
+                    " connection);\r\n                    }\r\n                }\r\n            }\r\n\r\n      " +
+                    "      public async Task<ILocalMigration?> GetCurrentLocalMigrationVersion()\r\n   " +
+                    "         {\r\n                var latestVersion = await GetCurrentMigrationVersion" +
+                    "();\r\n                if (latestVersion == null || !_idToIndex.TryGetValue(latest" +
+                    "Version.HumanId, out int idx))\r\n                    return null;\r\n              " +
+                    "  return _factoriesOrderedDesc[idx]();\r\n            }\r\n\r\n            public asyn" +
+                    "c Task<IMigration?> GetCurrentMigrationVersion()\r\n            {\r\n               " +
+                    " try\r\n                {\r\n                    using var connection = _ConnectionF" +
+                    "actory.Create();\r\n                    if (connection.State != System.Data.Connec" +
+                    "tionState.Open)\r\n                        await connection.OpenAsync();\r\n\r\n      " +
+                    "              // On first run the migrations table doesn\'t exist yet. Probe with" +
+                    " to_regclass\r\n                    // (returns NULL, never throws) instead of let" +
+                    "ting the query raise 42P01 — which the\r\n                    // debugger otherwis" +
+                    "e breaks on as a first-chance exception during normal startup.\r\n                " +
+                    "    using (var probe = connection.CreateCommand())\r\n                    {\r\n     " +
+                    "                   probe.CommandText = \"SELECT to_regclass(\'\\\"\" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 174 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 174 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.TableName + ""\""')"";
+                        var exists = await probe.ExecuteScalarAsync();
+                        if (exists is null || exists is DBNull)
+                            return null;
                     }
-                }
-            }
-
-            public async Task<ILocalMigration?> GetCurrentLocalMigrationVersion()
-            {
-                var latestVersion = await GetCurrentMigrationVersion();
-                if (latestVersion == null || !_idToIndex.TryGetValue(latestVersion.HumanId, out int idx))
-                    return null;
-                return _factoriesOrderedDesc[idx]();
-            }
-
-            public async Task<IMigration?> GetCurrentMigrationVersion()
-            {
-                try
-                {
-                    using var connection = _ConnectionFactory.Create();
 
                     var versions = ");
             
             #line default
             #line hidden
             
-            #line 167 "MigrationManagerTemplate.tt"
+            #line 180 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 167 "MigrationManagerTemplate.tt"
+            #line 180 "MigrationManagerTemplate.tt"
             this.Write(@".Migration.Query()
                         .WithConnection(connection)
                         .OrderByDesc(x => new object[] { x.AppliedAt })

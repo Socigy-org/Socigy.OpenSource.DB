@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
+using Benchmarks.Socigy.Generated;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -37,7 +38,7 @@ public class ProcedureBenchmarks
         await conn.OpenAsync();
 
         var list = new List<BenchUser>();
-        await foreach (var u in global::Benchmarks.Socigy.Generated.Procedures.GetUsersUnderAge(conn, Rows))
+        await foreach (var u in Procedures.GetUsersUnderAge(conn, Rows))
             list.Add(u);
         return list.Count;
     }
