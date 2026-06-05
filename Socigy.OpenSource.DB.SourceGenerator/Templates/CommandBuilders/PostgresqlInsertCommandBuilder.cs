@@ -195,68 +195,84 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
                     "nAsync();\r\n\r\n            await using var command = _Connection.CreateCommand() a" +
                     "s NpgsqlCommand;\r\n            if (command == null) return false;\r\n\r\n            " +
                     "if (_Transaction != null)\r\n                command.Transaction = _Transaction as" +
-                    " NpgsqlTransaction;\r\n\r\n            _ColumnInfo ??= _TableRow.GetColumns();\r\n\r\n  " +
-                    "          var columnNames = new List<string>();\r\n            var paramNames = ne" +
-                    "w List<string>();\r\n            BuildParameters(command, columnNames, paramNames)" +
-                    ";\r\n\r\n            if (columnNames.Count == 0) return false;\r\n\r\n            if (_P" +
-                    "ropagateValues)\r\n            {\r\n                command.CommandText = $@\"\r\n     " +
-                    "   INSERT INTO \"\"{_TableRow.GetTableName()}\"\"\r\n        ({string.Join(\", \", colum" +
-                    "nNames)})\r\n        VALUES\r\n        ({string.Join(\", \", paramNames)})\r\n        RE" +
-                    "TURNING *\";\r\n\r\n                await using var __instr = await global::Socigy.Op" +
-                    "enSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, \"INSERT\"," +
-                    " ct => ((System.Data.Common.DbCommand)command).ExecuteReaderAsync(ct), default, " +
-                    "_Diagnostics);\r\n                var reader = __instr.Reader;\r\n                if" +
-                    " (await __instr.ReadAsync())\r\n                {\r\n                    foreach (va" +
-                    "r kvp in _ColumnInfo!)\r\n                    {\r\n                        if (kvp.V" +
-                    "alue.SetValue == null) continue;\r\n                        int ordinal;\r\n        " +
-                    "                try { ordinal = reader.GetOrdinal(kvp.Key); } catch { continue; " +
-                    "}\r\n                        var dbVal = reader.IsDBNull(ordinal) ? null : reader." +
-                    "GetValue(ordinal);\r\n                        kvp.Value.SetValue(dbVal);\r\n        " +
-                    "            }\r\n                }\r\n                return true;\r\n            }\r\n\r" +
-                    "\n            command.CommandText = $@\"\r\n        INSERT INTO \"\"{_TableRow.GetTabl" +
-                    "eName()}\"\"\r\n        ({string.Join(\", \", columnNames)})\r\n        VALUES\r\n        " +
-                    "({string.Join(\", \", paramNames)})\";\r\n\r\n            int rowsAffected = await glob" +
-                    "al::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(com" +
-                    "mand, \"INSERT\", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);\r" +
-                    "\n            return rowsAffected > 0;\r\n        }\r\n\r\n        private void BuildPa" +
-                    "rameters(NpgsqlCommand command, List<string> columnNames, List<string> paramName" +
-                    "s)\r\n        {\r\n            foreach (var row in _ColumnInfo!)\r\n            {\r\n   " +
-                    "             string colName = row.Key;\r\n                ColumnInfo info = row.Va" +
-                    "lue;\r\n\r\n                if (!ShouldIncludeColumn(colName, info))\r\n              " +
-                    "      continue;\r\n\r\n                object? value = info.Value;\r\n                " +
-                    "Type type = info.Type;\r\n\r\n                var actualType = Nullable.GetUnderlyin" +
-                    "gType(type) ?? type;\r\n                if (actualType.IsEnum)\r\n                {\r" +
-                    "\n                    var enumUnderlyingType = Enum.GetUnderlyingType(actualType)" +
-                    ";\r\n                    if (value != null && value != DBNull.Value)\r\n            " +
-                    "            value = Convert.ChangeType(value, enumUnderlyingType);\r\n            " +
-                    "    }\r\n\r\n                columnNames.Add($\"\\\"{colName}\\\"\");\r\n\r\n                s" +
-                    "tring paramName = $\"@{colName}\";\r\n                paramNames.Add(paramName);\r\n\r\n" +
-                    "                var param = new NpgsqlParameter(paramName, value ?? DBNull.Value" +
-                    ");\r\n\r\n                if (value == null || value == DBNull.Value || actualType.I" +
-                    "sEnum)\r\n                {\r\n                    param.NpgsqlDbType = GetDbType(ty" +
-                    "pe);\r\n                }\r\n\r\n                if (info.IsJson)\r\n                   " +
-                    " param.NpgsqlDbType = NpgsqlDbType.Jsonb;\r\n\r\n                command.Parameters." +
-                    "Add(param);\r\n            }\r\n        }\r\n\r\n        public NpgsqlDbType GetDbType(T" +
-                    "ype type)\r\n        {\r\n            type = Nullable.GetUnderlyingType(type) ?? typ" +
-                    "e;\r\n\r\n            if (type.IsEnum)\r\n                type = Enum.GetUnderlyingTyp" +
-                    "e(type);\r\n\r\n            return type switch\r\n            {\r\n                Type " +
-                    "t when t == typeof(short) => NpgsqlDbType.Smallint,\r\n                Type t when" +
-                    " t == typeof(byte) => NpgsqlDbType.Smallint,\r\n                Type t when t == t" +
-                    "ypeof(sbyte) => NpgsqlDbType.Smallint,\r\n\r\n                Type t when t == typeo" +
-                    "f(int) => NpgsqlDbType.Integer,\r\n                Type t when t == typeof(ushort)" +
-                    " => NpgsqlDbType.Integer,\r\n\r\n                Type t when t == typeof(long) => Np" +
-                    "gsqlDbType.Bigint,\r\n                Type t when t == typeof(uint) => NpgsqlDbTyp" +
-                    "e.Bigint,\r\n\r\n                Type t when t == typeof(ulong) => NpgsqlDbType.Nume" +
-                    "ric,\r\n\r\n                Type t when t == typeof(string) => NpgsqlDbType.Text,\r\n " +
-                    "               Type t when t == typeof(bool) => NpgsqlDbType.Boolean,\r\n         " +
-                    "       Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,\r\n           " +
-                    "     Type t when t == typeof(float) => NpgsqlDbType.Real,\r\n                Type " +
-                    "t when t == typeof(double) => NpgsqlDbType.Double,\r\n                Type t when " +
-                    "t == typeof(decimal) => NpgsqlDbType.Numeric,\r\n                Type t when t == " +
-                    "typeof(Guid) => NpgsqlDbType.Uuid,\r\n                Type t when t == typeof(byte" +
-                    "[]) => NpgsqlDbType.Bytea,\r\n                Type t when t == typeof(char) => Npg" +
-                    "sqlDbType.Char,\r\n                _ => NpgsqlDbType.Text\r\n            };\r\n       " +
-                    " }\r\n    }\r\n}\r\n\r\n#nullable disable\r\n");
+                    " NpgsqlTransaction;\r\n\r\n            // Fast path: a plain default insert reuses t" +
+                    "he entity\'s cached static plan — no GetColumns()\r\n            // dictionary/clos" +
+                    "ures, no SQL rebuild, just bind the values.\r\n            if (_SelectedDbColumns " +
+                    "== null && _ExcludedDbColumns == null && _IncludedAutoFields == null\r\n          " +
+                    "      && !_ForceAllFields && !_ExcludeAutoFields && !_PropagateValues && _Column" +
+                    "Info == null\r\n                && _TableRow is IInsertPlanProvider __planProvider" +
+                    ")\r\n            {\r\n                var __plan = __planProvider.GetInsertPlan();\r\n" +
+                    "                if (__plan.Columns.Length == 0) return false;\r\n                f" +
+                    "oreach (var __col in __plan.Columns)\r\n                    AddInsertParameter(com" +
+                    "mand, __col.ParameterName, __col.GetValue(_TableRow!), __col.Type, __col.IsJson)" +
+                    ";\r\n                command.CommandText = __plan.CommandText;\r\n                in" +
+                    "t __fastRows = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics" +
+                    ".ExecuteNonQueryAsync(command, \"INSERT\", ct => command.ExecuteNonQueryAsync(ct)," +
+                    " default, _Diagnostics);\r\n                return __fastRows > 0;\r\n            }\r" +
+                    "\n\r\n            _ColumnInfo ??= _TableRow.GetColumns();\r\n\r\n            var column" +
+                    "Names = new List<string>();\r\n            var paramNames = new List<string>();\r\n " +
+                    "           BuildParameters(command, columnNames, paramNames);\r\n\r\n            if " +
+                    "(columnNames.Count == 0) return false;\r\n\r\n            if (_PropagateValues)\r\n   " +
+                    "         {\r\n                command.CommandText = $@\"\r\n        INSERT INTO \"\"{_T" +
+                    "ableRow.GetTableName()}\"\"\r\n        ({string.Join(\", \", columnNames)})\r\n        V" +
+                    "ALUES\r\n        ({string.Join(\", \", paramNames)})\r\n        RETURNING *\";\r\n\r\n     " +
+                    "           await using var __instr = await global::Socigy.OpenSource.DB.Core.Dia" +
+                    "gnostics.DbDiagnostics.ExecuteReaderAsync(command, \"INSERT\", ct => ((System.Data" +
+                    ".Common.DbCommand)command).ExecuteReaderAsync(ct), default, _Diagnostics);\r\n    " +
+                    "            var reader = __instr.Reader;\r\n                if (await __instr.Read" +
+                    "Async())\r\n                {\r\n                    foreach (var kvp in _ColumnInfo" +
+                    "!)\r\n                    {\r\n                        if (kvp.Value.SetValue == nul" +
+                    "l) continue;\r\n                        int ordinal;\r\n                        try " +
+                    "{ ordinal = reader.GetOrdinal(kvp.Key); } catch { continue; }\r\n                 " +
+                    "       var dbVal = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal);\r\n" +
+                    "                        kvp.Value.SetValue(dbVal);\r\n                    }\r\n     " +
+                    "           }\r\n                return true;\r\n            }\r\n\r\n            command" +
+                    ".CommandText = $@\"\r\n        INSERT INTO \"\"{_TableRow.GetTableName()}\"\"\r\n        " +
+                    "({string.Join(\", \", columnNames)})\r\n        VALUES\r\n        ({string.Join(\", \", " +
+                    "paramNames)})\";\r\n\r\n            int rowsAffected = await global::Socigy.OpenSourc" +
+                    "e.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, \"INSERT\", ct =" +
+                    "> command.ExecuteNonQueryAsync(ct), default, _Diagnostics);\r\n            return " +
+                    "rowsAffected > 0;\r\n        }\r\n\r\n        private void BuildParameters(NpgsqlComma" +
+                    "nd command, List<string> columnNames, List<string> paramNames)\r\n        {\r\n     " +
+                    "       foreach (var row in _ColumnInfo!)\r\n            {\r\n                string " +
+                    "colName = row.Key;\r\n                ColumnInfo info = row.Value;\r\n\r\n            " +
+                    "    if (!ShouldIncludeColumn(colName, info))\r\n                    continue;\r\n\r\n " +
+                    "               columnNames.Add($\"\\\"{colName}\\\"\");\r\n\r\n                string para" +
+                    "mName = $\"@{colName}\";\r\n                paramNames.Add(paramName);\r\n\r\n          " +
+                    "      AddInsertParameter(command, paramName, info.Value, info.Type, info.IsJson)" +
+                    ";\r\n            }\r\n        }\r\n\r\n        // Single place that turns a (value, type" +
+                    ", isJson) into an NpgsqlParameter — shared by the\r\n        // dictionary path (B" +
+                    "uildParameters) and the cached-plan fast path, so they behave identically.\r\n    " +
+                    "    private void AddInsertParameter(NpgsqlCommand command, string paramName, obj" +
+                    "ect? value, Type type, bool isJson)\r\n        {\r\n            var actualType = Nul" +
+                    "lable.GetUnderlyingType(type) ?? type;\r\n            if (actualType.IsEnum && val" +
+                    "ue != null && value != DBNull.Value)\r\n                value = Convert.ChangeType" +
+                    "(value, Enum.GetUnderlyingType(actualType));\r\n\r\n            var param = new Npgs" +
+                    "qlParameter(paramName, value ?? DBNull.Value);\r\n\r\n            if (value == null " +
+                    "|| value == DBNull.Value || actualType.IsEnum)\r\n                param.NpgsqlDbTy" +
+                    "pe = GetDbType(type);\r\n\r\n            if (isJson)\r\n                param.NpgsqlDb" +
+                    "Type = NpgsqlDbType.Jsonb;\r\n\r\n            command.Parameters.Add(param);\r\n      " +
+                    "  }\r\n\r\n        public NpgsqlDbType GetDbType(Type type)\r\n        {\r\n            " +
+                    "type = Nullable.GetUnderlyingType(type) ?? type;\r\n\r\n            if (type.IsEnum)" +
+                    "\r\n                type = Enum.GetUnderlyingType(type);\r\n\r\n            return typ" +
+                    "e switch\r\n            {\r\n                Type t when t == typeof(short) => Npgsq" +
+                    "lDbType.Smallint,\r\n                Type t when t == typeof(byte) => NpgsqlDbType" +
+                    ".Smallint,\r\n                Type t when t == typeof(sbyte) => NpgsqlDbType.Small" +
+                    "int,\r\n\r\n                Type t when t == typeof(int) => NpgsqlDbType.Integer,\r\n " +
+                    "               Type t when t == typeof(ushort) => NpgsqlDbType.Integer,\r\n\r\n     " +
+                    "           Type t when t == typeof(long) => NpgsqlDbType.Bigint,\r\n              " +
+                    "  Type t when t == typeof(uint) => NpgsqlDbType.Bigint,\r\n\r\n                Type " +
+                    "t when t == typeof(ulong) => NpgsqlDbType.Numeric,\r\n\r\n                Type t whe" +
+                    "n t == typeof(string) => NpgsqlDbType.Text,\r\n                Type t when t == ty" +
+                    "peof(bool) => NpgsqlDbType.Boolean,\r\n                Type t when t == typeof(Dat" +
+                    "eTime) => NpgsqlDbType.Timestamp,\r\n                Type t when t == typeof(float" +
+                    ") => NpgsqlDbType.Real,\r\n                Type t when t == typeof(double) => Npgs" +
+                    "qlDbType.Double,\r\n                Type t when t == typeof(decimal) => NpgsqlDbTy" +
+                    "pe.Numeric,\r\n                Type t when t == typeof(Guid) => NpgsqlDbType.Uuid," +
+                    "\r\n                Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,\r\n      " +
+                    "          Type t when t == typeof(char) => NpgsqlDbType.Char,\r\n                _" +
+                    " => NpgsqlDbType.Text\r\n            };\r\n        }\r\n    }\r\n}\r\n\r\n#nullable disable\r" +
+                    "\n");
             
             #line default
             #line hidden

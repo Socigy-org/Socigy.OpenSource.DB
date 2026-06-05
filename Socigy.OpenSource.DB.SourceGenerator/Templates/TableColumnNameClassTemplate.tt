@@ -14,7 +14,7 @@ namespace <#= Namespace #>
 {
 
     <#= CustomPreClass #>
-    public partial class <#= ClassName #> : IDbTable
+    public partial class <#= ClassName #> : IDbTable, IInsertPlanProvider
     {
         protected Dictionary<string, object?> _CustomValues { get; set; }
         public object? GetCustomValue(string key)
@@ -79,6 +79,31 @@ namespace <#= Namespace #>
                 }
 #>
             };
+        }
+
+        private static global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan? __InsertPlan;
+        /// <summary>Cached plan for the default INSERT (all columns except auto-increment), reused per call.</summary>
+        public global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan GetInsertPlan()
+        {
+            return __InsertPlan ??= new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertPlan(
+                "INSERT INTO \"<#= TableName #>\" (<#= string.Join(", ", Columns.Where(c => !c.IsAutoIncrement).Select(c => "\\\"" + c.DatabaseName + "\\\"")) #>) VALUES (<#= string.Join(", ", Columns.Where(c => !c.IsAutoIncrement).Select(c => "@" + c.DatabaseName)) #>)",
+                new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[]
+                {
+<#
+            foreach(var col in Columns.Where(c => !c.IsAutoIncrement))
+            {
+                bool isTypedJson2 = col.IsJsonColumn && !string.IsNullOrEmpty(col.JsonContextType);
+                bool hasConvertor2 = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
+                string typeExpr = col.IsJsonColumn ? "string " : col.Type.Replace("?", " ");
+                string valueExpr = isTypedJson2
+                    ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
+                    : hasConvertor2
+                        ? "new " + col.Converter + "().ConvertToDbValue(((" + ClassName + ")o)." + col.Name + ")"
+                        : "(object?)((" + ClassName + ")o)." + col.Name;
+#>                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor("@<#= col.DatabaseName #>", typeof(<#= typeExpr #>), <#= col.IsJsonColumn ? "true" : "false" #>, o => <#= valueExpr #>),
+<#
+            }
+#>                });
         }
 
         public Dictionary<string, ColumnInfo> GetPrimaryColumns()

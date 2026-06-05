@@ -11,9 +11,9 @@ using static Socigy.OpenSource.DB.Core.SyntaxHelper.DB;
 namespace Socigy.OpenSource.DB.UnitTests
 {
     /// <summary>
-    /// No-database tests for the query-shape cache: the structural hash (<see cref="ExpressionStructure"/>),
-    /// the value-only parameter binding (<c>BindParameters</c>), and the proof that a cache hit produces
-    /// SQL + parameters identical to a fresh translation.
+    /// No-database tests for the compiled-query cache: the structural hash (<see cref="ExpressionStructure"/>),
+    /// and the proof that replaying a recorded parameter plan over a structurally identical tree reproduces
+    /// exactly the parameters a fresh translation would produce — for every supported predicate shape.
     /// </summary>
     [TestFixture]
     public class QueryShapeCacheTests
@@ -35,60 +35,64 @@ namespace Socigy.OpenSource.DB.UnitTests
             return h;
         }
 
-        private static (string Sql, NpgsqlParameter[] Ps) Parse(Expression<Func<Foo, bool>> p)
+        private static (string Sql, NpgsqlParameter[] Ps, IReadOnlyList<RecordedParameter> Rec) Translate(Expression<Func<Foo, bool>> p)
         {
             var cmd = new NpgsqlCommand();
-            string sql = new PostgresqlWhereVisitor(p.Parameters[0], Columns, cmd).Parse(p.Body);
-            return (sql, cmd.Parameters.Cast<NpgsqlParameter>().ToArray());
+            var v = new PostgresqlWhereVisitor(p.Parameters[0], Columns, cmd);
+            string sql = v.Parse(p.Body);
+            return (sql, cmd.Parameters.Cast<NpgsqlParameter>().ToArray(), ((IParameterRecorder)v).RecordedParameters);
         }
 
-        private static NpgsqlParameter[] Bind(Expression<Func<Foo, bool>> p)
+        /// <summary>Replays a plan recorded from <paramref name="planBody"/> against <paramref name="targetBody"/>.</summary>
+        private static object?[] Replay(Expression planBody, IReadOnlyList<RecordedParameter> rec, Expression targetBody)
         {
-            var cmd = new NpgsqlCommand();
-            new PostgresqlWhereVisitor(p.Parameters[0], Columns, cmd).BindParameters(p.Body);
-            return cmd.Parameters.Cast<NpgsqlParameter>().ToArray();
+            var values = new object?[rec.Count];
+            for (int i = 0; i < rec.Count; i++)
+            {
+                int[]? path = ExpressionPath.ComputePath(planBody, rec[i].Source);
+                Assert.That(path, Is.Not.Null, "source must be locatable in the tree");
+                Expression node = ExpressionPath.Navigate(targetBody, path!);
+                values[i] = WhereParameter.Apply(rec[i].Transform, ExpressionEvaluator.Evaluate(node), rec[i].ArrayElementType);
+            }
+            return values;
+        }
+
+        /// <summary>The core guarantee: a cache hit (replay over a new tree) == a fresh translation.</summary>
+        private static void AssertReplayMatchesFresh(Expression<Func<Foo, bool>> first, Expression<Func<Foo, bool>> second)
+        {
+            Assert.That(Hash(first), Is.EqualTo(Hash(second)), "same shape must share a key");
+
+            var a = Translate(first);              // the "miss" that populates the cache
+            var b = Translate(second);             // ground truth for the second value
+            var replayed = Replay(first.Body, a.Rec, second.Body); // what a cache hit would bind
+
+            Assert.That(a.Sql, Is.EqualTo(b.Sql), "cached SQL must equal a fresh translation");
+            Assert.That(replayed.Length, Is.EqualTo(b.Ps.Length), "param count must match");
+            Assert.That(replayed, Is.EqualTo(b.Ps.Select(p => p.Value)), "replayed values must match a fresh bind");
         }
 
         // ---- Structural hash ----------------------------------------------------------------
 
         [Test]
         public void SameShape_DifferentValues_ProduceSameHash()
-        {
-            Assert.That(Hash(x => x.Id == 5), Is.EqualTo(Hash(x => x.Id == 9)));
-        }
-
-        [Test]
-        public void SameShape_CapturedVariables_ProduceSameHash()
-        {
-            int a = 1, b = 2;
-            Assert.That(Hash(x => x.Id == a), Is.EqualTo(Hash(x => x.Id == b)));
-            // captured and literal both collapse to a value slot
-            Assert.That(Hash(x => x.Id == a), Is.EqualTo(Hash(x => x.Id == 7)));
-        }
+            => Assert.That(Hash(x => x.Id == 5), Is.EqualTo(Hash(x => x.Id == 9)));
 
         [Test]
         public void DifferentOperator_ProducesDifferentHash()
-        {
-            Assert.That(Hash(x => x.Id < 5), Is.Not.EqualTo(Hash(x => x.Id > 5)));
-        }
+            => Assert.That(Hash(x => x.Id < 5), Is.Not.EqualTo(Hash(x => x.Id > 5)));
 
         [Test]
         public void DifferentColumn_ProducesDifferentHash()
-        {
-            Assert.That(Hash(x => x.Id == 5), Is.Not.EqualTo(Hash(x => x.Age == 5)));
-        }
+            => Assert.That(Hash(x => x.Id == 5), Is.Not.EqualTo(Hash(x => x.Age == 5)));
 
         [Test]
         public void NullLiteral_DiffersFromValueComparison()
-        {
-            Assert.That(Hash(x => x.Name == null), Is.Not.EqualTo(Hash(x => x.Name == "x")));
-        }
+            => Assert.That(Hash(x => x.Name == null), Is.Not.EqualTo(Hash(x => x.Name == "x")));
 
         [Test]
         public void DifferentStringMethod_ProducesDifferentHash()
         {
             Assert.That(Hash(x => x.Name.Contains("a")), Is.Not.EqualTo(Hash(x => x.Name.StartsWith("a"))));
-            // ToLower wrapping (ILIKE) differs from the plain form (LIKE)
             Assert.That(Hash(x => x.Name.ToLower().Contains("a")), Is.Not.EqualTo(Hash(x => x.Name.Contains("a"))));
         }
 
@@ -99,39 +103,42 @@ namespace Socigy.OpenSource.DB.UnitTests
             Assert.That(ExpressionStructure.TryComputeHash(p.Body, p.Parameters[0], out _), Is.False);
         }
 
-        // ---- Value-only binding -------------------------------------------------------------
+        // ---- Replay correctness across shapes -----------------------------------------------
 
         [Test]
-        public void BindParameters_ExtractsSameValues_AsParse()
-        {
-            Expression<Func<Foo, bool>> p = x => x.Id > 1 && x.Name.Contains("ab");
-            var (_, parsed) = Parse(p);
-            var bound = Bind(p);
-
-            Assert.That(bound.Select(x => x.ParameterName), Is.EqualTo(parsed.Select(x => x.ParameterName)));
-            Assert.That(bound.Select(x => x.Value), Is.EqualTo(parsed.Select(x => x.Value)));
-        }
-
-        // ---- End-to-end: a cache hit equals a fresh translation -----------------------------
+        public void Replay_Equality() => AssertReplayMatchesFresh(x => x.Id == 5, x => x.Id == 9);
 
         [Test]
-        public void CacheHit_ReusedSql_PlusBind_EqualsFreshTranslation()
+        public void Replay_AndPlusLike()
+            => AssertReplayMatchesFresh(x => x.Id > 1 && x.Name.Contains("ab"), x => x.Id > 7 && x.Name.Contains("zzz%"));
+
+        [Test]
+        public void Replay_StartsWith_CaseInsensitive()
+            => AssertReplayMatchesFresh(x => x.Name.ToLower().StartsWith("a"), x => x.Name.ToLower().StartsWith("qq"));
+
+        [Test]
+        public void Replay_Coalesce()
+            => AssertReplayMatchesFresh(x => (x.Age ?? 0) > 5, x => (x.Age ?? 0) > 42);
+
+        [Test]
+        public void Replay_NullableHasValue_NoParameters()
+            => AssertReplayMatchesFresh(x => x.Age.HasValue, x => x.Age.HasValue);
+
+        [Test]
+        public void Replay_CollectionContains_TypedArray()
         {
-            // Shape is translated once for value 5, then reused for value 9.
-            Expression<Func<Foo, bool>> first = x => x.Id == 5;
-            Expression<Func<Foo, bool>> second = x => x.Id == 9;
+            var first = new List<int> { 1, 2, 3 };
+            var second = new List<int> { 9, 8 };
+            Expression<Func<Foo, bool>> p1 = x => first.Contains(x.Id);
+            Expression<Func<Foo, bool>> p2 = x => second.Contains(x.Id);
 
-            Assert.That(Hash(first), Is.EqualTo(Hash(second)), "same shape must share a cache key");
+            var a = Translate(p1);
+            var b = Translate(p2);
+            var replayed = Replay(p1.Body, a.Rec, p2.Body);
 
-            var (cachedSql, _) = Parse(first);     // what the cache would store
-            var boundForSecond = Bind(second);     // what a cache hit re-binds
-
-            var (freshSql, freshPs) = Parse(second); // ground truth (no cache)
-
-            Assert.That(cachedSql, Is.EqualTo(freshSql));
-            Assert.That(boundForSecond.Select(x => x.ParameterName), Is.EqualTo(freshPs.Select(x => x.ParameterName)));
-            Assert.That(boundForSecond.Select(x => x.Value), Is.EqualTo(freshPs.Select(x => x.Value)));
-            Assert.That(boundForSecond.Single().Value, Is.EqualTo(9));
+            Assert.That(a.Sql, Is.EqualTo(b.Sql));
+            Assert.That(replayed.Single(), Is.AssignableTo<int[]>());
+            Assert.That((int[])replayed.Single()!, Is.EqualTo(new[] { 9, 8 }));
         }
 
         // ---- Cache store --------------------------------------------------------------------
@@ -140,14 +147,13 @@ namespace Socigy.OpenSource.DB.UnitTests
         public void Cache_AddThenGet_RoundTrips()
         {
             QueryShapeCache.Clear();
-            QueryShapeCache.Add(typeof(Foo), 12345L, " WHERE \"Id\" = @p0", 1);
+            var plan = new[] { new ParamSlot(new[] { 1 }, ParamTransform.Value, null) };
+            QueryShapeCache.Add(typeof(Foo), 12345L, new CompiledQuery(" WHERE \"Id\" = @p0", plan));
 
-            Assert.That(QueryShapeCache.TryGet(typeof(Foo), 12345L, out string sql, out int count), Is.True);
-            Assert.That(sql, Is.EqualTo(" WHERE \"Id\" = @p0"));
-            Assert.That(count, Is.EqualTo(1));
-
-            // Different type partitions the key.
-            Assert.That(QueryShapeCache.TryGet(typeof(string), 12345L, out _, out _), Is.False);
+            Assert.That(QueryShapeCache.TryGet(typeof(Foo), 12345L, out CompiledQuery q), Is.True);
+            Assert.That(q.Sql, Is.EqualTo(" WHERE \"Id\" = @p0"));
+            Assert.That(q.Plan, Has.Length.EqualTo(1));
+            Assert.That(QueryShapeCache.TryGet(typeof(string), 12345L, out _), Is.False);
             QueryShapeCache.Clear();
         }
     }

@@ -300,6 +300,21 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (_Transaction != null)
                 command.Transaction = _Transaction as NpgsqlTransaction;
 
+            // Fast path: a plain default insert reuses the entity's cached static plan — no GetColumns()
+            // dictionary/closures, no SQL rebuild, just bind the values.
+            if (_SelectedDbColumns == null && _ExcludedDbColumns == null && _IncludedAutoFields == null
+                && !_ForceAllFields && !_ExcludeAutoFields && !_PropagateValues && _ColumnInfo == null
+                && _TableRow is IInsertPlanProvider __planProvider)
+            {
+                var __plan = __planProvider.GetInsertPlan();
+                if (__plan.Columns.Length == 0) return false;
+                foreach (var __col in __plan.Columns)
+                    AddInsertParameter(command, __col.ParameterName, __col.GetValue(_TableRow!), __col.Type, __col.IsJson);
+                command.CommandText = __plan.CommandText;
+                int __fastRows = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
+                return __fastRows > 0;
+            }
+
             _ColumnInfo ??= _TableRow.GetColumns();
 
             var columnNames = new List<string>();
@@ -353,34 +368,32 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 if (!ShouldIncludeColumn(colName, info))
                     continue;
 
-                object? value = info.Value;
-                Type type = info.Type;
-
-                var actualType = Nullable.GetUnderlyingType(type) ?? type;
-                if (actualType.IsEnum)
-                {
-                    var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
-                    if (value != null && value != DBNull.Value)
-                        value = Convert.ChangeType(value, enumUnderlyingType);
-                }
-
                 columnNames.Add($"\"{colName}\"");
 
                 string paramName = $"@{colName}";
                 paramNames.Add(paramName);
 
-                var param = new NpgsqlParameter(paramName, value ?? DBNull.Value);
-
-                if (value == null || value == DBNull.Value || actualType.IsEnum)
-                {
-                    param.NpgsqlDbType = GetDbType(type);
-                }
-
-                if (info.IsJson)
-                    param.NpgsqlDbType = NpgsqlDbType.Jsonb;
-
-                command.Parameters.Add(param);
+                AddInsertParameter(command, paramName, info.Value, info.Type, info.IsJson);
             }
+        }
+
+        // Single place that turns a (value, type, isJson) into an NpgsqlParameter — shared by the
+        // dictionary path (BuildParameters) and the cached-plan fast path, so they behave identically.
+        private void AddInsertParameter(NpgsqlCommand command, string paramName, object? value, Type type, bool isJson)
+        {
+            var actualType = Nullable.GetUnderlyingType(type) ?? type;
+            if (actualType.IsEnum && value != null && value != DBNull.Value)
+                value = Convert.ChangeType(value, Enum.GetUnderlyingType(actualType));
+
+            var param = new NpgsqlParameter(paramName, value ?? DBNull.Value);
+
+            if (value == null || value == DBNull.Value || actualType.IsEnum)
+                param.NpgsqlDbType = GetDbType(type);
+
+            if (isJson)
+                param.NpgsqlDbType = NpgsqlDbType.Jsonb;
+
+            command.Parameters.Add(param);
         }
 
         public NpgsqlDbType GetDbType(Type type)

@@ -34,9 +34,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
-        /// <summary>Not shape-cached; delegates to <see cref="Parse"/> (parameters are added as a side effect).</summary>
-        public void BindParameters(Expression expression) => Parse(expression);
-
         private void AddParameter(object? value)
         {
             string paramName = $"@p{_Command.Parameters.Count}";

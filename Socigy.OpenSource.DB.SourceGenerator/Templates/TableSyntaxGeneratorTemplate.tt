@@ -585,13 +585,7 @@ namespace <#= Namespace #>
                     command.Transaction = _Transaction;
 
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
-                parser.Process(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
-                if (_Limit > 0)
-                    parser.AddLimit(_Limit);
-                if (_Offset > 0)
-                    parser.AddOffset(_Offset);
-
-                command.CommandText = parser.ToString();
+                command.CommandText = parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
 
                 await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), default, _Diagnostics);
                 var reader = __instr.Reader;
@@ -607,10 +601,7 @@ namespace <#= Namespace #>
             public string Compile(DbCommand command)
             {
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
-                parser.Process(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending);
-                if (_Limit > 0) parser.AddLimit(_Limit);
-                if (_Offset > 0) parser.AddOffset(_Offset);
-                return parser.ToString();
+                return parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
             }
 
             // ── Set-operation factory methods ─────────────────────────────────────────

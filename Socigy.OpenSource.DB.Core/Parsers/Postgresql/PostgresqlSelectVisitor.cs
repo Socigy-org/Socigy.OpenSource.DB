@@ -30,9 +30,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
-        /// <summary>Not shape-cached; delegates to <see cref="Parse"/> (parameters are added as a side effect).</summary>
-        public void BindParameters(Expression expression) => Parse(expression);
-
         // Handle the "new object[] { ... }" array initialization
         protected override Expression VisitNewArray(NewArrayExpression node)
         {
