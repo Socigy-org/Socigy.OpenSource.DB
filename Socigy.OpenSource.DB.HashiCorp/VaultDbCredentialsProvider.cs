@@ -55,8 +55,8 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 string username = secret.Data.Username;
                 string password = secret.Data.Password;
 
-                string baseCs = _options.BaseConnectionString.TrimEnd().TrimEnd(';');
-                _cache[database] = $"{baseCs};Username={username};Password={password}";
+                // Build via DbConnectionStringBuilder so special characters in the leased password are escaped.
+                _cache[database] = Internal.VaultConnectionString.Compose(_options.BaseConnectionString, username, password);
 
                 activity?.SetTag("vault.lease.duration_s", secret.LeaseDurationSeconds);
                 _logger?.LogInformation(

@@ -31,6 +31,10 @@
 		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="Socigy.OpenSource.DB.HashiCorp.Tests" />
+	</ItemGroup>
+
 	<!-- Compile-time access to the Core abstractions (IFieldEncryptor, IDbCredentialsProvider). The Core DLL
 	     is supplied to consumers by the main Socigy.OpenSource.DB package, which this package depends on once
 	     a matching version is published; declared via the nuspec dependency below at pack time. -->
