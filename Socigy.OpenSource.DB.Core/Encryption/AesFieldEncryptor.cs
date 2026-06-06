@@ -16,7 +16,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
     /// </para>
     /// Envelope layout: <c>[version:1][iv:16][ciphertext:n][mac:32]</c>.
     /// </summary>
-    public sealed class AesFieldEncryptor : IFieldEncryptor
+    public sealed class AesFieldEncryptor : IFieldEncryptor, IDisposable
     {
         private const byte Version = 1;
         private const int IvSize = 16;
@@ -24,6 +24,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
 
         private readonly byte[] _encKey; // 32 bytes -> AES-256
         private readonly byte[] _macKey; // 32 bytes -> HMAC-SHA256
+        private bool _disposed;
 
         /// <summary>Creates the encryptor from a master key (16 bytes or more; 32+ recommended).</summary>
         public AesFieldEncryptor(byte[] masterKey)
@@ -42,6 +43,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
 
         public byte[] Encrypt(byte[] plaintext)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(AesFieldEncryptor));
             if (plaintext == null) throw new ArgumentNullException(nameof(plaintext));
 
             byte[] iv = new byte[IvSize];
@@ -74,6 +76,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
 
         public byte[] Decrypt(byte[] ciphertext)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(AesFieldEncryptor));
             if (ciphertext == null) throw new ArgumentNullException(nameof(ciphertext));
             if (ciphertext.Length < 1 + IvSize + MacSize || ciphertext[0] != Version)
                 throw new CryptographicException("The encrypted value is malformed or was produced by an incompatible encryptor.");
@@ -109,6 +112,19 @@ namespace Socigy.OpenSource.DB.Core.Encryption
         {
             using (var hmac = new HMACSHA256(masterKey))
                 return hmac.ComputeHash(Encoding.UTF8.GetBytes(label)); // 32-byte sub-key
+        }
+
+        /// <summary>
+        /// Zeroes the derived key material so it does not linger in managed memory after the encryptor is no
+        /// longer needed. (CryptographicOperations.ZeroMemory is net5+; Array.Clear is the netstandard2.0
+        /// equivalent.) After disposal, Encrypt/Decrypt throw <see cref="ObjectDisposedException"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            Array.Clear(_encKey, 0, _encKey.Length);
+            Array.Clear(_macKey, 0, _macKey.Length);
+            _disposed = true;
         }
 
         // Constant-time compare of expectedMac against buffer[offset .. offset+32). (CryptographicOperations

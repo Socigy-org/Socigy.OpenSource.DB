@@ -113,6 +113,19 @@ namespace Socigy.OpenSource.DB.UnitTests
             Assert.Throws<ArgumentException>(() => new AesFieldEncryptor(new byte[8]));
         }
 
+        [Test]
+        public void Disposed_encryptor_zeroes_keys_and_refuses_use()
+        {
+            var enc = new AesFieldEncryptor(NewKey());
+            byte[] cipher = enc.Encrypt(new byte[] { 1, 2, 3 });
+
+            enc.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => enc.Encrypt(new byte[] { 1 }));
+            Assert.Throws<ObjectDisposedException>(() => enc.Decrypt(cipher));
+            Assert.DoesNotThrow(() => enc.Dispose()); // idempotent
+        }
+
         // ── End-to-end via FieldCrypto + ambient holder ─────────────────────────────
         [Test]
         public void FieldCrypto_encrypts_and_decrypts_through_ambient_encryptor()
