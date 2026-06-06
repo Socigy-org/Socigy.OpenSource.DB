@@ -26,6 +26,11 @@ namespace Socigy.OpenSource.DB.HashiCorp
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger;
             _client = VaultClientFactory.Create(options);
+
+            if (Internal.VaultSecurity.IsInsecureRemote(options.Address))
+                _logger?.LogWarning(
+                    "Vault address '{Address}' uses plaintext HTTP to a non-loopback host; tokens, keys and " +
+                    "leased credentials will be sent unencrypted. Use https://.", options.Address);
         }
 
         /// <summary>The current client. Always read through this so callers pick up a post-relogin swap.</summary>
