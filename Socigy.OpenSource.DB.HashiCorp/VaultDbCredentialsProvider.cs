@@ -24,6 +24,11 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private readonly ILogger? _logger;
         private readonly ConcurrentDictionary<string, string> _cache = new ConcurrentDictionary<string, string>();
 
+        // Smallest lease duration (seconds) observed in the most recent refresh round; drives the renewal
+        // schedule so we renew before the shortest-lived credential expires. -1 until the first lease.
+        private volatile int _minLeaseSeconds = -1;
+        internal double? MinLeaseSeconds => _minLeaseSeconds > 0 ? _minLeaseSeconds : (double?)null;
+
         public VaultDbCredentialsProvider(IVaultClient client, VaultCredentialsOptions options, ILogger? logger = null)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
@@ -58,6 +63,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 // Build via DbConnectionStringBuilder so special characters in the leased password are escaped.
                 _cache[database] = Internal.VaultConnectionString.Compose(_options.BaseConnectionString, username, password);
 
+                // Track the shortest lease seen this round so renewal can be scheduled off the real TTL.
+                int lease = secret.LeaseDurationSeconds;
+                if (lease > 0)
+                {
+                    int current = _minLeaseSeconds;
+                    if (current < 0 || lease < current) _minLeaseSeconds = lease;
+                }
+
                 activity?.SetTag("vault.lease.duration_s", secret.LeaseDurationSeconds);
                 _logger?.LogInformation(
                     "Leased Vault DB credentials for '{Database}' (role '{Role}', user '{User}', lease {Lease}s)",
@@ -74,6 +87,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
         /// <summary>Refreshes credentials for every configured database. Used by the background renewal service.</summary>
         public async Task RefreshAllAsync(CancellationToken cancellationToken = default)
         {
+            _minLeaseSeconds = -1; // recompute the shortest lease for this round
             foreach (var database in _options.DatabaseRoles.Keys)
             {
                 if (cancellationToken.IsCancellationRequested) break;

@@ -82,6 +82,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private readonly VaultDbCredentialsProvider _provider;
         private readonly ILogger<VaultCredentialsRenewalService>? _logger;
         private Timer? _timer;
+        private volatile bool _stopped;
 
         public VaultCredentialsRenewalService(VaultDbCredentialsProvider provider, ILogger<VaultCredentialsRenewalService>? logger = null)
         {
@@ -92,29 +93,43 @@ namespace Socigy.OpenSource.DB.HashiCorp
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await _provider.RefreshAllAsync(cancellationToken).ConfigureAwait(false);
+            // One-shot timer re-armed after each renewal, so the schedule tracks the actual lease TTL rather
+            // than a fixed interval that could be longer than the lease (which would let credentials expire).
+            _timer = new Timer(async _ => await RenewTickAsync().ConfigureAwait(false), null,
+                Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            ScheduleNext();
+        }
 
-            var interval = _provider.Options.RefreshInterval;
-            if (interval > TimeSpan.Zero)
+        private void ScheduleNext()
+        {
+            if (_stopped) return;
+            var delay = Internal.VaultRenewal.NextDelay(_provider.MinLeaseSeconds, _provider.Options.RefreshInterval);
+            _logger?.LogInformation("Next Vault DB credential renewal in {Delay}.", delay);
+            try { _timer?.Change(delay, Timeout.InfiniteTimeSpan); }
+            catch (ObjectDisposedException) { /* stopping */ }
+        }
+
+        private async Task RenewTickAsync()
+        {
+            try
             {
-                _timer = new Timer(async _ =>
-                {
-                    try
-                    {
-                        _logger?.LogDebug("Renewing Vault DB credentials…");
-                        await _provider.RefreshAllAsync().ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Keep serving the last good credentials until the next tick.
-                        _logger?.LogWarning(ex, "Vault DB credential renewal failed; keeping previous credentials.");
-                    }
-                }, null, interval, interval);
-                _logger?.LogInformation("Vault DB credential renewal scheduled every {Interval}.", interval);
+                _logger?.LogDebug("Renewing Vault DB credentials…");
+                await _provider.RefreshAllAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Keep serving the last good credentials until the next attempt.
+                _logger?.LogWarning(ex, "Vault DB credential renewal failed; keeping previous credentials.");
+            }
+            finally
+            {
+                ScheduleNext();
             }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            _stopped = true;
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
             return Task.CompletedTask;
         }
