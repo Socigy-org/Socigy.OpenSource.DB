@@ -62,6 +62,16 @@ namespace Socigy.OpenSource.DB.UnitTests
             Assert.Throws<NotSupportedException>(() => FieldValueCodec.Encode(new object(), typeof(object)));
         }
 
+        [Test]
+        public void Codec_encodes_numbers_little_endian_for_portable_format()
+        {
+            // The on-disk format must be fixed (little-endian), not host-dependent, so ciphertext is portable.
+            Assert.That(FieldValueCodec.Encode(0x01020304, typeof(int)),
+                Is.EqualTo(new byte[] { 0x04, 0x03, 0x02, 0x01 }));
+            Assert.That(FieldValueCodec.Encode((long)0x0102030405060708, typeof(long)),
+                Is.EqualTo(new byte[] { 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01 }));
+        }
+
         private static void AssertRoundTrip(object value, Type type)
         {
             byte[] bytes = FieldValueCodec.Encode(value, type);
