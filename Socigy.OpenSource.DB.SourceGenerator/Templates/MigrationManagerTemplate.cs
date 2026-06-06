@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class MigrationManagerTemplate : MigrationManagerTemplateBase {
         
         
-        #line 197 "MigrationManagerTemplate.tt"
+        #line 213 "MigrationManagerTemplate.tt"
 
     public string DatabaseName { get; set; }
     public string BaseNamespace { get; set; }
@@ -72,41 +72,43 @@ namespace ");
             // Migration SQL strings (UpSql/DownSql) can be large; this keeps them
             // out of memory until a migration is about to be applied, and GC can
             // collect them immediately after.
-            private static readonly Func<ILocalMigration>[] _factoriesOrderedDesc =
+            // Declaration order here is irrelevant — the real apply order is resolved at class init by
+            // following the PreviousId chain, which is robust to non-sortable / same-minute ids.
+            private static readonly Func<ILocalMigration>[] _allFactories =
             [
     ");
             
             #line default
             #line hidden
             
-            #line 27 "MigrationManagerTemplate.tt"
+            #line 29 "MigrationManagerTemplate.tt"
 
-                foreach (var migrationName in MigrationClassNames.OrderByDescending(x => x))
+                foreach (var migrationName in MigrationClassNames)
                 {
     
             
             #line default
             #line hidden
             
-            #line 31 "MigrationManagerTemplate.tt"
+            #line 33 "MigrationManagerTemplate.tt"
             this.Write("          static () => new ");
             
             #line default
             #line hidden
             
-            #line 31 "MigrationManagerTemplate.tt"
+            #line 33 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( migrationName ));
             
             #line default
             #line hidden
             
-            #line 31 "MigrationManagerTemplate.tt"
+            #line 33 "MigrationManagerTemplate.tt"
             this.Write("(),\r\n    ");
             
             #line default
             #line hidden
             
-            #line 32 "MigrationManagerTemplate.tt"
+            #line 34 "MigrationManagerTemplate.tt"
 
                 }
     
@@ -114,44 +116,45 @@ namespace ");
             #line default
             #line hidden
             
-            #line 35 "MigrationManagerTemplate.tt"
-            this.Write(@"            ];
-
-            // IDs and index map built once at class init. Each migration is
-            // instantiated briefly to read its Id, then released.
-            private static readonly string[] _idsOrderedDesc;
-            private static readonly Dictionary<string, int> _idToIndex;
-
-            static MigrationManager()
-            {
-                _idsOrderedDesc = new string[_factoriesOrderedDesc.Length];
-                _idToIndex = new Dictionary<string, int>(_factoriesOrderedDesc.Length);
-                for (int i = 0; i < _factoriesOrderedDesc.Length; i++)
-                {
-                    var id = _factoriesOrderedDesc[i]().Id;
-                    _idsOrderedDesc[i] = id;
-                    _idToIndex[id] = i;
-                }
-            }
-
-            // IMigrationManager.LocalMigrations — materialises on demand (rarely called).
-            public Dictionary<string, ILocalMigration> LocalMigrations =>
-                _idToIndex.ToDictionary(kvp => kvp.Key, kvp => _factoriesOrderedDesc[kvp.Value]());
-
-            private readonly ILogger _Logger;
-            private readonly IDbConnectionFactory _ConnectionFactory;
-            public MigrationManager(ILogger<MigrationManager> logger, [FromKeyedServices(""");
+            #line 37 "MigrationManagerTemplate.tt"
+            this.Write("            ];\r\n\r\n            // Newest-first after chain resolution, with the ma" +
+                    "tching id list and id->index map.\r\n            private static readonly Func<ILoc" +
+                    "alMigration>[] _factoriesOrderedDesc;\r\n            private static readonly strin" +
+                    "g[] _idsOrderedDesc;\r\n            private static readonly Dictionary<string, int" +
+                    "> _idToIndex;\r\n\r\n            static MigrationManager()\r\n            {\r\n         " +
+                    "       var byId = new Dictionary<string, Func<ILocalMigration>>(_allFactories.Le" +
+                    "ngth);\r\n                var chain = new List<(string, string?)>(_allFactories.Le" +
+                    "ngth);\r\n                foreach (var factory in _allFactories)\r\n                " +
+                    "{\r\n                    var migration = factory();\r\n                    byId[migr" +
+                    "ation.Id] = factory;\r\n                    chain.Add((migration.Id, migration.Pre" +
+                    "viousId));\r\n                }\r\n\r\n                // Oldest -> newest by Previous" +
+                    "Id chain; throws loudly on a broken/forked chain.\r\n                var ascending" +
+                    " = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.OrderByChain(ch" +
+                    "ain);\r\n                int count = ascending.Count;\r\n                _factoriesO" +
+                    "rderedDesc = new Func<ILocalMigration>[count];\r\n                _idsOrderedDesc " +
+                    "= new string[count];\r\n                _idToIndex = new Dictionary<string, int>(c" +
+                    "ount);\r\n                for (int i = 0; i < count; i++)\r\n                {\r\n    " +
+                    "                var id = ascending[count - 1 - i]; // newest first\r\n            " +
+                    "        _factoriesOrderedDesc[i] = byId[id];\r\n                    _idsOrderedDes" +
+                    "c[i] = id;\r\n                    _idToIndex[id] = i;\r\n                }\r\n        " +
+                    "    }\r\n\r\n            // IMigrationManager.LocalMigrations — materialises on dema" +
+                    "nd (rarely called).\r\n            public Dictionary<string, ILocalMigration> Loca" +
+                    "lMigrations =>\r\n                _idToIndex.ToDictionary(kvp => kvp.Key, kvp => _" +
+                    "factoriesOrderedDesc[kvp.Value]());\r\n\r\n            private readonly ILogger _Log" +
+                    "ger;\r\n            private readonly IDbConnectionFactory _ConnectionFactory;\r\n   " +
+                    "         public MigrationManager(ILogger<MigrationManager> logger, [FromKeyedSer" +
+                    "vices(\"");
             
             #line default
             #line hidden
             
-            #line 60 "MigrationManagerTemplate.tt"
+            #line 76 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 60 "MigrationManagerTemplate.tt"
+            #line 76 "MigrationManagerTemplate.tt"
             this.Write("\")] IDbConnectionFactory connectionFactory)\r\n            {\r\n                _Logg" +
                     "er = logger;\r\n                _ConnectionFactory = connectionFactory;\r\n         " +
                     "   }\r\n\r\n            public Task EnsureLatestVersion()\r\n            {\r\n          " +
@@ -181,13 +184,13 @@ namespace ");
             #line default
             #line hidden
             
-            #line 102 "MigrationManagerTemplate.tt"
+            #line 118 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 102 "MigrationManagerTemplate.tt"
+            #line 118 "MigrationManagerTemplate.tt"
             this.Write(@" is already at version: {migration.Id}"");
                     return;
                 }
@@ -212,25 +215,25 @@ namespace ");
             #line default
             #line hidden
             
-            #line 121 "MigrationManagerTemplate.tt"
+            #line 137 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 121 "MigrationManagerTemplate.tt"
+            #line 137 "MigrationManagerTemplate.tt"
             this.Write(".Migration.InsertAsync(new ");
             
             #line default
             #line hidden
             
-            #line 121 "MigrationManagerTemplate.tt"
+            #line 137 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 121 "MigrationManagerTemplate.tt"
+            #line 137 "MigrationManagerTemplate.tt"
             this.Write(@".Migration
                             {
                                 HumanId = migToApply.Id,
@@ -257,25 +260,25 @@ namespace ");
             #line default
             #line hidden
             
-            #line 142 "MigrationManagerTemplate.tt"
+            #line 158 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 142 "MigrationManagerTemplate.tt"
+            #line 158 "MigrationManagerTemplate.tt"
             this.Write(".Migration.InsertAsync(new ");
             
             #line default
             #line hidden
             
-            #line 142 "MigrationManagerTemplate.tt"
+            #line 158 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 142 "MigrationManagerTemplate.tt"
+            #line 158 "MigrationManagerTemplate.tt"
             this.Write(".Migration\r\n                            {\r\n                                HumanI" +
                     "d = migToApply.Id,\r\n                                AppliedAt = DateTime.UtcNow," +
                     "\r\n                                ExecutedBy = $\"{Environment.UserName} - {Envir" +
@@ -301,13 +304,13 @@ namespace ");
             #line default
             #line hidden
             
-            #line 174 "MigrationManagerTemplate.tt"
+            #line 190 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 174 "MigrationManagerTemplate.tt"
+            #line 190 "MigrationManagerTemplate.tt"
             this.Write(@".Migration.TableName + ""\""')"";
                         var exists = await probe.ExecuteScalarAsync();
                         if (exists is null || exists is DBNull)
@@ -319,13 +322,13 @@ namespace ");
             #line default
             #line hidden
             
-            #line 180 "MigrationManagerTemplate.tt"
+            #line 196 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 180 "MigrationManagerTemplate.tt"
+            #line 196 "MigrationManagerTemplate.tt"
             this.Write(@".Migration.Query()
                         .WithConnection(connection)
                         .OrderByDesc(x => new object[] { x.AppliedAt })

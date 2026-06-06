@@ -22,10 +22,12 @@ namespace <#= BaseNamespace #>
             // Migration SQL strings (UpSql/DownSql) can be large; this keeps them
             // out of memory until a migration is about to be applied, and GC can
             // collect them immediately after.
-            private static readonly Func<ILocalMigration>[] _factoriesOrderedDesc =
+            // Declaration order here is irrelevant — the real apply order is resolved at class init by
+            // following the PreviousId chain, which is robust to non-sortable / same-minute ids.
+            private static readonly Func<ILocalMigration>[] _allFactories =
             [
     <#
-                foreach (var migrationName in MigrationClassNames.OrderByDescending(x => x))
+                foreach (var migrationName in MigrationClassNames)
                 {
     #>          static () => new <#= migrationName #>(),
     <#
@@ -33,18 +35,32 @@ namespace <#= BaseNamespace #>
     #>
             ];
 
-            // IDs and index map built once at class init. Each migration is
-            // instantiated briefly to read its Id, then released.
+            // Newest-first after chain resolution, with the matching id list and id->index map.
+            private static readonly Func<ILocalMigration>[] _factoriesOrderedDesc;
             private static readonly string[] _idsOrderedDesc;
             private static readonly Dictionary<string, int> _idToIndex;
 
             static MigrationManager()
             {
-                _idsOrderedDesc = new string[_factoriesOrderedDesc.Length];
-                _idToIndex = new Dictionary<string, int>(_factoriesOrderedDesc.Length);
-                for (int i = 0; i < _factoriesOrderedDesc.Length; i++)
+                var byId = new Dictionary<string, Func<ILocalMigration>>(_allFactories.Length);
+                var chain = new List<(string, string?)>(_allFactories.Length);
+                foreach (var factory in _allFactories)
                 {
-                    var id = _factoriesOrderedDesc[i]().Id;
+                    var migration = factory();
+                    byId[migration.Id] = factory;
+                    chain.Add((migration.Id, migration.PreviousId));
+                }
+
+                // Oldest -> newest by PreviousId chain; throws loudly on a broken/forked chain.
+                var ascending = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.OrderByChain(chain);
+                int count = ascending.Count;
+                _factoriesOrderedDesc = new Func<ILocalMigration>[count];
+                _idsOrderedDesc = new string[count];
+                _idToIndex = new Dictionary<string, int>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    var id = ascending[count - 1 - i]; // newest first
+                    _factoriesOrderedDesc[i] = byId[id];
                     _idsOrderedDesc[i] = id;
                     _idToIndex[id] = i;
                 }

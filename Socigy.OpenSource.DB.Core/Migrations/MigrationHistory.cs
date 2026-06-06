@@ -1,0 +1,86 @@
+using System;
+using System.Collections.Generic;
+
+namespace Socigy.OpenSource.DB.Core.Migrations
+{
+#nullable enable
+    /// <summary>
+    /// Pure helpers for reasoning about migration order and applied state. Kept free of any database or
+    /// generated-code dependency so the logic is unit-testable in isolation.
+    /// </summary>
+    public static class MigrationHistory
+    {
+        /// <summary>
+        /// Orders migrations oldest-&gt;newest by following the <c>PreviousId</c> chain rather than by sorting
+        /// their ids. Id-sorting is fragile: ids are minute-granularity timestamps, so two migrations created
+        /// in the same minute sort arbitrarily, and a user-named or non-timestamped id may not sort at all.
+        /// The chain is the source of truth.
+        /// </summary>
+        /// <param name="migrations">(Id, PreviousId) for every local migration. PreviousId is null for the first.</param>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the chain is not a single, complete line: duplicate ids, more than one root, a missing
+        /// predecessor, a fork, or a cycle. A broken chain must fail loudly rather than apply in a guessed order.
+        /// </exception>
+        public static IReadOnlyList<string> OrderByChain(IEnumerable<(string Id, string? PreviousId)> migrations)
+        {
+            if (migrations == null) throw new ArgumentNullException(nameof(migrations));
+
+            var prevOf = new Dictionary<string, string?>();
+            var nextOf = new Dictionary<string, string>();
+            foreach (var (id, previousId) in migrations)
+            {
+                if (id == null) throw new InvalidOperationException("A migration has a null Id.");
+                if (prevOf.ContainsKey(id))
+                    throw new InvalidOperationException($"Duplicate migration id '{id}'.");
+                prevOf[id] = previousId;
+            }
+
+            if (prevOf.Count == 0) return Array.Empty<string>();
+
+            // The one true root is the migration with no predecessor (PreviousId == null). A non-null
+            // PreviousId that points outside the set is a missing predecessor — that node ends up
+            // unreachable and is caught by the completeness check below.
+            string? root = null;
+            foreach (var kvp in prevOf)
+            {
+                if (kvp.Value == null)
+                {
+                    if (root != null)
+                        throw new InvalidOperationException(
+                            $"Migration chain has more than one starting point ('{root}' and '{kvp.Key}'). " +
+                            "Exactly one migration may have a null PreviousId.");
+                    root = kvp.Key;
+                }
+                else
+                {
+                    if (nextOf.ContainsKey(kvp.Value))
+                        throw new InvalidOperationException(
+                            $"Migrations '{nextOf[kvp.Value]}' and '{kvp.Key}' both follow '{kvp.Value}' (forked chain).");
+                    nextOf[kvp.Value] = kvp.Key;
+                }
+            }
+
+            if (root == null)
+                throw new InvalidOperationException(
+                    "Migration chain has no starting point: every migration references a PreviousId. " +
+                    "The first migration is missing, or there is a cycle.");
+
+            var ordered = new List<string>(prevOf.Count);
+            var seen = new HashSet<string>();
+            for (string? cursor = root; cursor != null; cursor = nextOf.TryGetValue(cursor, out var next) ? next : null)
+            {
+                if (!seen.Add(cursor))
+                    throw new InvalidOperationException($"Cycle detected in migration chain at '{cursor}'.");
+                ordered.Add(cursor);
+            }
+
+            if (ordered.Count != prevOf.Count)
+                throw new InvalidOperationException(
+                    "Migration chain is broken: some migrations are not reachable from the start via PreviousId. " +
+                    "A migration may be missing or its PreviousId may be wrong.");
+
+            return ordered;
+        }
+    }
+#nullable disable
+}
