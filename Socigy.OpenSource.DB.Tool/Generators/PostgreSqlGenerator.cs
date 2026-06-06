@@ -19,11 +19,36 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         public IReadOnlyList<string> DestructiveOperations => _destructive;
         private readonly List<string> _destructive = new List<string>();
 
-        private string Destructive(string detail, List<string> sink)
+        /// <summary>Comment prefix for a type change whose in-place cast may fail or lose data (narrowing).</summary>
+        public const string LossyMarker = "-- [SOCIGY:LOSSY]";
+
+        private void Destructive(string detail, List<string> sink)
         {
             _destructive.Add(detail);
             sink.Add($"{DestructiveMarker} {detail}");
-            return null!; // marker line already added to sink
+        }
+
+        private void Lossy(string detail, List<string> sink)
+        {
+            _destructive.Add(detail);
+            sink.Add($"{LossyMarker} {detail}");
+        }
+
+        // Known-safe widenings within a type family — the in-place cast cannot lose data. Anything else
+        // (narrowing, or a conversion between unrelated families) is flagged for review.
+        private static bool IsSafeWidening(string fromType, string toType)
+        {
+            string f = (fromType ?? "").Trim().ToLowerInvariant();
+            string t = (toType ?? "").Trim().ToLowerInvariant();
+            if (f == t) return true;
+            if (t == "text") return true; // text has no length limit
+
+            int IntRank(string s) => s switch { "smallint" => 1, "integer" => 2, "bigint" => 3, _ => 0 };
+            int FloatRank(string s) => s switch { "real" => 1, "double precision" => 2, _ => 0 };
+
+            if (IntRank(f) > 0 && IntRank(t) > 0) return IntRank(t) >= IntRank(f);
+            if (FloatRank(f) > 0 && FloatRank(t) > 0) return FloatRank(t) >= FloatRank(f);
+            return false;
         }
 
         public (IEnumerable<string> Up, IEnumerable<string> Down) Generate(SchemaDiff diff, bool isFirstMigration)
@@ -219,8 +244,14 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     {
                         case "Type":
                             var newType = mod.NewColumn.DatabaseType;
-                            up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} TYPE {newType} USING {colName}::{newType};");
                             var oldType = mod.OldColumn.DatabaseType;
+                            if (!IsSafeWidening(oldType, newType))
+                                Lossy($"Casts \"{alteration.Table.Name}\".\"{mod.NewColumn.Name}\" {oldType} -> {newType} " +
+                                      "in place; the cast may fail or lose data on existing rows.", up);
+                            up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} TYPE {newType} USING {colName}::{newType};");
+                            if (!IsSafeWidening(newType, oldType))
+                                Lossy($"Casts \"{alteration.Table.Name}\".\"{mod.NewColumn.Name}\" {newType} -> {oldType} " +
+                                      "in place; the cast may fail or lose data on existing rows.", down);
                             down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} TYPE {oldType} USING {colName}::{oldType};");
                             break;
 
