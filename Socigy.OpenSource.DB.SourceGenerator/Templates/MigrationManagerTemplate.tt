@@ -192,12 +192,26 @@ namespace <#= BaseNamespace #>
                             return null;
                     }
 
-                    var versions = <#= DatabaseName #>.Migration.Query()
-                        .WithConnection(connection)
-                        .OrderByDesc(x => new object[] { x.AppliedAt })
-                        .ExecuteAsync();
+                    // Read the full history and resolve the current version accounting for rollbacks: a DOWN
+                    // migration records an IsRollback row, so simply taking the latest row by timestamp would
+                    // report a rolled-back migration as still current.
+                    var rows = new System.Collections.Generic.List<<#= DatabaseName #>.Migration>();
+                    await foreach (var row in <#= DatabaseName #>.Migration.Query().WithConnection(connection).ExecuteAsync())
+                        rows.Add(row);
 
-                    return await versions.FirstAsync();
+                    var records = new System.Collections.Generic.List<(string, System.DateTime, bool)>(rows.Count);
+                    foreach (var row in rows)
+                        records.Add((row.HumanId, row.AppliedAt, row.IsRollback));
+
+                    var currentId = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveCurrentVersion(records);
+                    if (currentId == null)
+                        return null;
+
+                    <#= DatabaseName #>.Migration? current = null;
+                    foreach (var row in rows)
+                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.AppliedAt >= current.AppliedAt))
+                            current = row;
+                    return current;
                 }
                 catch (Exception)
                 {

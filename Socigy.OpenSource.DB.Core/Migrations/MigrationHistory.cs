@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Socigy.OpenSource.DB.Core.Migrations
 {
@@ -80,6 +81,41 @@ namespace Socigy.OpenSource.DB.Core.Migrations
                     "A migration may be missing or its PreviousId may be wrong.");
 
             return ordered;
+        }
+
+        /// <summary>
+        /// Resolves which migration the database is currently at from its version-history rows, honoring
+        /// rollbacks. A DOWN migration records a row with <c>IsRollback = true</c> for the migration it
+        /// undoes; taking the most recent row by timestamp (the old behavior) would wrongly report a
+        /// rolled-back migration as current. Here a rollback removes its migration from the applied set, so
+        /// the result is the newest migration that is actually applied — or <see langword="null"/> if none.
+        /// </summary>
+        public static string? ResolveCurrentVersion(IEnumerable<(string HumanId, DateTime AppliedAt, bool IsRollback)> records)
+        {
+            if (records == null) throw new ArgumentNullException(nameof(records));
+
+            var ordered = records.OrderBy(r => r.AppliedAt).ToList();
+
+            var applied = new HashSet<string>();
+            foreach (var r in ordered)
+            {
+                if (r.IsRollback) applied.Remove(r.HumanId);
+                else applied.Add(r.HumanId);
+            }
+            if (applied.Count == 0) return null;
+
+            // Among currently-applied migrations, the current version is the one most recently applied.
+            string? current = null;
+            DateTime best = DateTime.MinValue;
+            foreach (var r in ordered)
+            {
+                if (!r.IsRollback && applied.Contains(r.HumanId) && (current == null || r.AppliedAt >= best))
+                {
+                    current = r.HumanId;
+                    best = r.AppliedAt;
+                }
+            }
+            return current;
         }
     }
 #nullable disable

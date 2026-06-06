@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class MigrationManagerTemplate : MigrationManagerTemplateBase {
         
         
-        #line 213 "MigrationManagerTemplate.tt"
+        #line 227 "MigrationManagerTemplate.tt"
 
     public string DatabaseName { get; set; }
     public string BaseNamespace { get; set; }
@@ -317,24 +317,61 @@ namespace ");
                             return null;
                     }
 
-                    var versions = ");
+                    // Read the full history and resolve the current version accounting for rollbacks: a DOWN
+                    // migration records an IsRollback row, so simply taking the latest row by timestamp would
+                    // report a rolled-back migration as still current.
+                    var rows = new System.Collections.Generic.List<");
             
             #line default
             #line hidden
             
-            #line 196 "MigrationManagerTemplate.tt"
+            #line 199 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 196 "MigrationManagerTemplate.tt"
-            this.Write(@".Migration.Query()
-                        .WithConnection(connection)
-                        .OrderByDesc(x => new object[] { x.AppliedAt })
-                        .ExecuteAsync();
+            #line 199 "MigrationManagerTemplate.tt"
+            this.Write(".Migration>();\r\n                    await foreach (var row in ");
+            
+            #line default
+            #line hidden
+            
+            #line 200 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 200 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.Query().WithConnection(connection).ExecuteAsync())
+                        rows.Add(row);
 
-                    return await versions.FirstAsync();
+                    var records = new System.Collections.Generic.List<(string, System.DateTime, bool)>(rows.Count);
+                    foreach (var row in rows)
+                        records.Add((row.HumanId, row.AppliedAt, row.IsRollback));
+
+                    var currentId = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveCurrentVersion(records);
+                    if (currentId == null)
+                        return null;
+
+                    ");
+            
+            #line default
+            #line hidden
+            
+            #line 211 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 211 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration? current = null;
+                    foreach (var row in rows)
+                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.AppliedAt >= current.AppliedAt))
+                            current = row;
+                    return current;
                 }
                 catch (Exception)
                 {

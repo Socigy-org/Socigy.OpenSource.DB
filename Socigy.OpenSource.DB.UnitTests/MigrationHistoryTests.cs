@@ -70,5 +70,50 @@ namespace Socigy.OpenSource.DB.UnitTests
         {
             Assert.Throws<InvalidOperationException>(() => Order(("a", null), ("a", null)));
         }
+
+        // ── ResolveCurrentVersion (rollback-aware) ──────────────────────────────────
+        private static readonly DateTime T0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        private static (string, DateTime, bool) Rec(string id, int minute, bool rollback) => (id, T0.AddMinutes(minute), rollback);
+
+        [Test]
+        public void Current_version_is_the_latest_applied()
+        {
+            var current = MigrationHistory.ResolveCurrentVersion(new[] { Rec("a", 1, false), Rec("b", 2, false) });
+            Assert.That(current, Is.EqualTo("b"));
+        }
+
+        [Test]
+        public void Rolled_back_migration_is_not_reported_as_current()
+        {
+            // Apply a, apply b, then roll back b -> current must be a (the old max-AppliedAt logic returned b).
+            var current = MigrationHistory.ResolveCurrentVersion(new[]
+            {
+                Rec("a", 1, false), Rec("b", 2, false), Rec("b", 3, true),
+            });
+            Assert.That(current, Is.EqualTo("a"));
+        }
+
+        [Test]
+        public void Reapplied_migration_is_current_again()
+        {
+            var current = MigrationHistory.ResolveCurrentVersion(new[]
+            {
+                Rec("a", 1, false), Rec("a", 2, true), Rec("a", 3, false),
+            });
+            Assert.That(current, Is.EqualTo("a"));
+        }
+
+        [Test]
+        public void All_rolled_back_yields_null()
+        {
+            var current = MigrationHistory.ResolveCurrentVersion(new[] { Rec("a", 1, false), Rec("a", 2, true) });
+            Assert.That(current, Is.Null);
+        }
+
+        [Test]
+        public void No_history_yields_null()
+        {
+            Assert.That(MigrationHistory.ResolveCurrentVersion(Array.Empty<(string, DateTime, bool)>()), Is.Null);
+        }
     }
 }
