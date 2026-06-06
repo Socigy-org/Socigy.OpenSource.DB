@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Socigy.OpenSource.DB.Core.Diagnostics;
 using VaultSharp;
 
 namespace Socigy.OpenSource.DB.HashiCorp
@@ -49,6 +51,8 @@ namespace Socigy.OpenSource.DB.HashiCorp
         /// </summary>
         public async Task<double?> RenewOrReloginAsync(CancellationToken cancellationToken = default)
         {
+            // Trackable by admins via the "Socigy.OpenSource.DB" ActivitySource, like the other Vault ops.
+            using var activity = SocigyDbInstrumentation.ActivitySource.StartActivity("vault.token.renew", ActivityKind.Client);
             var client = _client;
             try
             {
@@ -75,6 +79,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             }
             catch (Exception ex) when (CanRelogin)
             {
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 _logger?.LogWarning(ex, "Vault token lookup/renew failed; re-authenticating via AppRole.");
                 return await ReloginAsync().ConfigureAwait(false);
             }
@@ -82,6 +87,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
 
         private async Task<double?> ReloginAsync()
         {
+            using var activity = SocigyDbInstrumentation.ActivitySource.StartActivity("vault.token.relogin", ActivityKind.Client);
             var fresh = VaultClientFactory.Create(_options); // performs a fresh AppRole login on first use
             _client = fresh;                                  // atomic swap; readers pick it up next call
             var info = (await fresh.V1.Auth.Token.LookupSelfAsync().ConfigureAwait(false)).Data;
