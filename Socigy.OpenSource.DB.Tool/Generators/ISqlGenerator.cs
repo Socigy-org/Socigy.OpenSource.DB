@@ -14,6 +14,9 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         /// <returns>(upSQL[], downSql[])</returns>
         (IEnumerable<string> Up, IEnumerable<string> Down) Generate(SchemaDiff diff, bool isFirstMigration);
 
+        /// <summary>Human-readable data-losing operations produced by the most recent <see cref="Generate"/> call.</summary>
+        IReadOnlyList<string> DestructiveOperations { get; }
+
         string GetDatabaseType(string csharpType);
     }
 }

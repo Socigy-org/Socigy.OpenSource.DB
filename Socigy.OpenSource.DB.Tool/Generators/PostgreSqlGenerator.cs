@@ -9,15 +9,36 @@ namespace Socigy.OpenSource.DB.Tool.Generators
 {
     public class PostgreSqlGenerator : ISqlGenerator
     {
+        /// <summary>Comment prefix prepended to any data-losing statement so it is visible in review and greppable.</summary>
+        public const string DestructiveMarker = "-- [SOCIGY:DESTRUCTIVE]";
+
+        /// <summary>
+        /// Destructive operations emitted by the last <see cref="Generate"/> call (human-readable). The
+        /// orchestrator surfaces these to the user so a data-losing migration is never produced silently.
+        /// </summary>
+        public IReadOnlyList<string> DestructiveOperations => _destructive;
+        private readonly List<string> _destructive = new List<string>();
+
+        private string Destructive(string detail, List<string> sink)
+        {
+            _destructive.Add(detail);
+            sink.Add($"{DestructiveMarker} {detail}");
+            return null!; // marker line already added to sink
+        }
+
         public (IEnumerable<string> Up, IEnumerable<string> Down) Generate(SchemaDiff diff, bool isFirstMigration)
         {
             var upCommands = new List<string>();
             var downCommands = new List<string>();
+            _destructive.Clear();
 
             // --- UP: 1. Drop Removed Tables ---
             // --- DOWN: 5. Re-Create Removed Tables & Restore Data ---
             foreach (var table in diff.RemovedTables)
             {
+                Destructive($"Drops table \"{table.Name}\" and ALL its rows (CASCADE also drops dependent " +
+                            "objects). The DOWN script restores the schema and seed data only — runtime rows " +
+                            "are NOT recoverable.", upCommands);
                 upCommands.Add($"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
 
                 // Down: Recreate Schema
@@ -159,6 +180,8 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             // 2. Removed Columns
             foreach (var c in alteration.RemovedColumns)
             {
+                Destructive($"Drops column \"{alteration.Table.Name}\".\"{c.Name}\"; its data cannot be " +
+                            "recovered by the DOWN script.", up);
                 up.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
                 down.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c)};");
             }

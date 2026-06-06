@@ -37,6 +37,14 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
 
             var (upScript, downScript) = sqlGenerator.Generate(diff, firstMigration);
 
+            if (sqlGenerator.DestructiveOperations.Count > 0)
+            {
+                Logger.Warning($"{Configuration.BaseNamespace}: This migration contains DESTRUCTIVE, data-losing operations:");
+                foreach (var op in sqlGenerator.DestructiveOperations)
+                    Logger.Warning($"  - {op}");
+                Logger.Warning("Review the generated migration (search for [SOCIGY:DESTRUCTIVE]) before applying it.");
+            }
+
 #if IsWindows
             string? migrationName = null;
             RunOnStaThread(() => migrationName = UI.MigrationNameInputDialog.Show($"{Configuration.BaseNamespace}: Please choose name for the new DB migration", "DB Migration Name:"));
