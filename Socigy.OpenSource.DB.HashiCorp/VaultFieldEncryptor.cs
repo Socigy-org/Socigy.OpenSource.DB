@@ -23,14 +23,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
     /// </summary>
     public sealed class VaultFieldEncryptor : IFieldEncryptor
     {
-        private readonly IVaultClient _client;
+        private readonly VaultClientProvider _clients;
         private readonly VaultEncryptionOptions _options;
         private readonly ILogger? _logger;
         private volatile AesFieldEncryptor? _aes;
 
-        public VaultFieldEncryptor(IVaultClient client, VaultEncryptionOptions options, ILogger? logger = null)
+        public VaultFieldEncryptor(VaultClientProvider clients, VaultEncryptionOptions options, ILogger? logger = null)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _clients = clients ?? throw new ArgumentNullException(nameof(clients));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger;
         }
@@ -44,7 +44,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             activity?.SetTag("vault.kv.path", _options.KeySecretPath);
             try
             {
-                var secret = await _client.V1.Secrets.KeyValue.V2
+                var secret = await _clients.Client.V1.Secrets.KeyValue.V2
                     .ReadSecretAsync(path: _options.KeySecretPath, mountPoint: _options.KvMountPoint)
                     .ConfigureAwait(false);
 

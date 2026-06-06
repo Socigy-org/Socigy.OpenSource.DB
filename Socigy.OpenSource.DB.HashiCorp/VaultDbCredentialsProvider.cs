@@ -19,7 +19,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
     /// </summary>
     public sealed class VaultDbCredentialsProvider : IDbCredentialsProvider
     {
-        private readonly IVaultClient _client;
+        private readonly VaultClientProvider _clients;
         private readonly VaultCredentialsOptions _options;
         private readonly ILogger? _logger;
         private readonly ConcurrentDictionary<string, string> _cache = new ConcurrentDictionary<string, string>();
@@ -29,9 +29,9 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private volatile int _minLeaseSeconds = -1;
         internal double? MinLeaseSeconds => _minLeaseSeconds > 0 ? _minLeaseSeconds : (double?)null;
 
-        public VaultDbCredentialsProvider(IVaultClient client, VaultCredentialsOptions options, ILogger? logger = null)
+        public VaultDbCredentialsProvider(VaultClientProvider clients, VaultCredentialsOptions options, ILogger? logger = null)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _clients = clients ?? throw new ArgumentNullException(nameof(clients));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger;
         }
@@ -53,7 +53,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             activity?.SetTag("vault.database.role", role);
             try
             {
-                var secret = await _client.V1.Secrets.Database
+                var secret = await _clients.Client.V1.Secrets.Database
                     .GetCredentialsAsync(role, _options.DatabaseMountPoint)
                     .ConfigureAwait(false);
 

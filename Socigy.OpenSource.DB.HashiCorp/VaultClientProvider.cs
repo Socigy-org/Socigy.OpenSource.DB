@@ -1,0 +1,88 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using VaultSharp;
+
+namespace Socigy.OpenSource.DB.HashiCorp
+{
+#nullable enable
+    /// <summary>
+    /// Owns the <see cref="IVaultClient"/> and keeps its auth token alive. VaultSharp logs in once and caches
+    /// the token forever with no renewal, so without this the token eventually expires and every Vault call
+    /// (key fetch, credential leasing) starts failing. Renewable/periodic tokens are kept alive via
+    /// renew-self; when renewal is exhausted (max TTL) and AppRole credentials are configured, a fresh login
+    /// obtains a new token and the client is swapped. A static, non-renewable token cannot be saved — that is
+    /// logged loudly so the operator switches to a periodic/renewable token or AppRole.
+    /// </summary>
+    public sealed class VaultClientProvider
+    {
+        private readonly VaultConnectionOptions _options;
+        private readonly ILogger? _logger;
+        private volatile IVaultClient _client;
+
+        public VaultClientProvider(VaultConnectionOptions options, ILogger? logger = null)
+        {
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _logger = logger;
+            _client = VaultClientFactory.Create(options);
+        }
+
+        /// <summary>The current client. Always read through this so callers pick up a post-relogin swap.</summary>
+        public IVaultClient Client => _client;
+
+        /// <summary>True when we can obtain a brand-new token by logging in again (AppRole, not a static token).</summary>
+        internal bool CanRelogin =>
+            string.IsNullOrEmpty(_options.Token)
+            && !string.IsNullOrEmpty(_options.AppRoleId)
+            && !string.IsNullOrEmpty(_options.AppRoleSecretId);
+
+        /// <summary>
+        /// Renews the current token, or re-logs-in when renewal can no longer extend it. Returns the token's
+        /// remaining lifetime in seconds (used to schedule the next renewal), or <see langword="null"/> if
+        /// unknown.
+        /// </summary>
+        public async Task<double?> RenewOrReloginAsync(CancellationToken cancellationToken = default)
+        {
+            var client = _client;
+            try
+            {
+                var before = (await client.V1.Auth.Token.LookupSelfAsync().ConfigureAwait(false)).Data;
+
+                if (before.Renewable)
+                {
+                    var renewed = await client.V1.Auth.Token.RenewSelfAsync().ConfigureAwait(false);
+                    // If renew-self still extended the lifetime (true for renewable and periodic tokens until
+                    // they hit max TTL), the current token is healthy — keep it.
+                    if (renewed.LeaseDurationSeconds > before.TimeToLive)
+                        return renewed.LeaseDurationSeconds;
+                }
+
+                // Not renewable, or renewal capped at max TTL → a fresh token is required.
+                if (CanRelogin)
+                    return await ReloginAsync().ConfigureAwait(false);
+
+                _logger?.LogError(
+                    "Vault token is non-renewable or has reached its max TTL, and no AppRole credentials are " +
+                    "configured to obtain a new one. Vault access will FAIL in ~{Ttl}s. Use a periodic/renewable " +
+                    "token or AppRole auth for long-running services.", before.TimeToLive);
+                return before.TimeToLive;
+            }
+            catch (Exception ex) when (CanRelogin)
+            {
+                _logger?.LogWarning(ex, "Vault token lookup/renew failed; re-authenticating via AppRole.");
+                return await ReloginAsync().ConfigureAwait(false);
+            }
+        }
+
+        private async Task<double?> ReloginAsync()
+        {
+            var fresh = VaultClientFactory.Create(_options); // performs a fresh AppRole login on first use
+            _client = fresh;                                  // atomic swap; readers pick it up next call
+            var info = (await fresh.V1.Auth.Token.LookupSelfAsync().ConfigureAwait(false)).Data;
+            _logger?.LogInformation("Re-authenticated to Vault via AppRole; new token TTL {Ttl}s.", info.TimeToLive);
+            return info.TimeToLive;
+        }
+    }
+#nullable disable
+}

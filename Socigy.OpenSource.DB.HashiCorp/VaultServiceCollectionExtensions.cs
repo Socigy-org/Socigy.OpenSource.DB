@@ -25,12 +25,20 @@ namespace Socigy.OpenSource.DB.HashiCorp
             if (configure == null) throw new ArgumentNullException(nameof(configure));
             var options = new VaultEncryptionOptions();
             configure(options);
-            var client = VaultClientFactory.Create(options);
 
+            // Shared client provider keeps the auth token alive (renew/relogin). If both Vault features are
+            // registered they share one provider (TryAdd, first wins) — configure them with the same Vault
+            // connection/auth settings; feature-specific paths/mounts stay on each feature's own options.
+            services.TryAddSingleton(sp => new VaultClientProvider(options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
             services.AddSingleton(sp => new VaultFieldEncryptor(
-                client, options, sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+                sp.GetRequiredService<VaultClientProvider>(), options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
             services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultFieldEncryptor>());
             services.AddHostedService<VaultEncryptionPrimingService>();
+            services.AddHostedService(sp => new VaultAuthRenewalService(
+                sp.GetRequiredService<VaultClientProvider>(),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
             return services;
         }
 
@@ -44,14 +52,68 @@ namespace Socigy.OpenSource.DB.HashiCorp
             if (configure == null) throw new ArgumentNullException(nameof(configure));
             var options = new VaultCredentialsOptions();
             configure(options);
-            var client = VaultClientFactory.Create(options);
 
+            services.TryAddSingleton(sp => new VaultClientProvider(options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
             services.AddSingleton(sp => new VaultDbCredentialsProvider(
-                client, options, sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Credentials")));
+                sp.GetRequiredService<VaultClientProvider>(), options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Credentials")));
             services.TryAddSingleton<IDbCredentialsProvider>(sp => sp.GetRequiredService<VaultDbCredentialsProvider>());
             services.AddHostedService<VaultCredentialsRenewalService>();
+            services.AddHostedService(sp => new VaultAuthRenewalService(
+                sp.GetRequiredService<VaultClientProvider>(),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
             return services;
         }
+    }
+
+    /// <summary>Keeps the Vault auth token alive in the background (renew-self / AppRole relogin).</summary>
+    internal sealed class VaultAuthRenewalService : IHostedService, IDisposable
+    {
+        private readonly VaultClientProvider _clients;
+        private readonly ILogger? _logger;
+        private Timer? _timer;
+        private volatile bool _stopped;
+
+        public VaultAuthRenewalService(VaultClientProvider clients, ILogger<VaultAuthRenewalService>? logger = null)
+        {
+            _clients = clients;
+            _logger = logger;
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            _timer = new Timer(_ => _ = TickAsync(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            // First renewal shortly after startup; subsequent ones are scheduled off the real token TTL.
+            try { _timer.Change(Internal.VaultRenewal.Floor, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
+            return Task.CompletedTask;
+        }
+
+        private async Task TickAsync()
+        {
+            double? ttl = null;
+            try
+            {
+                ttl = await _clients.RenewOrReloginAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Vault token renewal failed; will retry.");
+            }
+
+            if (_stopped) return;
+            var delay = Internal.VaultRenewal.NextDelay(ttl, TimeSpan.FromMinutes(30));
+            try { _timer?.Change(delay, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            _stopped = true;
+            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            return Task.CompletedTask;
+        }
+
+        public void Dispose() => _timer?.Dispose();
     }
 
     /// <summary>Loads the encryption key from Vault at startup and installs the ambient encryptor.</summary>
