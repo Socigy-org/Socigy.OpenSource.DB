@@ -208,6 +208,12 @@ namespace <#= Namespace #>
 #>
             return __row;
         }
+
+        // IOrdinalReadable — lets the non-generic join engine reuse this fast (boxing-free, ordinals-once) path.
+        int[] global::Socigy.OpenSource.DB.Core.Interfaces.IOrdinalReadable.GetReaderOrdinals(DbDataReader reader, Dictionary<string, string>? overrides)
+            => GetColumnOrdinals(reader, overrides);
+        global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable global::Socigy.OpenSource.DB.Core.Interfaces.IOrdinalReadable.ReadByOrdinals(DbDataReader reader, int[] ordinals)
+            => ConvertFrom(reader, ordinals);
         #endregion
 
         /// <summary>Returns a new insert command builder for this instance.</summary>
@@ -221,6 +227,15 @@ namespace <#= Namespace #>
         {
             return await new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(instance)
                 .WithConnection(connection)
+                .ExecuteAsync();
+        }
+
+        /// <summary>Inserts the given instance, enlisting in the provided transaction (same unit of work).</summary>
+        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection, global::System.Data.Common.DbTransaction transaction)
+        {
+            return await new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(instance)
+                .WithConnection(connection)
+                .WithTransaction(transaction)
                 .ExecuteAsync();
         }
 

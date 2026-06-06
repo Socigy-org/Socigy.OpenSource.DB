@@ -203,11 +203,11 @@ namespace ");
                         var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($""Applying UP migration: {migToApply.Id} - {migToApply.GetType().Name}"");
 
-                        using var command = connection.CreateCommand();
-                        command.CommandText = migToApply.UpSql;
-                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, ""MIGRATE"", ct => command.ExecuteNonQueryAsync(ct));
-
-                        await ");
+                        // The schema change and its version row commit together or roll back together.
+                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
+                            connection,
+                            migToApply.UpSql,
+                            tx => ");
             
             #line default
             #line hidden
@@ -232,12 +232,12 @@ namespace ");
             
             #line 121 "MigrationManagerTemplate.tt"
             this.Write(@".Migration
-                        {
-                            HumanId = migToApply.Id,
-                            AppliedAt = DateTime.UtcNow,
-                            ExecutedBy = $""{Environment.UserName} - {Environment.MachineName}"",
-                            IsRollback = false
-                        }, connection);
+                            {
+                                HumanId = migToApply.Id,
+                                AppliedAt = DateTime.UtcNow,
+                                ExecutedBy = $""{Environment.UserName} - {Environment.MachineName}"",
+                                IsRollback = false
+                            }, connection, tx));
                         // migToApply goes out of scope here — SQL strings are GC-eligible
                     }
                 }
@@ -248,11 +248,11 @@ namespace ");
                         var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($""Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}"");
 
-                        using var command = connection.CreateCommand();
-                        command.CommandText = migToApply.DownSql;
-                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, ""MIGRATE"", ct => command.ExecuteNonQueryAsync(ct));
-
-                        await ");
+                        // The schema change and its version row commit together or roll back together.
+                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
+                            connection,
+                            migToApply.DownSql,
+                            tx => ");
             
             #line default
             #line hidden
@@ -276,26 +276,27 @@ namespace ");
             #line hidden
             
             #line 142 "MigrationManagerTemplate.tt"
-            this.Write(".Migration\r\n                        {\r\n                            HumanId = migT" +
-                    "oApply.Id,\r\n                            AppliedAt = DateTime.UtcNow,\r\n          " +
-                    "                  ExecutedBy = $\"{Environment.UserName} - {Environment.MachineNa" +
-                    "me}\",\r\n                            IsRollback = true\r\n                        }," +
-                    " connection);\r\n                    }\r\n                }\r\n            }\r\n\r\n      " +
-                    "      public async Task<ILocalMigration?> GetCurrentLocalMigrationVersion()\r\n   " +
-                    "         {\r\n                var latestVersion = await GetCurrentMigrationVersion" +
-                    "();\r\n                if (latestVersion == null || !_idToIndex.TryGetValue(latest" +
-                    "Version.HumanId, out int idx))\r\n                    return null;\r\n              " +
-                    "  return _factoriesOrderedDesc[idx]();\r\n            }\r\n\r\n            public asyn" +
-                    "c Task<IMigration?> GetCurrentMigrationVersion()\r\n            {\r\n               " +
-                    " try\r\n                {\r\n                    using var connection = _ConnectionF" +
-                    "actory.Create();\r\n                    if (connection.State != System.Data.Connec" +
-                    "tionState.Open)\r\n                        await connection.OpenAsync();\r\n\r\n      " +
-                    "              // On first run the migrations table doesn\'t exist yet. Probe with" +
-                    " to_regclass\r\n                    // (returns NULL, never throws) instead of let" +
-                    "ting the query raise 42P01 — which the\r\n                    // debugger otherwis" +
-                    "e breaks on as a first-chance exception during normal startup.\r\n                " +
-                    "    using (var probe = connection.CreateCommand())\r\n                    {\r\n     " +
-                    "                   probe.CommandText = \"SELECT to_regclass(\'\\\"\" + ");
+            this.Write(".Migration\r\n                            {\r\n                                HumanI" +
+                    "d = migToApply.Id,\r\n                                AppliedAt = DateTime.UtcNow," +
+                    "\r\n                                ExecutedBy = $\"{Environment.UserName} - {Envir" +
+                    "onment.MachineName}\",\r\n                                IsRollback = true\r\n      " +
+                    "                      }, connection, tx));\r\n                    }\r\n             " +
+                    "   }\r\n            }\r\n\r\n            public async Task<ILocalMigration?> GetCurren" +
+                    "tLocalMigrationVersion()\r\n            {\r\n                var latestVersion = awa" +
+                    "it GetCurrentMigrationVersion();\r\n                if (latestVersion == null || !" +
+                    "_idToIndex.TryGetValue(latestVersion.HumanId, out int idx))\r\n                   " +
+                    " return null;\r\n                return _factoriesOrderedDesc[idx]();\r\n           " +
+                    " }\r\n\r\n            public async Task<IMigration?> GetCurrentMigrationVersion()\r\n " +
+                    "           {\r\n                try\r\n                {\r\n                    using " +
+                    "var connection = _ConnectionFactory.Create();\r\n                    if (connectio" +
+                    "n.State != System.Data.ConnectionState.Open)\r\n                        await conn" +
+                    "ection.OpenAsync();\r\n\r\n                    // On first run the migrations table " +
+                    "doesn\'t exist yet. Probe with to_regclass\r\n                    // (returns NULL," +
+                    " never throws) instead of letting the query raise 42P01 — which the\r\n           " +
+                    "         // debugger otherwise breaks on as a first-chance exception during norm" +
+                    "al startup.\r\n                    using (var probe = connection.CreateCommand())\r" +
+                    "\n                    {\r\n                        probe.CommandText = \"SELECT to_r" +
+                    "egclass(\'\\\"\" + ");
             
             #line default
             #line hidden

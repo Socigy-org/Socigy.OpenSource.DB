@@ -113,17 +113,17 @@ namespace <#= BaseNamespace #>
                         var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($"Applying UP migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
-                        using var command = connection.CreateCommand();
-                        command.CommandText = migToApply.UpSql;
-                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "MIGRATE", ct => command.ExecuteNonQueryAsync(ct));
-
-                        await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
-                        {
-                            HumanId = migToApply.Id,
-                            AppliedAt = DateTime.UtcNow,
-                            ExecutedBy = $"{Environment.UserName} - {Environment.MachineName}",
-                            IsRollback = false
-                        }, connection);
+                        // The schema change and its version row commit together or roll back together.
+                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
+                            connection,
+                            migToApply.UpSql,
+                            tx => <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
+                            {
+                                HumanId = migToApply.Id,
+                                AppliedAt = DateTime.UtcNow,
+                                ExecutedBy = $"{Environment.UserName} - {Environment.MachineName}",
+                                IsRollback = false
+                            }, connection, tx));
                         // migToApply goes out of scope here — SQL strings are GC-eligible
                     }
                 }
@@ -134,17 +134,17 @@ namespace <#= BaseNamespace #>
                         var migToApply = _factoriesOrderedDesc[i]();
                         _Logger.LogInformation($"Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
-                        using var command = connection.CreateCommand();
-                        command.CommandText = migToApply.DownSql;
-                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "MIGRATE", ct => command.ExecuteNonQueryAsync(ct));
-
-                        await <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
-                        {
-                            HumanId = migToApply.Id,
-                            AppliedAt = DateTime.UtcNow,
-                            ExecutedBy = $"{Environment.UserName} - {Environment.MachineName}",
-                            IsRollback = true
-                        }, connection);
+                        // The schema change and its version row commit together or roll back together.
+                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
+                            connection,
+                            migToApply.DownSql,
+                            tx => <#= DatabaseName #>.Migration.InsertAsync(new <#= DatabaseName #>.Migration
+                            {
+                                HumanId = migToApply.Id,
+                                AppliedAt = DateTime.UtcNow,
+                                ExecutedBy = $"{Environment.UserName} - {Environment.MachineName}",
+                                IsRollback = true
+                            }, connection, tx));
                     }
                 }
             }
