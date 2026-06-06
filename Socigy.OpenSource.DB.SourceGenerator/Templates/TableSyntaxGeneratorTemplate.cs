@@ -311,7 +311,19 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 60 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(")) ?? default(");
+            this.Write("), TableName + \":\" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 60 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("ColumnName) ?? default(");
             
             #line default
             #line hidden
@@ -472,7 +484,19 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 117 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(")) ?? default(");
+            this.Write("), TableName + \":\" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 117 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("ColumnName) ?? default(");
             
             #line default
             #line hidden
@@ -910,7 +934,19 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 190 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(")) ?? default(");
+            this.Write("), TableName + \":\" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( column.SourceName ));
+            
+            #line default
+            #line hidden
+            
+            #line 190 "TableSyntaxGeneratorTemplate.tt"
+            this.Write("ColumnName) ?? default(");
             
             #line default
             #line hidden

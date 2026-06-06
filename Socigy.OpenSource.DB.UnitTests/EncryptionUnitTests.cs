@@ -202,7 +202,10 @@ namespace Socigy.OpenSource.DB.UnitTests
                 var secret = new UnitTest.DB.TestSecret();
 
                 // Simulate materialization: the raw ciphertext lands in ManualRawEncrypted (private setter).
-                byte[] cipher = (byte[])FieldCrypto.Encrypt("hush", typeof(string))!;
+                // The generated decrypt getter binds the value to its "table:column" context, so encrypt with
+                // the same context here.
+                string ctx = UnitTest.DB.TestSecret.TableName + ":" + UnitTest.DB.TestSecret.ManualColumnName;
+                byte[] cipher = (byte[])FieldCrypto.Encrypt("hush", typeof(string), ctx)!;
                 typeof(UnitTest.DB.TestSecret).GetProperty("ManualRawEncrypted")!.SetValue(secret, cipher);
 
                 Assert.That(secret.Manual, Is.EqualTo(""));               // true field not decrypted yet

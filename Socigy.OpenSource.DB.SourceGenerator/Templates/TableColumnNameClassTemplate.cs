@@ -57,7 +57,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             string encType = col.Type.Replace("?", "");
             string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
             string valueExpr = col.IsEncrypted
-                ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)((" + ClassName + ")o)." + col.Name + ", typeof(" + encType + "))"
+                ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)((" + ClassName + ")o)." + col.Name + ", typeof(" + encType + "), TableName + \":\" + " + col.Name + "ColumnName)"
                 : isTypedJson
                     ? "((" + ClassName + ")o)." + col.Name + " == null ? (object?)null : global::System.Text.Json.JsonSerializer.Serialize(((" + ClassName + ")o)." + col.Name + ", " + col.JsonContextType + ".Default.Options)"
                 : hasConvertor
@@ -272,13 +272,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
                     string encType = col.Type.Replace("?", "");
                     string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
                     string valueExpr = col.IsEncrypted
-                        ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "))"
+                        ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "), TableName + \":\" + " + col.Name + "ColumnName)"
                         : isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)"
                         : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")"
                         : col.Name;
                     string setExpr = col.IsEncrypted
                         ? (col.EncryptAutoDecrypt
-                            ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + ")) ?? default(" + col.Type + "))"
+                            ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + "), TableName + \":\" + " + col.Name + "ColumnName) ?? default(" + col.Type + "))"
                             : "v => { " + col.Name + "RawEncrypted = v as byte[]; _" + col.Name + "Decrypted = false; }")
                         : isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)"
                         : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))"
@@ -655,13 +655,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
                    string encType = col.Type.Replace("?", "");
                    string typeExpr = col.IsEncrypted ? "byte[]" : (col.IsJsonColumn ? "string " : col.Type.Replace("?", " "));
                    string valueExpr = col.IsEncrypted
-                       ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "))"
+                       ? "global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Encrypt((object?)" + col.Name + ", typeof(" + encType + "), TableName + \":\" + " + col.Name + "ColumnName)"
                        : isTypedJson ? col.Name + " == null ? null : global::System.Text.Json.JsonSerializer.Serialize(" + col.Name + ", " + col.JsonContextType + ".Default.Options)"
                        : hasConvertor ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")"
                        : col.Name;
                    string setExpr = col.IsEncrypted
                        ? (col.EncryptAutoDecrypt
-                           ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + ")) ?? default(" + col.Type + "))"
+                           ? "v => " + col.Name + " = (" + col.Type + ")(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(v, typeof(" + encType + "), TableName + \":\" + " + col.Name + "ColumnName) ?? default(" + col.Type + "))"
                            : "v => { " + col.Name + "RawEncrypted = v as byte[]; _" + col.Name + "Decrypted = false; }")
                        : isTypedJson ? "v => " + col.Name + " = v == null || v is DBNull ? null : global::System.Text.Json.JsonSerializer.Deserialize<" + col.Type.TrimEnd('?') + ">(v?.ToString() ?? \"\", " + col.JsonContextType + ".Default.Options)"
                        : hasConvertor ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))"

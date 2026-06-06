@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace Socigy.OpenSource.DB.Core.Encryption
 {
@@ -30,6 +31,17 @@ namespace Socigy.OpenSource.DB.Core.Encryption
             if (dbValue == null || dbValue is DBNull) return null;
             return FieldValueCodec.Decode(SocigyFieldEncryption.Require().Decrypt((byte[])dbValue, associatedData), clrType);
         }
+
+        /// <summary>
+        /// Convenience overloads used by generated code: the associated-data <paramref name="context"/> string
+        /// (e.g. <c>table:column</c>) is UTF-8 encoded and bound into the ciphertext, so a value cannot be
+        /// relocated to a different column/table and still decrypt.
+        /// </summary>
+        public static object? Encrypt(object? value, Type clrType, string context)
+            => Encrypt(value, clrType, Encoding.UTF8.GetBytes(context));
+
+        public static object? Decrypt(object? dbValue, Type clrType, string context)
+            => Decrypt(dbValue, clrType, Encoding.UTF8.GetBytes(context));
     }
 #nullable disable
 }
