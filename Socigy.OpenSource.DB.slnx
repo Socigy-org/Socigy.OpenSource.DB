@@ -30,6 +30,9 @@
     <File Path="Directory.Build.props" />
   </Folder>
   <Folder Name="/Unit Tests/">
+    <Project Path="Socigy.OpenSource.DB.Tool.Tests/Socigy.OpenSource.DB.Tool.Tests.csproj">
+      <BuildType Solution="DB_Migration|*" Project="Release" />
+    </Project>
     <Project Path="Socigy.OpenSource.DB.UnitTests/Socigy.OpenSource.DB.UnitTests.csproj">
       <BuildType Solution="DB_Migration|*" Project="Release" />
     </Project>

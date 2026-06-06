@@ -48,13 +48,31 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
                 }
                 else
                 {
-                    _Name = $"{prefix}_{tablePrefix}{Guid.NewGuid():N}";
+                    // No column list (e.g. a raw-expression CHECK): derive a STABLE suffix from the
+                    // constraint's content. A random GUID here would change every regeneration, making
+                    // migrations non-reproducible and the DOWN-script's DROP unable to match a name from
+                    // a previously generated UP that was produced by a different process run.
+                    var basis = $"{Type}|{TableName}|{Value}|{TargetTable}|" +
+                                $"{(TargetColumns != null ? string.Join(",", TargetColumns) : "")}";
+                    _Name = $"{prefix}_{tablePrefix}{StableHash(basis)}";
                 }
 
                 return _Name;
             }
 
             set { _Name = value; }
+        }
+
+        // Deterministic FNV-1a 32-bit hash — unlike string.GetHashCode() it is stable across runs and
+        // processes, so generated constraint names are reproducible.
+        private static string StableHash(string s)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (char c in s) { hash ^= c; hash *= 16777619; }
+                return hash.ToString("x8");
+            }
         }
 
         public IEnumerable<string> Columns { get; set; }

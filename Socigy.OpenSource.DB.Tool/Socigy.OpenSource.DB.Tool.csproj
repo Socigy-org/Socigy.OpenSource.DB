@@ -28,6 +28,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Socigy.OpenSource.DB.Tool.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Compile Update="Templates\GitignoreTemplate.cs">
 			<DesignTime>True</DesignTime>
 			<AutoGen>True</AutoGen>

@@ -551,7 +551,9 @@ namespace Socigy.OpenSource.DB.Tool.Generators
 
         private string Quote(string id) => $"\"{id}\"";
 
-        private string GuessConstraintName(DbConstraint con) => $"IX_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        // Fallback name only used if a constraint somehow has no computed Name. Must be deterministic
+        // (DbConstraint.Name already derives a stable name) so UP/DOWN scripts and regenerations agree.
+        private string GuessConstraintName(DbConstraint con) => con.Name;
 
         public static readonly Dictionary<string, string> CSharpTypeMapping = new Dictionary<string, string>()
         {
