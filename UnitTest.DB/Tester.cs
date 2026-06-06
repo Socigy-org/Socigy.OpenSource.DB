@@ -192,3 +192,22 @@ public partial class TestSecret
     [Encrypted(AutoDecrypt = false)]
     public string Manual { get; set; } = "";
 }
+
+/// <summary>
+/// Runtime-named typed table (<c>[TableType]</c>) — exercises <c>DynamicTable&lt;T&gt;</c>: the column shape is
+/// fixed here, but the table name is bound at runtime via <c>WithTableName</c>/<c>MapTypeAsync</c>.
+/// </summary>
+[TableType]
+public partial class AuditEntry
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public string Action { get; set; } = "";
+
+    public int Amount { get; set; }
+
+    public DateTime At { get; set; }
+}

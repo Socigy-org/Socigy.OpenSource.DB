@@ -9,6 +9,17 @@ namespace Socigy.OpenSource.DB.Core.SyntaxHelper
 {
     public static class DB
     {
+        /// <summary>
+        /// Translation marker for referencing a column that isn't declared on the entity — used with
+        /// <c>DynamicTable&lt;T&gt;</c> to filter/sort on a runtime ("custom") column, e.g.
+        /// <c>x =&gt; DB.CustomField&lt;int&gt;("score") &gt; 10</c>. It never executes (returns <c>default</c>);
+        /// the query translator rewrites it to the quoted column name.
+        /// </summary>
+        public static TValue CustomField<TValue>(string columnName)
+        {
+            return default!;
+        }
+
         public static class OrderBy
         {
             public static T Desc<T>(T value)

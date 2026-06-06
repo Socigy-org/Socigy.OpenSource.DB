@@ -16,6 +16,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         private static readonly string ColumnAttributeFullName = typeof(ColumnAttribute).FullName!;
         private static readonly string TableAttributeFullName = typeof(TableAttribute).FullName!;
         private static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName!;
+        private static readonly string TableTypeAttributeFullName = typeof(TableTypeAttribute).FullName!;
         private static readonly string PrimaryKeyAttributeFullName = typeof(PrimaryKeyAttribute).FullName!;
         private static readonly string AutoIncrementAttributeFullName = typeof(AutoIncrementAttribute).FullName!;
         private static readonly string DefaultAttributeFullName = typeof(DefaultAttribute).FullName!;
@@ -41,15 +42,22 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         public static void Execute(SourceProductionContext ctx, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> tables, Program program)
         {
+            // A class may match more than one collected provider (e.g. [Table] + [TableType]); process once.
+            var processed = new HashSet<string>();
             foreach (var table in tables)
             {
                 var semanticModel = compilation.GetSemanticModel(table.SyntaxTree);
                 if (semanticModel.GetDeclaredSymbol(table) is not INamedTypeSymbol tableSymbolInfo || tableSymbolInfo.IsStatic)
                     continue;
 
+                if (!processed.Add(tableSymbolInfo.ToDisplayString()))
+                    continue;
+
                 var allAttrs = tableSymbolInfo.GetAttributes();
                 var tableAttribute = allAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == TableAttributeFullName);
                 var flagTableAttribute = allAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == FlagTableAttributeFullName);
+                var tableTypeAttribute = allAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == TableTypeAttributeFullName);
+                bool isTableType = tableTypeAttribute != null;
 
                 string tableName;
                 if (tableAttribute != null &&
@@ -63,6 +71,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     flagTableAttribute.ConstructorArguments[0].Value != null)
                 {
                     tableName = flagTableAttribute.ConstructorArguments.First().Value!.ToString()!;
+                }
+                else if (isTableType)
+                {
+                    // A pure [TableType] has no fixed name; use a snake_case default for the const TableName
+                    // (the runtime name always wins through DynamicTable<T>).
+                    tableName = ToSnakeCase(tableSymbolInfo.Name);
                 }
                 else
                 {
@@ -323,7 +337,152 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}.table.g.cs", tableColNameClassTemplate.TransformText());
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());
+
+                if (isTableType)
+                    ctx.AddSource(
+                        $"{tableColNameClassTemplate.ClassName}.tabletype.g.cs",
+                        EmitTableTypePartial(tableColNameClassTemplate.Namespace, tableColNameClassTemplate.ClassName, tableColNameClassTemplate.Columns));
             }
+        }
+
+        // Emits the [TableType] partial: implements IDbTableType<T> (delegating to the generated statics),
+        // the WithTableName / MapTypeAsync factories, and a baked CREATE TABLE for the declared shape.
+        private static string EmitTableTypePartial(string ns, string className, List<TableColumnNameClassTemplate.ColumnInfo> columns)
+        {
+            string columnDefs = BuildCreateTableColumnDefs(columns);
+            return $@"#pragma warning disable
+#nullable enable
+using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using Socigy.OpenSource.DB.Core.CommandBuilders;
+using Socigy.OpenSource.DB.Core.Dynamic;
+using Socigy.OpenSource.DB.Core.Interfaces;
+
+namespace {ns}
+{{
+    public partial class {className} : global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>
+    {{
+        int[] global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>.ResolveOrdinals(DbDataReader reader, System.Collections.Generic.Dictionary<string, string>? columnOverrides)
+            => GetColumnOrdinals(reader, columnOverrides);
+
+        {className} global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>.MaterializeRow(DbDataReader reader, int[] ordinals)
+            => ConvertFrom(reader, ordinals);
+
+        global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>.InsertColumns(bool includeAutoIncrement)
+            => GetInsertPlan(includeAutoIncrement).Columns;
+
+        string global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>.GetCreateTableSql(string tableName, bool ifNotExists)
+            => ""CREATE TABLE "" + (ifNotExists ? ""IF NOT EXISTS "" : """") + ""\"""" + tableName.Replace(""\"""", ""\""\"""") + ""\"" ({columnDefs})"";
+
+        /// <summary>Binds this table type to a runtime table name.</summary>
+        public static global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<{className}> WithTableName(string tableName)
+            => new global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<{className}>(tableName);
+
+        /// <summary>Binds to a runtime table name and auto-discovers its extra (undeclared) columns (cached).</summary>
+        public static global::System.Threading.Tasks.Task<global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<{className}>> MapTypeAsync(string tableName, DbConnection connection, bool force = false, CancellationToken cancellationToken = default)
+            => WithTableName(tableName).WithConnection(connection).MapTypeAsync(force, cancellationToken);
+    }}
+}}
+#nullable disable
+";
+        }
+
+        // Builds the baked column-definition list for a runtime CREATE TABLE (escaped for a C# string literal).
+        private static string BuildCreateTableColumnDefs(List<TableColumnNameClassTemplate.ColumnInfo> columns)
+        {
+            var parts = new List<string>();
+            foreach (var col in columns)
+            {
+                string baseType = col.Type.TrimEnd('?').Trim();
+                string pgType;
+                bool serial = false;
+                if (col.IsAutoIncrement)
+                {
+                    pgType = baseType.ToLowerInvariant() switch
+                    {
+                        "short" or "int16" or "system.int16" => "smallserial",
+                        "long" or "int64" or "system.int64" => "bigserial",
+                        _ => "serial",
+                    };
+                    serial = true;
+                }
+                else if (col.IsEncrypted)
+                    pgType = "bytea";
+                else if (col.IsJsonColumn)
+                    pgType = "jsonb";
+                else
+                    pgType = MapPgType(baseType);
+
+                bool isReference = baseType == "string" || baseType == "byte[]";
+                bool nullable = col.Type.EndsWith("?") || isReference;
+                bool notNull = !serial && (col.IsPrimaryKey || !nullable);
+
+                // Quotes are doubled so the result is a valid C# string literal segment.
+                var def = "\\\"" + col.DatabaseName + "\\\" " + pgType;
+                if (notNull) def += " NOT NULL";
+                parts.Add(def);
+            }
+
+            var pkCols = columns.Where(c => c.IsPrimaryKey).ToList();
+            if (pkCols.Count > 0)
+                parts.Add("PRIMARY KEY (" + string.Join(", ", pkCols.Select(c => "\\\"" + c.DatabaseName + "\\\"")) + ")");
+
+            return string.Join(", ", parts);
+        }
+
+        private static string MapPgType(string csharpType)
+        {
+            string t = csharpType.ToLowerInvariant();
+            if (t.StartsWith("system.")) t = t.Substring("system.".Length);
+            switch (t)
+            {
+                case "int":
+                case "int32":
+                case "system.int32": return "integer";
+                case "long":
+                case "int64":
+                case "system.int64": return "bigint";
+                case "short":
+                case "int16":
+                case "system.int16": return "smallint";
+                case "byte": return "smallint";
+                case "decimal": return "numeric";
+                case "double": return "double precision";
+                case "float":
+                case "single": return "real";
+                case "string": return "text";
+                case "char": return "character(1)";
+                case "datetime": return "timestamp without time zone";
+                case "datetimeoffset": return "timestamp with time zone";
+                case "date":
+                case "dateonly": return "date";
+                case "time":
+                case "timeonly": return "time without time zone";
+                case "timespan": return "interval";
+                case "bool":
+                case "boolean": return "boolean";
+                case "guid": return "uuid";
+                case "byte[]": return "bytea";
+                default: return "text";
+            }
+        }
+
+        private static string ToSnakeCase(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            var sb = new System.Text.StringBuilder(name.Length + 8);
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                if (char.IsUpper(c))
+                {
+                    if (i > 0) sb.Append('_');
+                    sb.Append(char.ToLowerInvariant(c));
+                }
+                else sb.Append(c);
+            }
+            return sb.ToString();
         }
     }
 }

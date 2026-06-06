@@ -218,6 +218,17 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 }
             }
 
+            // DynamicTable custom (undeclared) column reference: DB.CustomField<T>("col") => "col"
+            if (node.Method.DeclaringType == typeof(global::Socigy.OpenSource.DB.Core.SyntaxHelper.DB)
+                && node.Method.Name == "CustomField")
+            {
+                if (TryEvaluate(node.Arguments[0], out var __colName) && __colName is string __col)
+                {
+                    _Sql.Append('"').Append(__col.Replace("\"", "\"\"")).Append('"');
+                    return node;
+                }
+            }
+
             // SQL Markers
             if (IsSqlMarker(node)) return VisitSqlMarkers(node);
 
@@ -397,6 +408,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             {
                 if (node == _param) IsFound = true;
                 return node;
+            }
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                // DB.CustomField("col") is a column reference, not a constant — never fold it away.
+                if (node.Method.DeclaringType == typeof(global::Socigy.OpenSource.DB.Core.SyntaxHelper.DB)
+                    && node.Method.Name == "CustomField")
+                    IsFound = true;
+                return base.VisitMethodCall(node);
             }
         }
     }

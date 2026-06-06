@@ -104,3 +104,20 @@
 |                              |           |                |          |           |           |       |         |           |             |
 | 'Socigy (insert builder)'    | NativeAOT | NativeAOT 10.0 | 1.906 ms | 0.0547 ms | 0.1587 ms |  1.01 |    0.12 |   4.66 KB |        1.00 |
 | 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 1.866 ms | 0.0652 ms | 0.1900 ms |  0.99 |    0.13 |    3.2 KB |        0.69 |
+
+| Method                                | Rows | Mean     | Error    | StdDev   | Median   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------------------------- |----- |---------:|---------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| 'Socigy (typed Query, defined)'       | 1    | 362.7 us |  7.24 us | 19.08 us | 365.4 us |  1.00 |    0.07 |      - |   4.65 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 1    | 328.7 us |  6.43 us |  9.42 us | 326.7 us |  0.91 |    0.05 |      - |   5.92 KB |        1.27 |
+| 'Dapper (raw SQL, runtime name)'      | 1    | 329.0 us |  6.48 us |  6.66 us | 329.8 us |  0.91 |    0.05 |      - |   3.34 KB |        0.72 |
+| 'EF Core (no tracking, static model)' | 1    | 489.4 us |  7.85 us |  7.35 us | 488.7 us |  1.35 |    0.07 | 0.9766 |  56.52 KB |       12.15 |
+|                                       |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (typed Query, defined)'       | 100  | 410.6 us |  8.20 us | 10.08 us | 409.8 us |  1.00 |    0.03 |      - |  16.72 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 100  | 377.3 us |  7.43 us |  8.84 us | 373.2 us |  0.92 |    0.03 |      - |  18.01 KB |        1.08 |
+| 'Dapper (raw SQL, runtime name)'      | 100  | 417.5 us |  7.81 us | 18.26 us | 417.1 us |  1.02 |    0.05 |      - |  23.09 KB |        1.38 |
+| 'EF Core (no tracking, static model)' | 100  | 527.6 us | 10.47 us | 13.62 us | 523.7 us |  1.29 |    0.04 | 0.9766 |  87.23 KB |        5.22 |
+|                                       |      |          |          |          |          |       |         |        |           |             |
+| 'Socigy (typed Query, defined)'       | 1000 | 586.5 us | 11.18 us | 10.98 us | 584.0 us |  1.00 |    0.03 | 1.9531 | 122.44 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 1000 | 642.1 us | 17.92 us | 52.55 us | 626.4 us |  1.10 |    0.09 | 1.9531 | 123.67 KB |        1.01 |
+| 'Dapper (raw SQL, runtime name)'      | 1000 | 569.2 us | 10.15 us |  9.00 us | 569.0 us |  0.97 |    0.02 | 1.9531 | 198.95 KB |        1.62 |
+| 'EF Core (no tracking, static model)' | 1000 | 767.1 us | 13.80 us | 12.91 us | 765.4 us |  1.31 |    0.03 | 5.8594 | 361.55 KB |        2.95 |

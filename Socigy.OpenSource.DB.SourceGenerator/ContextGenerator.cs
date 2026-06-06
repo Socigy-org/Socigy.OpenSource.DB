@@ -105,6 +105,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        Task<TResult> WithConnectionAsync<TResult>(Func<DbConnection, Task<TResult>> work);");
             sb.AppendLine("        /// <summary>Runs <paramref name=\"work\"/> with the scope's connection — escape hatch for stored procedures or raw ADO.</summary>");
             sb.AppendLine("        Task WithConnectionAsync(Func<DbConnection, Task> work);");
+            sb.AppendLine("        /// <summary>Returns a runtime-named typed-table handle for a [TableType] entity, bound to this scope.</summary>");
+            sb.AppendLine("        global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<T> DynamicTable<T>(string tableName) where T : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<T>, new();");
             sb.AppendLine("    }");
             sb.AppendLine();
         }
@@ -131,6 +133,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("            try { await work(__acq.Connection); }");
             sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
             sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        public global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<T> DynamicTable<T>(string tableName) where T : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<T>, new()");
+            sb.AppendLine("            => new global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<T>(tableName, _scope);");
             sb.AppendLine("    }");
             sb.AppendLine();
         }

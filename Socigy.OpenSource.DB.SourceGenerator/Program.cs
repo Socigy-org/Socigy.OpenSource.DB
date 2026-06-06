@@ -26,6 +26,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         public static readonly string TableAttributeFullName = typeof(TableAttribute).FullName;
         public static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName;
+        public static readonly string TableTypeAttributeFullName = typeof(TableTypeAttribute).FullName;
         public static readonly string ILocalMigrationFullName = typeof(ILocalMigration).FullName;
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -74,6 +75,26 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                              })
                      .Where(x => x != null)!;
 
+            IncrementalValuesProvider<ClassDeclarationSyntax> tableTypeClasses =
+                 context.SyntaxProvider
+                         .ForAttributeWithMetadataName(
+                             TableTypeAttributeFullName,
+                             static (node, _) => node is ClassDeclarationSyntax,
+                             static (ctx, _) =>
+                             {
+                                 if (ctx.TargetNode is not ClassDeclarationSyntax classSyntax)
+                                     return null;
+
+                                 if (ctx.SemanticModel.GetDeclaredSymbol(classSyntax) is not INamedTypeSymbol semantics)
+                                     return null;
+
+                                 var tableTypeAttribute = ctx.SemanticModel.Compilation.GetTypeByMetadataName(TableTypeAttributeFullName);
+                                 return semantics.GetAttributes().Any(x => SymbolEqualityComparer.Default.Equals(x.AttributeClass, tableTypeAttribute))
+                                    ? classSyntax
+                                    : null;
+                             })
+                     .Where(x => x != null)!;
+
             IncrementalValuesProvider<ClassDeclarationSyntax> migrationClasses =
                 context.SyntaxProvider.CreateSyntaxProvider(
                         predicate: static (node, _) =>
@@ -117,7 +138,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             });
 
             var allTableClasses = tableClasses.Collect().Combine(flagTableClasses.Collect())
-                .Select((pair, _) => pair.Left.AddRange(pair.Right));
+                .Combine(tableTypeClasses.Collect())
+                .Select((pair, _) => pair.Left.Left.AddRange(pair.Left.Right).AddRange(pair.Right));
 
             context.RegisterSourceOutput(context.CompilationProvider.Combine(allTableClasses), Execute);
 

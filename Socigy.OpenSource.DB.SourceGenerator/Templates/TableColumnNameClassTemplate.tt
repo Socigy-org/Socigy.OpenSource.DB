@@ -32,6 +32,32 @@ namespace <#= Namespace #>
             return _CustomValues.ContainsKey(key) ? (T?)_CustomValues[key] : default;
         }
 
+        /// <summary>Stores a value for a custom (undeclared) column — used by DynamicTable&lt;T&gt; auto-mapping.</summary>
+        public void SetCustomValue(string key, object? value)
+        {
+            _CustomValues ??= new Dictionary<string, object?>();
+            _CustomValues[key] = value;
+        }
+
+        /// <summary>Reads a captured custom (undeclared) column value, converting if needed; false when absent.</summary>
+        public bool TryGetCustomValue<TValue>(string key, out TValue? value)
+        {
+            if (_CustomValues != null && _CustomValues.TryGetValue(key, out var __raw))
+            {
+                if (__raw == null || __raw is System.DBNull) { value = default; return true; }
+                if (__raw is TValue __typed) { value = __typed; return true; }
+                try
+                {
+                    var __t = System.Nullable.GetUnderlyingType(typeof(TValue)) ?? typeof(TValue);
+                    value = (TValue)System.Convert.ChangeType(__raw, __t);
+                    return true;
+                }
+                catch { value = default; return false; }
+            }
+            value = default;
+            return false;
+        }
+
         public const string TableName = "<#= TableName #>";
         public string GetTableName() => TableName;
 
