@@ -113,30 +113,30 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line hidden
             
             #line 17 "TableColumnNameClassTemplate.tt"
-            this.Write(" : IDbTable, IInsertPlanProvider\r\n    {\r\n        protected Dictionary<string, obj" +
-                    "ect?> _CustomValues { get; set; }\r\n        public object? GetCustomValue(string " +
-                    "key)\r\n        {\r\n            if (_CustomValues == null)\r\n                return " +
-                    "null;\r\n\r\n            return _CustomValues.ContainsKey(key) ? _CustomValues[key] " +
-                    ": null;\r\n        }\r\n        public T? GetCustomValue<T>(string key)\r\n        {\r\n" +
-                    "            if (_CustomValues == null)\r\n                return default(T);\r\n\r\n  " +
-                    "          return _CustomValues.ContainsKey(key) ? (T?)_CustomValues[key] : defau" +
-                    "lt;\r\n        }\r\n\r\n        /// <summary>Stores a value for a custom (undeclared) " +
-                    "column — used by DynamicTable&lt;T&gt; auto-mapping.</summary>\r\n        public v" +
-                    "oid SetCustomValue(string key, object? value)\r\n        {\r\n            _CustomVal" +
-                    "ues ??= new Dictionary<string, object?>();\r\n            _CustomValues[key] = val" +
-                    "ue;\r\n        }\r\n\r\n        /// <summary>Reads a captured custom (undeclared) colu" +
-                    "mn value, converting if needed; false when absent.</summary>\r\n        public boo" +
-                    "l TryGetCustomValue<TValue>(string key, out TValue? value)\r\n        {\r\n         " +
-                    "   if (_CustomValues != null && _CustomValues.TryGetValue(key, out var __raw))\r\n" +
-                    "            {\r\n                if (__raw == null || __raw is System.DBNull) { va" +
-                    "lue = default; return true; }\r\n                if (__raw is TValue __typed) { va" +
-                    "lue = __typed; return true; }\r\n                try\r\n                {\r\n         " +
-                    "           var __t = System.Nullable.GetUnderlyingType(typeof(TValue)) ?? typeof" +
-                    "(TValue);\r\n                    value = (TValue)System.Convert.ChangeType(__raw, " +
-                    "__t);\r\n                    return true;\r\n                }\r\n                catc" +
-                    "h { value = default; return false; }\r\n            }\r\n            value = default" +
-                    ";\r\n            return false;\r\n        }\r\n\r\n        public const string TableName" +
-                    " = \"");
+            this.Write(" : IDbTable, IInsertPlanProvider, IOrdinalReadable\r\n    {\r\n        protected Dict" +
+                    "ionary<string, object?> _CustomValues { get; set; }\r\n        public object? GetC" +
+                    "ustomValue(string key)\r\n        {\r\n            if (_CustomValues == null)\r\n     " +
+                    "           return null;\r\n\r\n            return _CustomValues.ContainsKey(key) ? _" +
+                    "CustomValues[key] : null;\r\n        }\r\n        public T? GetCustomValue<T>(string" +
+                    " key)\r\n        {\r\n            if (_CustomValues == null)\r\n                return" +
+                    " default(T);\r\n\r\n            return _CustomValues.ContainsKey(key) ? (T?)_CustomV" +
+                    "alues[key] : default;\r\n        }\r\n\r\n        /// <summary>Stores a value for a cu" +
+                    "stom (undeclared) column — used by DynamicTable&lt;T&gt; auto-mapping.</summary>" +
+                    "\r\n        public void SetCustomValue(string key, object? value)\r\n        {\r\n    " +
+                    "        _CustomValues ??= new Dictionary<string, object?>();\r\n            _Custo" +
+                    "mValues[key] = value;\r\n        }\r\n\r\n        /// <summary>Reads a captured custom" +
+                    " (undeclared) column value, converting if needed; false when absent.</summary>\r\n" +
+                    "        public bool TryGetCustomValue<TValue>(string key, out TValue? value)\r\n  " +
+                    "      {\r\n            if (_CustomValues != null && _CustomValues.TryGetValue(key," +
+                    " out var __raw))\r\n            {\r\n                if (__raw == null || __raw is S" +
+                    "ystem.DBNull) { value = default; return true; }\r\n                if (__raw is TV" +
+                    "alue __typed) { value = __typed; return true; }\r\n                try\r\n          " +
+                    "      {\r\n                    var __t = System.Nullable.GetUnderlyingType(typeof(" +
+                    "TValue)) ?? typeof(TValue);\r\n                    value = (TValue)System.Convert." +
+                    "ChangeType(__raw, __t);\r\n                    return true;\r\n                }\r\n  " +
+                    "              catch { value = default; return false; }\r\n            }\r\n         " +
+                    "   value = default;\r\n            return false;\r\n        }\r\n\r\n        public cons" +
+                    "t string TableName = \"");
             
             #line default
             #line hidden

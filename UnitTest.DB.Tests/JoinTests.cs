@@ -142,6 +142,7 @@ public class JoinTests : BaseUnitTest
         var results = await TestItem.Query(item => item.Id == itemId)
             .Join<TestCounter>((item, counter) => item.Name == counter.Label)
             .Join<TestType>((item, counter, type) => type.Amount == item.Priority)
+            .Where((item, counter, type) => type.Id == typeId)   // shared test tables aren't cleaned; pin the joined row
             .WithConnection(Connection)
             .ToListAsync();
 
@@ -158,7 +159,8 @@ public class JoinTests : BaseUnitTest
         var itemId = Guid.NewGuid();
         await TestItem.InsertAsync(new TestItem { Id = itemId, Name = label, Priority = 9 }, Connection);
         await TestCounter.InsertAsync(new TestCounter { Id = Guid.NewGuid(), Label = label }, Connection);
-        await TestType.InsertAsync(new TestType { Id = Guid.NewGuid(), Amount = 9m, IsActive = true }, Connection);
+        var typeId = Guid.NewGuid();
+        await TestType.InsertAsync(new TestType { Id = typeId, Amount = 9m, IsActive = true }, Connection);
         var convId = Guid.NewGuid();
         await TestConvertorItem.InsertAsync(new TestConvertorItem { Id = convId, Label = "x", Value = 9 }, Connection);
 
@@ -166,6 +168,7 @@ public class JoinTests : BaseUnitTest
             .Join<TestCounter>((item, counter) => item.Name == counter.Label)
             .Join<TestType>((item, counter, type) => type.Amount == item.Priority)
             .Join<TestConvertorItem>((item, counter, type, conv) => conv.Value == item.Priority)
+            .Where((item, counter, type, conv) => type.Id == typeId && conv.Id == convId)   // pin joined rows (shared tables)
             .WithConnection(Connection)
             .ToListAsync();
 

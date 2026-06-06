@@ -105,19 +105,33 @@
 | 'Socigy (insert builder)'    | NativeAOT | NativeAOT 10.0 | 1.906 ms | 0.0547 ms | 0.1587 ms |  1.01 |    0.12 |   4.66 KB |        1.00 |
 | 'Raw ADO.NET (hand-written)' | NativeAOT | NativeAOT 10.0 | 1.866 ms | 0.0652 ms | 0.1900 ms |  0.99 |    0.13 |    3.2 KB |        0.69 |
 
-| Method                                | Rows | Mean     | Error    | StdDev   | Median   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|-------------------------------------- |----- |---------:|---------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
-| 'Socigy (typed Query, defined)'       | 1    | 362.7 us |  7.24 us | 19.08 us | 365.4 us |  1.00 |    0.07 |      - |   4.65 KB |        1.00 |
-| 'Socigy (DynamicTable, runtime name)' | 1    | 328.7 us |  6.43 us |  9.42 us | 326.7 us |  0.91 |    0.05 |      - |   5.92 KB |        1.27 |
-| 'Dapper (raw SQL, runtime name)'      | 1    | 329.0 us |  6.48 us |  6.66 us | 329.8 us |  0.91 |    0.05 |      - |   3.34 KB |        0.72 |
-| 'EF Core (no tracking, static model)' | 1    | 489.4 us |  7.85 us |  7.35 us | 488.7 us |  1.35 |    0.07 | 0.9766 |  56.52 KB |       12.15 |
-|                                       |      |          |          |          |          |       |         |        |           |             |
-| 'Socigy (typed Query, defined)'       | 100  | 410.6 us |  8.20 us | 10.08 us | 409.8 us |  1.00 |    0.03 |      - |  16.72 KB |        1.00 |
-| 'Socigy (DynamicTable, runtime name)' | 100  | 377.3 us |  7.43 us |  8.84 us | 373.2 us |  0.92 |    0.03 |      - |  18.01 KB |        1.08 |
-| 'Dapper (raw SQL, runtime name)'      | 100  | 417.5 us |  7.81 us | 18.26 us | 417.1 us |  1.02 |    0.05 |      - |  23.09 KB |        1.38 |
-| 'EF Core (no tracking, static model)' | 100  | 527.6 us | 10.47 us | 13.62 us | 523.7 us |  1.29 |    0.04 | 0.9766 |  87.23 KB |        5.22 |
-|                                       |      |          |          |          |          |       |         |        |           |             |
-| 'Socigy (typed Query, defined)'       | 1000 | 586.5 us | 11.18 us | 10.98 us | 584.0 us |  1.00 |    0.03 | 1.9531 | 122.44 KB |        1.00 |
-| 'Socigy (DynamicTable, runtime name)' | 1000 | 642.1 us | 17.92 us | 52.55 us | 626.4 us |  1.10 |    0.09 | 1.9531 | 123.67 KB |        1.01 |
-| 'Dapper (raw SQL, runtime name)'      | 1000 | 569.2 us | 10.15 us |  9.00 us | 569.0 us |  0.97 |    0.02 | 1.9531 | 198.95 KB |        1.62 |
-| 'EF Core (no tracking, static model)' | 1000 | 767.1 us | 13.80 us | 12.91 us | 765.4 us |  1.31 |    0.03 | 5.8594 | 361.55 KB |        2.95 |
+| Method                                | Rows | Mean     | Error    | StdDev   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------------------------- |----- |---------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| 'Socigy (typed Query, defined)'       | 1    | 359.1 us |  7.16 us | 13.63 us |  1.00 |    0.05 |      - |   4.62 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 1    | 333.1 us |  6.51 us |  8.92 us |  0.93 |    0.04 |      - |   5.71 KB |        1.24 |
+| 'Dapper (raw SQL, runtime name)'      | 1    | 325.0 us |  6.43 us | 10.38 us |  0.91 |    0.04 |      - |   3.25 KB |        0.70 |
+| 'EF Core (no tracking, static model)' | 1    | 464.7 us |  9.00 us | 23.55 us |  1.30 |    0.08 | 0.9766 |  56.53 KB |       12.25 |
+|                                       |      |          |          |          |       |         |        |           |             |
+| 'Socigy (typed Query, defined)'       | 100  | 395.2 us |  7.87 us |  8.75 us |  1.00 |    0.03 |      - |  16.73 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 100  | 390.0 us |  7.76 us | 19.89 us |  0.99 |    0.05 |      - |  17.89 KB |        1.07 |
+| 'Dapper (raw SQL, runtime name)'      | 100  | 373.3 us |  7.39 us |  6.55 us |  0.94 |    0.03 |      - |  23.16 KB |        1.38 |
+| 'EF Core (no tracking, static model)' | 100  | 505.7 us |  9.88 us | 14.79 us |  1.28 |    0.05 | 0.9766 |  87.25 KB |        5.21 |
+|                                       |      |          |          |          |       |         |        |           |             |
+| 'Socigy (typed Query, defined)'       | 1000 | 602.9 us | 11.54 us | 29.78 us |  1.00 |    0.07 | 1.9531 | 122.41 KB |        1.00 |
+| 'Socigy (DynamicTable, runtime name)' | 1000 | 697.4 us | 22.07 us | 65.07 us |  1.16 |    0.12 | 1.9531 | 123.44 KB |        1.01 |
+| 'Dapper (raw SQL, runtime name)'      | 1000 | 695.9 us | 12.20 us |  9.53 us |  1.16 |    0.06 | 1.9531 | 198.93 KB |        1.63 |
+| 'EF Core (no tracking, static model)' | 1000 | 833.8 us | 16.37 us | 15.31 us |  1.39 |    0.07 | 5.8594 | 361.61 KB |        2.95 |
+
+| Method                       | Rows | Mean       | Error    | StdDev   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|----------------------------- |----- |-----------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| 'Socigy (typed Join)'        | 1    |   486.6 us |  9.44 us | 14.70 us |  1.00 |    0.04 |      - |  14.43 KB |        1.00 |
+| 'Dapper (multi-map join)'    | 1    |   491.2 us | 11.15 us | 32.88 us |  1.01 |    0.07 |      - |   3.94 KB |        0.27 |
+| 'EF Core (no tracking join)' | 1    |   593.2 us |  8.74 us |  7.30 us |  1.22 |    0.04 | 0.9766 |  61.06 KB |        4.23 |
+|                              |      |            |          |          |       |         |        |           |             |
+| 'Socigy (typed Join)'        | 100  |   542.1 us | 10.54 us | 11.28 us |  1.00 |    0.03 |      - |  34.53 KB |        1.00 |
+| 'Dapper (multi-map join)'    | 100  |   556.9 us | 12.90 us | 37.22 us |  1.03 |    0.07 |      - |  37.46 KB |        1.08 |
+| 'EF Core (no tracking join)' | 100  |   693.9 us | 13.65 us | 12.76 us |  1.28 |    0.03 |      - | 100.99 KB |        2.93 |
+|                              |      |            |          |          |       |         |        |           |             |
+| 'Socigy (typed Join)'        | 1000 |   993.6 us | 19.81 us | 41.35 us |  1.00 |    0.06 |      - | 217.82 KB |        1.00 |
+| 'Dapper (multi-map join)'    | 1000 |   903.6 us | 18.06 us | 38.49 us |  0.91 |    0.05 | 3.9063 | 339.82 KB |        1.56 |
+| 'EF Core (no tracking join)' | 1000 | 1,179.2 us | 23.46 us | 27.01 us |  1.19 |    0.06 | 7.8125 | 459.77 KB |        2.11 |

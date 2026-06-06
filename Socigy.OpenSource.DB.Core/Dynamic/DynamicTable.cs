@@ -13,6 +13,7 @@ using Socigy.OpenSource.DB.Core.Delegates;
 using Socigy.OpenSource.DB.Core.Diagnostics;
 using Socigy.OpenSource.DB.Core.Interfaces;
 using Socigy.OpenSource.DB.Core.Parsers;
+using Socigy.OpenSource.DB.Core.Parsers.Delegates;
 using Socigy.OpenSource.DB.Core.Parsers.Postgresql;
 
 namespace Socigy.OpenSource.DB.Core.Dynamic
@@ -33,8 +34,15 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         private static readonly ConcurrentDictionary<(Type, string), string[]> _mapCache =
             new ConcurrentDictionary<(Type, string), string[]>();
 
+        // Per-closed-type shared state: the metadata prototype (stateless for the hooks we call) and the
+        // parser delegates. Cached statically so a handle/query doesn't allocate them every call.
+        private static readonly T _proto = new T();
+        private static readonly GetColumnName _getColumnName = new GetColumnName(((IDbTable)_proto).GetDbColumnName);
+        private static readonly CreateSelectVisitor _newSelect = (p, g, c) => new PostgresqlSelectVisitor(p, g, c);
+        private static readonly CreateWhereVisitor _newWhere = (p, g, c) => new PostgresqlWhereVisitor(p, g, c);
+        private static readonly CreateOrderByVisitor _newOrderBy = (p, g, c, d) => new PostgresqlOrderByVisitor(p, g, c, d);
+
         private readonly string _tableName;
-        private readonly T _prototype;                 // throwaway instance for the IDbTableType<T> hooks
         private readonly SocigyDbScope? _scope;
 
         private DbConnection? _conn;
@@ -51,7 +59,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         public DynamicTable(string tableName)
         {
             _tableName = tableName ?? throw new ArgumentNullException(nameof(tableName));
-            _prototype = new T();
         }
 
         /// <summary>Creates a scope-bound handle (used by the generated context's <c>DynamicTable&lt;T&gt;</c>).</summary>
@@ -104,11 +111,11 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
                 {
                     if (ordinals == null)
                     {
-                        ordinals = _prototype.ResolveOrdinals(reader);
+                        ordinals = _proto.ResolveOrdinals(reader);
                         customOrdinals = ResolveCustomOrdinals(reader);
                     }
 
-                    T row = _prototype.MaterializeRow(reader, ordinals);
+                    T row = _proto.MaterializeRow(reader, ordinals);
                     if (customOrdinals != null)
                         for (int i = 0; i < customOrdinals.Length; i++)
                             if (customOrdinals[i] >= 0)
@@ -204,7 +211,7 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             var list = rows as IList<T> ?? new List<T>(rows);
             if (list.Count == 0) return 0;
 
-            InsertColumnDescriptor[] cols = _prototype.InsertColumns(includeAutoFields);
+            InsertColumnDescriptor[] cols = _proto.InsertColumns(includeAutoFields);
             if (cols.Length == 0) return 0;
 
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -312,7 +319,7 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
                 return this;
             }
 
-            var declared = new HashSet<string>(((IDbTable)_prototype).GetColumns().Keys, StringComparer.OrdinalIgnoreCase);
+            var declared = new HashSet<string>(((IDbTable)_proto).GetColumns().Keys, StringComparer.OrdinalIgnoreCase);
             var extras = new List<string>();
 
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -348,7 +355,7 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             {
                 using var command = lease.Connection.CreateCommand();
                 if (_tx != null) command.Transaction = _tx;
-                command.CommandText = _prototype.GetCreateTableSql(_tableName, ifNotExists);
+                command.CommandText = _proto.GetCreateTableSql(_tableName, ifNotExists);
                 return await DbDiagnostics.ExecuteNonQueryAsync(
                     command, "CREATE", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _diag).ConfigureAwait(false);
             }
@@ -386,13 +393,8 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────────
-        private SqlQueryBuilderExpressionParser<T> NewParser(DbCommand command)
-            => new SqlQueryBuilderExpressionParser<T>(
-                command,
-                new GetColumnName(((IDbTable)_prototype).GetDbColumnName),
-                (p, g, c) => new PostgresqlSelectVisitor(p, g, c),
-                (p, g, c) => new PostgresqlWhereVisitor(p, g, c),
-                (p, g, c, d) => new PostgresqlOrderByVisitor(p, g, c, d));
+        private static SqlQueryBuilderExpressionParser<T> NewParser(DbCommand command)
+            => new SqlQueryBuilderExpressionParser<T>(command, _getColumnName, _newSelect, _newWhere, _newOrderBy);
 
         private string BuildSelect(SqlQueryBuilderExpressionParser<T> parser, string projection, bool includeOrderLimit)
         {
@@ -428,7 +430,7 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
 
             if (body is MemberExpression m && m.Expression is ParameterExpression)
             {
-                var col = ((IDbTable)_prototype).GetDbColumnName(m.Member.Name);
+                var col = ((IDbTable)_proto).GetDbColumnName(m.Member.Name);
                 if (!string.IsNullOrEmpty(col)) return col!;
             }
 

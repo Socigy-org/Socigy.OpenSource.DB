@@ -14,7 +14,7 @@ namespace <#= Namespace #>
 {
 
     <#= CustomPreClass #>
-    public partial class <#= ClassName #> : IDbTable, IInsertPlanProvider
+    public partial class <#= ClassName #> : IDbTable, IInsertPlanProvider, IOrdinalReadable
     {
         protected Dictionary<string, object?> _CustomValues { get; set; }
         public object? GetCustomValue(string key)

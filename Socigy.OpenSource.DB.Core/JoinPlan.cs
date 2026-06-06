@@ -173,13 +173,55 @@ namespace Socigy.OpenSource.DB.Core
             await using var instr = await DbDiagnostics.ExecuteReaderAsync(
                 command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, diagnostics).ConfigureAwait(false);
             var reader = instr.Reader;
+
+            // Resolve each table's column ordinals + PK ordinals ONCE per result set (not per row), so the
+            // hot loop just reads by ordinal via the generated fast materializer — no per-row dictionary,
+            // closures, GetOrdinal-by-name, or boxing.
+            int n = Steps.Count;
+            var fast = new IOrdinalReadable?[n];
+            var ords = new int[n][];
+            var pkOrds = new int[n][];
+            for (int i = 0; i < n; i++)
+            {
+                fast[i] = Steps[i].Prototype as IOrdinalReadable;
+                if (fast[i] != null) ords[i] = fast[i]!.GetReaderOrdinals(reader, overrides[i]);
+                pkOrds[i] = ResolvePkOrdinals(Steps[i].Prototype, reader, overrides[i]);
+            }
+
             while (await instr.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                var entities = new IDbTable?[Steps.Count];
-                for (int i = 0; i < Steps.Count; i++)
-                    entities[i] = MaterializeRow(Steps[i], reader, overrides[i]);
+                var entities = new IDbTable?[n];
+                for (int i = 0; i < n; i++)
+                {
+                    if (AllDbNull(reader, pkOrds[i])) { entities[i] = null; continue; } // outer-join miss
+                    entities[i] = fast[i] != null
+                        ? fast[i]!.ReadByOrdinals(reader, ords[i])
+                        : MaterializeRowSlow(Steps[i], reader, overrides[i]);
+                }
                 yield return entities;
             }
+        }
+
+        private static int[] ResolvePkOrdinals(IDbTable prototype, DbDataReader reader, Dictionary<string, string> overrides)
+        {
+            var pk = prototype.GetPrimaryColumns();
+            var list = new List<int>(pk.Count);
+            foreach (var kv in pk)
+            {
+                if (!overrides.TryGetValue(kv.Key, out var alias)) continue;
+                try { list.Add(reader.GetOrdinal(alias)); } catch (IndexOutOfRangeException) { }
+            }
+            return list.ToArray();
+        }
+
+        // True only when the table has a PK and every PK column is NULL — the canonical outer-join no-match
+        // signal. A table without a PK is never treated as a miss.
+        private static bool AllDbNull(DbDataReader reader, int[] ordinals)
+        {
+            if (ordinals.Length == 0) return false;
+            foreach (var o in ordinals)
+                if (o >= 0 && !reader.IsDBNull(o)) return false;
+            return true;
         }
 
         public async Task<long> CountAsync(
@@ -229,27 +271,10 @@ namespace Socigy.OpenSource.DB.Core
                 command, "SELECT", ct => command.ExecuteScalarAsync(ct), cancellationToken, diagnostics).ConfigureAwait(false);
         }
 
-        private static IDbTable? MaterializeRow(JoinStep step, DbDataReader reader, Dictionary<string, string> overrides)
+        // Fallback for any prototype that doesn't implement IOrdinalReadable (none in practice — all entities
+        // are generated). The caller already handled outer-join no-match detection.
+        private static IDbTable MaterializeRowSlow(JoinStep step, DbDataReader reader, Dictionary<string, string> overrides)
         {
-            // Outer-join no-match detection: a row that didn't match comes back all-NULL for that table.
-            // The primary key is the canonical signal (a real row always has a non-null PK) → return null.
-            var pk = step.Prototype.GetPrimaryColumns();
-            if (pk.Count > 0)
-            {
-                bool allPkNull = true;
-                foreach (var kv in pk)
-                {
-                    if (!overrides.TryGetValue(kv.Key, out var pkAlias)) continue;
-                    try
-                    {
-                        int o = reader.GetOrdinal(pkAlias);
-                        if (!reader.IsDBNull(o)) { allPkNull = false; break; }
-                    }
-                    catch (IndexOutOfRangeException) { }
-                }
-                if (allPkNull) return null;
-            }
-
             var row = step.Factory();
             foreach (var kv in row.GetColumns())
             {
