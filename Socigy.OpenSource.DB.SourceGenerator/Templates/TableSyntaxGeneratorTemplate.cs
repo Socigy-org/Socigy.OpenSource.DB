@@ -4082,8 +4082,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 765 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);\r\n          " +
-                    "  public PostgresqlJoinQueryCommandBuilder<");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on, _WhereClause" +
+                    ");\r\n            public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
@@ -4121,8 +4121,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 769 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);\r\n           " +
-                    " public PostgresqlJoinQueryCommandBuilder<");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on, _WhereClause)" +
+                    ";\r\n            public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
@@ -4160,8 +4160,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 773 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);\r\n          " +
-                    "  public PostgresqlJoinQueryCommandBuilder<");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on, _WhereClause" +
+                    ");\r\n            public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
@@ -4199,8 +4199,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 777 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);\r\n           " +
-                    " public PostgresqlJoinQueryCommandBuilder<");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on, _WhereClause)" +
+                    ";\r\n            public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
@@ -4226,8 +4226,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 780 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);\r\n      " +
-                    "      public PostgresqlJoinQueryCommandBuilder<");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null, _WhereCl" +
+                    "ause);\r\n            public PostgresqlJoinQueryCommandBuilder<");
             
             #line default
             #line hidden
@@ -4253,8 +4253,8 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 783 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);\r\n        " +
-                    "}\r\n        ");
+            this.Write(", TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null, _WhereClau" +
+                    "se);\r\n        }\r\n        ");
             
             #line default
             #line hidden

@@ -1,13 +1,9 @@
 using Socigy.OpenSource.DB.Core.Enums;
 using Socigy.OpenSource.DB.Core.Interfaces;
-using Socigy.OpenSource.DB.Core.Parsers.Postgresql;
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Data.Common;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,150 +11,96 @@ namespace Socigy.OpenSource.DB.Core
 {
 #nullable enable
     /// <summary>
-    /// Builds and executes a two-table JOIN query, yielding <c>(T, TJoin)</c> tuples.
+    /// Builds and executes a two-table JOIN query, yielding <c>(T Left, TJoin Right)</c> tuples. Chain
+    /// <see cref="Join{T3}"/> (etc.) for a third table, <c>OrderBy</c>/<c>Select</c>/aggregates for the rest.
     /// </summary>
     public class PostgresqlJoinQueryCommandBuilder<T, TJoin> : SqlCommandBuilder<PostgresqlJoinQueryCommandBuilder<T, TJoin>>
         where T : class, IDbTable, new()
         where TJoin : class, IDbTable, new()
     {
-        private readonly JoinType _JoinType;
-        private readonly LambdaExpression? _OnExpression;
+        private readonly JoinPlan _plan;
 
-        private LambdaExpression? _WhereExpression;
-        private int _Limit = -1;
-        private int _Offset = -1;
-
-        public PostgresqlJoinQueryCommandBuilder(JoinType joinType, LambdaExpression? onExpression)
+        public PostgresqlJoinQueryCommandBuilder(JoinType joinType, LambdaExpression? onExpression, LambdaExpression? drivingPredicate = null)
         {
-            _JoinType = joinType;
-            _OnExpression = onExpression;
+            _plan = new JoinPlan { DrivingPredicate = drivingPredicate };
+            _plan.Steps.Add(new JoinPlan.JoinStep { Prototype = new T(), Factory = () => new T(), Alias = "a0", Type = JoinType.None, On = null });
+            _plan.Steps.Add(new JoinPlan.JoinStep { Prototype = new TJoin(), Factory = () => new TJoin(), Alias = "a1", Type = joinType, On = onExpression });
         }
 
-        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Where(Expression<Func<T, TJoin, bool>> where)
+        internal PostgresqlJoinQueryCommandBuilder(JoinPlan plan) { _plan = plan; }
+
+        internal JoinPlan Plan => _plan;
+
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Where(Expression<Func<T, TJoin, bool>> where) { _plan.Where = where; return this; }
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderBy(Expression<Func<T, TJoin, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = false; return this; }
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderByDesc(Expression<Func<T, TJoin, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = true; return this; }
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Limit(int limit) { _plan.Limit = limit; return this; }
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Offset(int offset) { _plan.Offset = offset; return this; }
+
+        // ── Chain a third table ─────────────────────────────────────────────────────
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> Join<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Inner, on);
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> LeftJoin<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Left, on);
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> RightJoin<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Right, on);
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> FullOuterJoin<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Full, on);
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> NaturalJoin<T3>() where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Natural, null);
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> CrossJoin<T3>() where T3 : class, IDbTable, new()
+            => Chain<T3>(JoinType.Cross, null);
+
+        private PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> Chain<T3>(JoinType type, LambdaExpression? on) where T3 : class, IDbTable, new()
         {
-            _WhereExpression = where;
-            return this;
+            var plan = _plan.Clone();
+            plan.Steps.Add(new JoinPlan.JoinStep { Prototype = new T3(), Factory = () => new T3(), Alias = "a" + plan.Steps.Count, Type = type, On = on });
+            var next = new PostgresqlJoinQueryCommandBuilder<T, TJoin, T3>(plan);
+            if (_Transaction != null) next.WithTransaction(_Transaction); else if (_Connection != null) next.WithConnection(_Connection);
+            next.WithDiagnostics(_Diagnostics);
+            return next;
         }
 
-        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Limit(int limit)
+        // ── Terminal: tuples / projection / aggregates ──────────────────────────────
+        // Elements are nullable: an outer-join (Left/Right/Full) miss yields null for the unmatched side.
+        public async IAsyncEnumerable<(T? Left, TJoin? Right)> ExecuteAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            _Limit = limit;
-            return this;
+            await foreach (var row in _plan.ExecuteRowsAsync(_Connection, _Transaction, _Diagnostics, cancellationToken).ConfigureAwait(false))
+                yield return ((T?)row[0], (TJoin?)row[1]);
         }
 
-        public PostgresqlJoinQueryCommandBuilder<T, TJoin> Offset(int offset)
+        public async Task<List<(T? Left, TJoin? Right)>> ToListAsync(CancellationToken cancellationToken = default)
         {
-            _Offset = offset;
-            return this;
+            var list = new List<(T?, TJoin?)>();
+            await foreach (var item in ExecuteAsync(cancellationToken).ConfigureAwait(false)) list.Add(item);
+            return list;
         }
 
-        public async IAsyncEnumerable<(T Left, TJoin Right)> ExecuteAsync(
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async Task<(T? Left, TJoin? Right)?> FirstOrDefaultAsync(CancellationToken cancellationToken = default)
         {
-            if (_Connection == null)
-                throw new InvalidOperationException("No connection. Call WithConnection() first.");
-
-            if (_Connection.State != ConnectionState.Open)
-                await _Connection.OpenAsync(cancellationToken);
-
-            var tInstance = new T();
-            var jInstance = new TJoin();
-
-            var tCols = tInstance.GetColumns();
-            var jCols = jInstance.GetColumns();
-
-            var selectParts = new List<string>(tCols.Count + jCols.Count);
-            var tOverrides = new Dictionary<string, string>(tCols.Count);
-            var jOverrides = new Dictionary<string, string>(jCols.Count);
-
-            foreach (var kv in tCols)
-            {
-                var alias = $"t_{kv.Key}";
-                selectParts.Add($"t.{kv.Key} AS {alias}");
-                tOverrides[kv.Key] = alias;
-            }
-            foreach (var kv in jCols)
-            {
-                var alias = $"j_{kv.Key}";
-                selectParts.Add($"j.{kv.Key} AS {alias}");
-                jOverrides[kv.Key] = alias;
-            }
-
-            var command = _Connection.CreateCommand();
-            if (_Transaction != null)
-                command.Transaction = _Transaction;
-
-            var sb = new StringBuilder();
-            sb.Append("SELECT ");
-            sb.Append(string.Join(", ", selectParts));
-            sb.Append($" FROM \"{tInstance.GetTableName()}\" AS t");
-            sb.Append($" {BuildJoinKeyword(_JoinType)} \"{jInstance.GetTableName()}\" AS j");
-
-            if (_OnExpression != null && (_JoinType & JoinType.Natural) == 0 && _JoinType != JoinType.Cross)
-            {
-                var tParam = _OnExpression.Parameters[0];
-                var jParam = _OnExpression.Parameters[1];
-                var visitor = new PostgresqlJoinConditionVisitor(
-                    tParam, jParam,
-                    name => tInstance.GetDbColumnName(name),
-                    name => jInstance.GetDbColumnName(name),
-                    command);
-                sb.Append($" ON {visitor.Parse(_OnExpression)}");
-            }
-
-            if (_WhereExpression != null)
-            {
-                var tParam = _WhereExpression.Parameters[0];
-                var jParam = _WhereExpression.Parameters[1];
-                var visitor = new PostgresqlJoinConditionVisitor(
-                    tParam, jParam,
-                    name => tInstance.GetDbColumnName(name),
-                    name => jInstance.GetDbColumnName(name),
-                    command);
-                sb.Append($" WHERE {visitor.Parse(_WhereExpression)}");
-            }
-
-            if (_Limit > 0) sb.Append($" LIMIT {_Limit}");
-            if (_Offset > 0) sb.Append($" OFFSET {_Offset}");
-
-            command.CommandText = sb.ToString();
-
-            await using var instr = await Diagnostics.DbDiagnostics.ExecuteReaderAsync(
-                command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
-            var reader = instr.Reader;
-            while (await instr.ReadAsync(cancellationToken))
-                yield return (ReadRow<T>(reader, tOverrides), ReadRow<TJoin>(reader, jOverrides));
+            await foreach (var item in ExecuteAsync(cancellationToken).ConfigureAwait(false)) return item;
+            return null;
         }
 
-        private static TRow ReadRow<TRow>(DbDataReader reader, Dictionary<string, string> overrides)
-            where TRow : class, IDbTable, new()
+        public JoinProjection<TResult> Select<TResult>(Func<T?, TJoin?, TResult> projector)
         {
-            var row = new TRow();
-            foreach (var kv in row.GetColumns())
-            {
-                if (!overrides.TryGetValue(kv.Key, out var alias))
-                    continue;
-                try
-                {
-                    var ordinal = reader.GetOrdinal(alias);
-                    if (!reader.IsDBNull(ordinal))
-                        kv.Value.SetValue?.Invoke(reader.GetValue(ordinal));
-                }
-                catch (IndexOutOfRangeException) { }
-            }
-            return row;
+            var p = new JoinProjection<TResult>(_plan, row => projector((T?)row[0], (TJoin?)row[1]));
+            if (_Transaction != null) p.WithTransaction(_Transaction); else if (_Connection != null) p.WithConnection(_Connection);
+            p.WithDiagnostics(_Diagnostics);
+            return p;
         }
 
-        private static string BuildJoinKeyword(JoinType joinType)
-        {
-            if ((joinType & JoinType.Natural) != 0) return "NATURAL JOIN";
-            if (joinType == JoinType.Cross) return "CROSS JOIN";
-            if (joinType == JoinType.Inner) return "INNER JOIN";
-            if ((joinType & JoinType.Full) == JoinType.Full) return "FULL OUTER JOIN";
-            if ((joinType & JoinType.Left) != 0) return "LEFT JOIN";
-            if ((joinType & JoinType.Right) != 0) return "RIGHT JOIN";
-            return "JOIN";
-        }
+        public Task<long> CountAsync(CancellationToken cancellationToken = default)
+            => _plan.CountAsync(_Connection, _Transaction, _Diagnostics, cancellationToken);
+
+        public Task<TResult?> SumAsync<TResult>(Expression<Func<T, TJoin, object?>> column, CancellationToken cancellationToken = default) where TResult : struct
+            => JoinChaining.AggAsync<TResult>(_plan, "SUM", column, _Connection, _Transaction, _Diagnostics, cancellationToken);
+        public Task<TResult?> AvgAsync<TResult>(Expression<Func<T, TJoin, object?>> column, CancellationToken cancellationToken = default) where TResult : struct
+            => JoinChaining.AggAsync<TResult>(_plan, "AVG", column, _Connection, _Transaction, _Diagnostics, cancellationToken);
+        public Task<TResult?> MinAsync<TResult>(Expression<Func<T, TJoin, object?>> column, CancellationToken cancellationToken = default) where TResult : struct
+            => JoinChaining.AggAsync<TResult>(_plan, "MIN", column, _Connection, _Transaction, _Diagnostics, cancellationToken);
+        public Task<TResult?> MaxAsync<TResult>(Expression<Func<T, TJoin, object?>> column, CancellationToken cancellationToken = default) where TResult : struct
+            => JoinChaining.AggAsync<TResult>(_plan, "MAX", column, _Connection, _Transaction, _Diagnostics, cancellationToken);
     }
 #nullable disable
 }

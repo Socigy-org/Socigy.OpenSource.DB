@@ -55,6 +55,44 @@ public static class BenchSupport
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>Ensures <c>bench_users</c> is seeded, then creates <c>bench_logins</c> with one login per user (idempotent). For the JOIN benchmark.</summary>
+    public static async Task EnsureJoinSeedAsync(string connectionString)
+    {
+        await EnsureSeedAsync(connectionString);
+
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        await using (var ddl = conn.CreateCommand())
+        {
+            ddl.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""bench_logins"" (
+                    ""id""      UUID      NOT NULL PRIMARY KEY,
+                    ""user_id"" UUID      NOT NULL,
+                    ""seen_at"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );";
+            await ddl.ExecuteNonQueryAsync();
+        }
+
+        await using (var count = conn.CreateCommand())
+        {
+            count.CommandText = @"SELECT COUNT(*) FROM ""bench_logins""";
+            if (Convert.ToInt64(await count.ExecuteScalarAsync()) >= SeedRows) return;
+        }
+
+        await using (var truncate = conn.CreateCommand())
+        {
+            truncate.CommandText = @"TRUNCATE ""bench_logins""";
+            await truncate.ExecuteNonQueryAsync();
+        }
+
+        // One login per user, keyed by the existing user ids so the join is 1:1.
+        await using var insert = conn.CreateCommand();
+        insert.CommandText = @"INSERT INTO ""bench_logins"" (""id"", ""user_id"", ""seen_at"")
+                               SELECT gen_random_uuid(), ""id"", NOW() FROM ""bench_users""";
+        await insert.ExecuteNonQueryAsync();
+    }
+
     /// <summary>Creates the <c>bench_users</c> table and seeds it with <see cref="SeedRows"/> rows (idempotent).</summary>
     public static async Task EnsureSeedAsync(string connectionString)
     {

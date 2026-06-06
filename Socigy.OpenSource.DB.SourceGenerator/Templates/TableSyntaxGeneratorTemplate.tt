@@ -744,25 +744,25 @@ namespace <#= Namespace #>
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> Join<TJoin>(
                 Expression<Func<<#= ClassName #>, TJoin, bool>> on)
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Inner, on, _WhereClause);
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> LeftJoin<TJoin>(
                 Expression<Func<<#= ClassName #>, TJoin, bool>> on)
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Left, on, _WhereClause);
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> RightJoin<TJoin>(
                 Expression<Func<<#= ClassName #>, TJoin, bool>> on)
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Right, on, _WhereClause);
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> FullOuterJoin<TJoin>(
                 Expression<Func<<#= ClassName #>, TJoin, bool>> on)
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Full, on, _WhereClause);
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> NaturalJoin<TJoin>()
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Natural, null, _WhereClause);
             public PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin> CrossJoin<TJoin>()
                 where TJoin : class, global::Socigy.OpenSource.DB.Core.Interfaces.IDbTable, new()
-                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null);
+                => new PostgresqlJoinQueryCommandBuilder<<#= ClassName #>, TJoin>(global::Socigy.OpenSource.DB.Core.Enums.JoinType.Cross, null, _WhereClause);
         }
         <#= CustomPostClass #>
 	}

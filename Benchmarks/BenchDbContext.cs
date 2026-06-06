@@ -11,6 +11,7 @@ public sealed class BenchDbContext : DbContext
 
     public DbSet<BenchUser> Users => Set<BenchUser>();
     public DbSet<BenchWrite> Writes => Set<BenchWrite>();
+    public DbSet<BenchLogin> Logins => Set<BenchLogin>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
         => options.UseNpgsql(_connectionString);
@@ -31,5 +32,12 @@ public sealed class BenchDbContext : DbContext
         write.Property(x => x.Id).HasColumnName("id");
         write.Property(x => x.Name).HasColumnName("name");
         write.Property(x => x.Age).HasColumnName("age");
+
+        var login = builder.Entity<BenchLogin>();
+        login.ToTable("bench_logins");
+        login.HasKey(x => x.Id);
+        login.Property(x => x.Id).HasColumnName("id");
+        login.Property(x => x.UserId).HasColumnName("user_id");
+        login.Property(x => x.SeenAt).HasColumnName("seen_at");
     }
 }
