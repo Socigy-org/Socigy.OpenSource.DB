@@ -124,6 +124,30 @@ namespace Socigy.OpenSource.DB.UnitTests
         }
 
         [Test]
+        public void Aes_associated_data_binds_ciphertext_to_its_context()
+        {
+            var enc = new AesFieldEncryptor(NewKey());
+            byte[] plain = System.Text.Encoding.UTF8.GetBytes("123-45-6789");
+            byte[] aadUsersSsn = System.Text.Encoding.UTF8.GetBytes("users:ssn");
+            byte[] aadOrdersNote = System.Text.Encoding.UTF8.GetBytes("orders:note");
+
+            byte[] cipher = enc.Encrypt(plain, aadUsersSsn);
+
+            // Same context decrypts; a different column/table (relocation) or missing context fails.
+            Assert.That(enc.Decrypt(cipher, aadUsersSsn), Is.EqualTo(plain));
+            Assert.Throws<CryptographicException>(() => enc.Decrypt(cipher, aadOrdersNote));
+            Assert.Throws<CryptographicException>(() => enc.Decrypt(cipher));
+        }
+
+        [Test]
+        public void Aes_without_associated_data_still_round_trips()
+        {
+            var enc = new AesFieldEncryptor(NewKey());
+            byte[] plain = System.Text.Encoding.UTF8.GetBytes("no aad");
+            Assert.That(enc.Decrypt(enc.Encrypt(plain)), Is.EqualTo(plain));
+        }
+
+        [Test]
         public void Disposed_encryptor_zeroes_keys_and_refuses_use()
         {
             var enc = new AesFieldEncryptor(NewKey());

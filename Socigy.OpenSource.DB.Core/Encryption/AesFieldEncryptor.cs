@@ -41,7 +41,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
         public AesFieldEncryptor(string base64MasterKey)
             : this(Convert.FromBase64String(base64MasterKey ?? throw new ArgumentNullException(nameof(base64MasterKey)))) { }
 
-        public byte[] Encrypt(byte[] plaintext)
+        public byte[] Encrypt(byte[] plaintext, byte[]? associatedData = null)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(AesFieldEncryptor));
             if (plaintext == null) throw new ArgumentNullException(nameof(plaintext));
@@ -69,12 +69,12 @@ namespace Socigy.OpenSource.DB.Core.Encryption
             Buffer.BlockCopy(cipher, 0, output, 1 + IvSize, cipher.Length);
 
             int macInputLen = 1 + IvSize + cipher.Length;
-            byte[] mac = ComputeMac(output, macInputLen);
+            byte[] mac = ComputeMac(output, macInputLen, associatedData);
             Buffer.BlockCopy(mac, 0, output, macInputLen, MacSize);
             return output;
         }
 
-        public byte[] Decrypt(byte[] ciphertext)
+        public byte[] Decrypt(byte[] ciphertext, byte[]? associatedData = null)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(AesFieldEncryptor));
             if (ciphertext == null) throw new ArgumentNullException(nameof(ciphertext));
@@ -82,7 +82,7 @@ namespace Socigy.OpenSource.DB.Core.Encryption
                 throw new CryptographicException("The encrypted value is malformed or was produced by an incompatible encryptor.");
 
             int macOffset = ciphertext.Length - MacSize;
-            byte[] expectedMac = ComputeMac(ciphertext, macOffset);
+            byte[] expectedMac = ComputeMac(ciphertext, macOffset, associatedData);
             if (!FixedTimeEquals(ciphertext, macOffset, expectedMac))
                 throw new CryptographicException("The encrypted value failed its integrity check (wrong key or tampered data).");
 
@@ -102,10 +102,18 @@ namespace Socigy.OpenSource.DB.Core.Encryption
             }
         }
 
-        private byte[] ComputeMac(byte[] buffer, int length)
+        private byte[] ComputeMac(byte[] buffer, int length, byte[]? associatedData)
         {
             using (var hmac = new HMACSHA256(_macKey))
-                return hmac.ComputeHash(buffer, 0, length);
+            {
+                // MAC = HMAC(version || iv || cipher || associatedData). The AAD is authenticated but not
+                // stored; the caller must supply the same AAD on decrypt, binding the ciphertext to its context.
+                hmac.TransformBlock(buffer, 0, length, null, 0);
+                if (associatedData != null && associatedData.Length > 0)
+                    hmac.TransformBlock(associatedData, 0, associatedData.Length, null, 0);
+                hmac.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                return hmac.Hash!;
+            }
         }
 
         private static byte[] Derive(byte[] masterKey, string label)

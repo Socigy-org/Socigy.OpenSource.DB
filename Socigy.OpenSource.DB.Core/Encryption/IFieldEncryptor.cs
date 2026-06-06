@@ -16,11 +16,19 @@ namespace Socigy.OpenSource.DB.Core.Encryption
     /// </summary>
     public interface IFieldEncryptor
     {
-        /// <summary>Encrypts <paramref name="plaintext"/> and returns the self-describing ciphertext envelope.</summary>
-        byte[] Encrypt(byte[] plaintext);
+        /// <summary>
+        /// Encrypts <paramref name="plaintext"/> and returns the self-describing ciphertext envelope.
+        /// <paramref name="associatedData"/>, when supplied, is authenticated (not stored) and binds the
+        /// ciphertext to a context — e.g. <c>table:column</c> — so a value cannot be relocated to a different
+        /// column/row and still decrypt. The same associated data must be passed to <see cref="Decrypt"/>.
+        /// </summary>
+        byte[] Encrypt(byte[] plaintext, byte[]? associatedData = null);
 
-        /// <summary>Decrypts an envelope produced by <see cref="Encrypt"/>. Throws if the data is tampered with or undecryptable.</summary>
-        byte[] Decrypt(byte[] ciphertext);
+        /// <summary>
+        /// Decrypts an envelope produced by <see cref="Encrypt"/>, verifying the same
+        /// <paramref name="associatedData"/>. Throws if the data is tampered with, relocated, or undecryptable.
+        /// </summary>
+        byte[] Decrypt(byte[] ciphertext, byte[]? associatedData = null);
     }
 #nullable disable
 }

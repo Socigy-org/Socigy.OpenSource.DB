@@ -67,9 +67,9 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private AesFieldEncryptor Aes =>
             _aes ?? throw new InvalidOperationException("VaultFieldEncryptor is not initialized — call RefreshAsync() at startup (AddSocigyVaultEncryption does this).");
 
-        public byte[] Encrypt(byte[] plaintext) => Aes.Encrypt(plaintext);
+        public byte[] Encrypt(byte[] plaintext, byte[]? associatedData = null) => Aes.Encrypt(plaintext, associatedData);
 
-        public byte[] Decrypt(byte[] ciphertext) => Aes.Decrypt(ciphertext);
+        public byte[] Decrypt(byte[] ciphertext, byte[]? associatedData = null) => Aes.Decrypt(ciphertext, associatedData);
     }
 #nullable disable
 }
