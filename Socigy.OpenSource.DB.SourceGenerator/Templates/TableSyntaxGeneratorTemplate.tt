@@ -105,7 +105,9 @@ namespace <#= Namespace #>
             return reader.GetOrdinal(columnName);
         }
 
+        <#= SetsRequiredMembersAttribute #>
         public <#= ClassName #>() {}
+        <#= SetsRequiredMembersAttribute #>
         public <#= ClassName #>(DbDataReader reader, Dictionary<string, string>? columnOverrides = null)
         {
         <#
@@ -243,8 +245,12 @@ namespace <#= Namespace #>
         /// Inserts many instances efficiently as batched multi-row INSERT commands (one command per chunk,
         /// not one per row). Returns the total number of rows inserted.
         /// </summary>
-        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, global::System.Threading.CancellationToken cancellationToken = default)
-            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, cancellationToken);
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.CancellationToken cancellationToken = default)
+            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellationToken);
+
+        /// <summary>Inserts many instances via PostgreSQL binary COPY (much faster than the multi-row INSERT for large batches, and not bound by the 65535-parameter limit). COPY cannot use RETURNING, so database-generated values are not propagated back. Pass <c>excludeDbDefaults: true</c> to omit <c>[Default]</c> columns so the server default applies. Returns the number of rows written.</summary>
+        public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.CancellationToken cancellationToken = default)
+            => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync<<#= ClassName #>>(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellationToken);
 
         /// <summary>Returns a new update command builder for this instance.</summary>
         public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()
@@ -789,6 +795,10 @@ namespace <#= Namespace #>
 	public string Namespace { get; set; }
 	public string ClassName { get; set; }
     public string DbEnginePrefix { get; set; }
+    // "[global::System.Diagnostics.CodeAnalysis.SetsRequiredMembers]" when the consumer's compilation has the
+    // attribute (so `required` members satisfy the new() constraint); empty otherwise. Default empty so callers
+    // that don't set it (e.g. the migration-table generation) emit nothing.
+    public string SetsRequiredMembersAttribute { get; set; } = "";
 
     public string CustomPreClass { get; set; } = "";
     public string CustomPostClass { get; set; } = "";

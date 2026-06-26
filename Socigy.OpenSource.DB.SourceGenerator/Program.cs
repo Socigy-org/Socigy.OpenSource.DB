@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -164,6 +165,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             if (compilation.AssemblyName!.StartsWith("Socigy.OpenSource.DB"))
                 return; // Skip self-generation
 
+            // No configured platform (no socigy.json, or no/unknown platform) -> emit nothing. Guards consumer
+            // projects that run the analyzer transitively without a socigy.json from a hard generator failure
+            // (a null DbEnginePrefix fed into a template throws ArgumentNullException('objectToConvert')).
+            if (string.IsNullOrWhiteSpace(DatabasePrefix))
+                return;
+
             // Table.Query() and other method generation
             TableBindingsGenerator.Execute(ctx, compilation, tables, this);
 
@@ -189,6 +196,41 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 "postgresql" or "postgre" or "postgres" => DatabasePrefixes.Postgresql,
                 _ => null,
             };
+        }
+
+        /// <summary>
+        /// The base name used for generated C# identifiers (context interface, DI methods, factory, namespaces):
+        /// <c>contextName</c> when set, else a valid identifier derived from <c>databaseName</c>. Distinct from
+        /// the raw <c>databaseName</c>, which stays the connection-string / DI service / physical-database key.
+        /// </summary>
+        public string DatabaseTypeName
+        {
+            get
+            {
+                var ctx = Settings?.Database?.ContextName;
+                return ToTypeIdentifier(!string.IsNullOrWhiteSpace(ctx) ? ctx! : (Settings?.Database?.DatabaseName ?? "UnnamedDb"));
+            }
+        }
+
+        /// <summary>
+        /// Derives a valid C# identifier from a (possibly lowercase, Postgres-conventional) name: keeps only
+        /// letters/digits/underscore, prefixes '_' if it would start with a digit, and uppercases the first
+        /// letter so an all-lowercase name like <c>identity</c> becomes <c>Identity</c> (avoiding CS8981).
+        /// Mixed-case names like <c>MyDb</c> are unchanged.
+        /// </summary>
+        public static string ToTypeIdentifier(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "UnnamedDb";
+
+            var sb = new StringBuilder(name.Length);
+            foreach (char c in name)
+                if (char.IsLetterOrDigit(c) || c == '_')
+                    sb.Append(c);
+
+            if (sb.Length == 0) return "UnnamedDb";
+            if (char.IsDigit(sb[0])) sb.Insert(0, '_');
+            if (char.IsLower(sb[0])) sb[0] = char.ToUpperInvariant(sb[0]);
+            return sb.ToString();
         }
     }
 

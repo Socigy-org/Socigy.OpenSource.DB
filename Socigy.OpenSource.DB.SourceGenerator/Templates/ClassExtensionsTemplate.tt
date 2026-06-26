@@ -32,18 +32,18 @@ namespace <#= BaseNamespace #>
 <#
             if (IncludeConnectionFactory) 
             {
-#>            collection.AddKeyedSingleton<IDbConnectionFactory, <#= DatabasePrefix #>ConnectionFactory>("<#= DatabaseName #>");
+#>            collection.AddKeyedSingleton<IDbConnectionFactory, <#= DatabasePrefix #>ConnectionFactory>("<#= ServiceKey #>");
 <#
             }
 #>
-            collection.AddKeyedSingleton<IMigrationManager, <#= AssemblyBaseNamespace #>.Socigy.Generated.<#= DatabaseName #>.MigrationManager>("<#= DatabaseName #>");
+            collection.AddKeyedSingleton<IMigrationManager, <#= AssemblyBaseNamespace #>.Socigy.Generated.<#= DatabaseName #>.MigrationManager>("<#= ServiceKey #>");
             return collection;
         }
     }
 
     public static partial class WebApplicationExtensions
     {
-        private const string <#= DatabaseName #>Name = "<#= DatabaseName #>";
+        private const string <#= DatabaseName #>Name = "<#= ServiceKey #>";
 
         public static async Task EnsureLatest<#= DatabaseName #>Migration(this WebApplication app)
         {
@@ -61,6 +61,9 @@ namespace <#= BaseNamespace #>
 
 <#+
     public string DatabaseName { get; set; }
+    // Raw databaseName: the DI keyed-service / connection-string lookup key (kept separate from DatabaseName,
+    // which is the C# identifier base — so a lowercase databaseName still yields clean type/method names).
+    public string ServiceKey { get; set; }
     public string DatabasePrefix { get; set; }
     public string AssemblyBaseNamespace { get; set; }
 

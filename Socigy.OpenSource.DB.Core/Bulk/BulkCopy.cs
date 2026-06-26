@@ -35,6 +35,7 @@ namespace Socigy.OpenSource.DB.Core.Bulk
             DbConnection connection,
             DbTransaction? transaction = null,
             bool includeAutoFields = false,
+            bool excludeDbDefaults = false,
             CancellationToken cancellationToken = default)
             where T : class, IDbTable, IInsertPlanProvider
         {
@@ -45,6 +46,13 @@ namespace Socigy.OpenSource.DB.Core.Bulk
             if (list.Count == 0) return Task.FromResult(0UL);
 
             InsertColumnDescriptor[] cols = list[0].GetInsertPlan(includeAutoFields).Columns;
+            // Omit columns with a DB [Default] so the server default applies instead of the property's CLR value.
+            if (excludeDbDefaults)
+            {
+                var kept = new List<InsertColumnDescriptor>(cols.Length);
+                foreach (var d in cols) if (!d.HasDbDefault) kept.Add(d);
+                cols = kept.ToArray();
+            }
             if (cols.Length == 0) return Task.FromResult(0UL);
 
             string tableName = list[0].GetTableName();

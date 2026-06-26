@@ -1,7 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<!-- Multi-targeted: netstandard2.0 keeps the broad surface; net8.0 carries the Npgsql dependency, which
+		     ships no netstandard2.0 asset. Consumers on net8+ pick the net8.0 dependency group. -->
+		<TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
 		<LangVersion>preview</LangVersion>
 
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -57,6 +59,12 @@
 	<ItemGroup>
 		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.8" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+		<!-- Runtime dependency of the injected Core DLL; declare it here so it flows to consumers (the Core
+		     ProjectReference below is PrivateAssets=all, so Core's own refs don't propagate). Ships ns2.0. -->
+		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.8" />
+		<!-- The generated table code uses Npgsql (NpgsqlCommand/NpgsqlDbType). Npgsql 10 ships no ns2.0 asset,
+		     so it's declared only for the net8.0 group; net8+ consumers get it transitively. -->
+		<PackageReference Include="Npgsql" Version="10.0.3" Condition="'$(TargetFramework)' == 'net8.0'" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -70,10 +78,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Update="icon.png">
-	    <Pack>True</Pack>
-	    <PackagePath>\</PackagePath>
-	  </None>
+	  <!-- Include (not Update) so the icon is packed at the outer cross-targeting build where pack runs and the
+	       default item globs don't apply. Remove first to avoid duplicating the inner-build auto-include. -->
+	  <None Remove="icon.png" />
+	  <None Include="icon.png" Pack="true" PackagePath="\" Visible="false" />
 	</ItemGroup>
 
 	<Target Name="IncludeCoreDllInPackage" BeforeTargets="GenerateNuspec">
@@ -88,7 +96,9 @@
 
 		<ItemGroup>
 			<_PackageFiles Include="@(SocigyCoreDll)">
-				<PackagePath>lib\$(TargetFramework)</PackagePath>
+				<!-- Core is a single ns2.0 DLL usable by both dependency groups; hardcode the path so the single
+				     GenerateNuspec pass (where $(TargetFramework) is empty under multi-targeting) is correct. -->
+				<PackagePath>lib\netstandard2.0</PackagePath>
 				<Visible>true</Visible>
 				<BuildAction>Content</BuildAction>
 			</_PackageFiles>

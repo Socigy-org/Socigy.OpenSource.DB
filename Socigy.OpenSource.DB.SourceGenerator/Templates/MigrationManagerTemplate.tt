@@ -72,7 +72,7 @@ namespace <#= BaseNamespace #>
 
             private readonly ILogger _Logger;
             private readonly IDbConnectionFactory _ConnectionFactory;
-            public MigrationManager(ILogger<MigrationManager> logger, [FromKeyedServices("<#= DatabaseName #>")] IDbConnectionFactory connectionFactory)
+            public MigrationManager(ILogger<MigrationManager> logger, [FromKeyedServices("<#= ServiceKey #>")] IDbConnectionFactory connectionFactory)
             {
                 _Logger = logger;
                 _ConnectionFactory = connectionFactory;
@@ -225,6 +225,9 @@ namespace <#= BaseNamespace #>
 #nullable disable
 <#+
     public string DatabaseName { get; set; }
+    // Raw databaseName: the DI keyed-service key the MigrationManager resolves its connection factory under
+    // (kept separate from DatabaseName, the C# type-name base).
+    public string ServiceKey { get; set; }
     public string BaseNamespace { get; set; }
     public IList<string> MigrationClassNames { get; set; } = [];
 #>

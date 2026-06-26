@@ -143,6 +143,11 @@ Add `socigy.json` to your DB class library project root:
 }
 ```
 
+`databaseName` is also the connection-string key and the physical database name. To keep a lowercase,
+Postgres-conventional name (e.g. `"identity"`) while generating clean C# identifiers, add an optional
+`"contextName": "IdentityDb"` — the generated surface becomes `IIdentityDb` / `AddIdentityDb()` while the
+connection-string key and physical database stay `identity`.
+
 The build generates `AddMyDb()` extension methods and registers `IDbConnectionFactory` and `IMigrationManager` in DI:
 
 ```csharp

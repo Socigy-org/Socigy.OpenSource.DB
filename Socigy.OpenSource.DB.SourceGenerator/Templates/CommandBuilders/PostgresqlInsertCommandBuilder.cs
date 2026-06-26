@@ -282,7 +282,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
                     "sert them too (supply your own\r\n        /// values). Returns the total rows inse" +
                     "rted.\r\n        /// </summary>\r\n        public static async Task<int> InsertMulti" +
                     "pleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transactio" +
-                    "n = null, bool includeAutoFields = false, System.Threading.CancellationToken can" +
+                    "n = null, bool includeAutoFields = false, bool excludeDbDefaults = false, System" +
+                    ".Threading.CancellationToken can" +
                     "cellationToken = default)\r\n        {\r\n            if (rows == null) throw new Ar" +
                     "gumentNullException(nameof(rows));\r\n            if (connection == null) throw ne" +
                     "w ArgumentNullException(nameof(connection));\r\n\r\n            var list = rows as I" +
@@ -291,6 +292,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
                     " throw new InvalidOperationException($\"{typeof(T).Name} does not provide an inse" +
                     "rt plan (IInsertPlanProvider).\");\r\n\r\n            var plan = __planProvider.GetIn" +
                     "sertPlan(includeAutoFields);\r\n            var cols = plan.Columns;\r\n            " +
+                    "if (excludeDbDefaults)\r\n            {\r\n                var __kept = new List<Inse" +
+                    "rtColumnDescriptor>(cols.Length);\r\n                foreach (var __d in cols) if (" +
+                    "!__d.HasDbDefault) __kept.Add(__d);\r\n                cols = __kept.ToArray();\r\n " +
+                    "           }\r\n            " +
                     "int colCount = cols.Length;\r\n            if (colCount == 0) return 0;\r\n\r\n       " +
                     "     string tableName = ((IDbTable)list[0]!).GetTableName();\r\n\r\n            // C" +
                     "olumn name = parameter name without the leading \'@\'.\r\n            var colNames =" +

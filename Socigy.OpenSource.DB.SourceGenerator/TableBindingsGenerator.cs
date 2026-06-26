@@ -42,6 +42,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         public static void Execute(SourceProductionContext ctx, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> tables, Program program)
         {
+            // Emit [SetsRequiredMembers] on generated ctors only when the consumer's compilation has the
+            // attribute (net7+/C# 11). Lets `required` members satisfy the new() constraint without breaking
+            // older (e.g. netstandard2.0) consumers, which can't use `required` anyway.
+            string setsRequiredAttr =
+                compilation.GetTypeByMetadataName("System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute") != null
+                    ? "[global::System.Diagnostics.CodeAnalysis.SetsRequiredMembers]"
+                    : "";
+
             // A class may match more than one collected provider (e.g. [Table] + [TableType]); process once.
             var processed = new HashSet<string>();
             foreach (var table in tables)
@@ -95,7 +103,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 {
                     Namespace = tableColNameClassTemplate.Namespace,
                     ClassName = tableColNameClassTemplate.ClassName,
-                    DbEnginePrefix = program.DatabasePrefix
+                    DbEnginePrefix = program.DatabasePrefix,
+                    SetsRequiredMembersAttribute = setsRequiredAttr
                 };
 
                 var updateBuilderTemplate = new PostgresqlUpdateCommandBuilder()

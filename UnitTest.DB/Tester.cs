@@ -230,3 +230,16 @@ public partial class AuditEntry
 
     public DateTime At { get; set; }
 }
+
+/// <summary>
+/// Table with a <c>required</c> member — verifies the generated entity carries <c>[SetsRequiredMembers]</c> so
+/// it satisfies the builders' <c>new()</c> constraint (issue #2).
+/// </summary>
+[Table("test_required")]
+public partial class RequiredItem
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)]
+    public Guid Id { get; set; }
+
+    public required string Label { get; set; }
+}

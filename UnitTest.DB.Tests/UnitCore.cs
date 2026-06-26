@@ -173,5 +173,14 @@ public static class UnitCore
             ""manual""    BYTEA,
             PRIMARY KEY (""id"")
         );
+
+        -- ---------------------------------------------------------------
+        -- test_required  (entity with a `required` member — issue #2)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_required"" (
+            ""id""     UUID NOT NULL DEFAULT gen_random_uuid(),
+            ""label""  TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (""id"")
+        );
     ";
 }

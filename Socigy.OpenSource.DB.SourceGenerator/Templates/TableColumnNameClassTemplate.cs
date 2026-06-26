@@ -73,7 +73,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
                 : hasConvertor
                     ? "new " + col.Converter + "().ConvertToDbValue(((" + ClassName + ")o)." + col.Name + ")"
                 : "(object?)((" + ClassName + ")o)." + col.Name;
-            WriteLine("                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor(\"@" + col.DatabaseName + "\", typeof(" + typeExpr + "), " + (col.IsJsonColumn ? "true" : "false") + ", o => " + valueExpr + ", " + (col.IsEncrypted ? "true" : "false") + "),");
+            WriteLine("                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor(\"@" + col.DatabaseName + "\", typeof(" + typeExpr + "), " + (col.IsJsonColumn ? "true" : "false") + ", o => " + valueExpr + ", " + (col.IsEncrypted ? "true" : "false") + ", " + (col.HasDbDefault ? "true" : "false") + "),");
         }
     }
 

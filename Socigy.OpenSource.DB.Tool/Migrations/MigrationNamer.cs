@@ -66,22 +66,26 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
         private static string GeneratePrefix(SchemaDiff diff)
         {
             if (diff.AddedTables?.Any() == true)
-            {
-                var addedTable = diff.AddedTables.First();
-                return $"Add{addedTable.Name}";
-            }
+                return Summarize("Add", diff.AddedTables.Select(t => t.Name));
             if (diff.RemovedTables?.Any() == true)
-            {
-                var removedTable = diff.RemovedTables.First();
-                return $"Remove{removedTable.Name}";
-            }
+                return Summarize("Remove", diff.RemovedTables.Select(t => t.Name));
             if (diff.AlteredTables?.Any() == true)
-            {
-                var alteredTable = diff.AlteredTables.First();
-                return $"Alter{alteredTable.Table.Name}";
-            }
+                return Summarize("Alter", diff.AlteredTables.Select(t => t.Table.Name));
 
             return "UpdateSchema";
+        }
+
+        // Summarizes the affected tables into a short, stable prefix that names them all instead of just the
+        // first: 1 -> "AddUsers", 2 -> "AddUsersAndOutbox", >2 -> "AddUsersAnd2More".
+        private static string Summarize(string verb, IEnumerable<string> names)
+        {
+            var list = names.Where(n => !string.IsNullOrEmpty(n))
+                            .Select(Introspection.Naming.ToPascalCase)
+                            .ToList();
+            if (list.Count == 0) return verb + "Tables";
+            if (list.Count == 1) return verb + list[0];
+            if (list.Count == 2) return verb + list[0] + "And" + list[1];
+            return verb + list[0] + "And" + (list.Count - 1) + "More";
         }
 
         public static string GetMigrationId()

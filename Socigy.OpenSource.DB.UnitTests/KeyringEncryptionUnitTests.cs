@@ -150,6 +150,24 @@ namespace Socigy.OpenSource.DB.UnitTests
         }
 
         [Test]
+        public void AddSocigyAesEncryption_configures_default_and_named_profiles()
+        {
+            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+            byte[] key = NewKey();
+
+            var returned = services.AddSocigyAesEncryption(key);                 // default profile
+            services.AddSocigyAesEncryption(Convert.ToBase64String(NewKey()), "transit"); // base64 + named profile
+
+            Assert.That(returned, Is.SameAs(services), "helper returns the collection for chaining");
+
+            var def = SocigyFieldEncryption.Require();
+            Assert.That(SocigyFieldEncryption.Require("transit"), Is.Not.SameAs(def), "the named profile is a distinct encryptor");
+
+            byte[] plain = Encoding.UTF8.GetBytes("secret");
+            Assert.That(def.Decrypt(def.Encrypt(plain)), Is.EqualTo(plain));
+        }
+
+        [Test]
         public void FieldCrypto_profile_overload_round_trips_through_named_encryptor()
         {
             var transit = new AesFieldEncryptor(NewKey());

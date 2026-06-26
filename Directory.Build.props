@@ -4,13 +4,13 @@
 		     informational version that the OpenTelemetry instrumentation scope reports as
 		     "SocigyDbInstrumentation". It is also the default NuGet version for each package
 		     when that package does not set its own version below. Bump it on each release. -->
-		<Version>0.3.3</Version>
+		<Version>0.3.4</Version>
 
 		<!-- Per-package NuGet versions, settable independently so each package can ship at a
 		     different version. Edit a value to release that package on its own track, or leave
 		     it blank to keep tracking the base <Version> above. -->
-		<DbPackageVersion>0.3.3</DbPackageVersion>
-		<HashiCorpPackageVersion>0.3.3</HashiCorpPackageVersion>
+		<DbPackageVersion>0.3.4</DbPackageVersion>
+		<HashiCorpPackageVersion>0.3.4</HashiCorpPackageVersion>
 	</PropertyGroup>
 
 	<!-- A blank per-package version falls back to the base <Version>. -->

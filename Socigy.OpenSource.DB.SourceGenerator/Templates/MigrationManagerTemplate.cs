@@ -20,6 +20,8 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
         #line 227 "MigrationManagerTemplate.tt"
 
     public string DatabaseName { get; set; }
+    // Raw databaseName: the DI keyed-service key the MigrationManager resolves its connection factory under.
+    public string ServiceKey { get; set; }
     public string BaseNamespace { get; set; }
     public IList<string> MigrationClassNames { get; set; } = [];
 
@@ -149,11 +151,11 @@ namespace ");
             #line hidden
             
             #line 76 "MigrationManagerTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
-            
+            this.Write(this.ToStringHelper.ToStringWithCulture( ServiceKey ));
+
             #line default
             #line hidden
-            
+
             #line 76 "MigrationManagerTemplate.tt"
             this.Write("\")] IDbConnectionFactory connectionFactory)\r\n            {\r\n                _Logg" +
                     "er = logger;\r\n                _ConnectionFactory = connectionFactory;\r\n         " +

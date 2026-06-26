@@ -108,8 +108,8 @@ using Socigy.OpenSource.DB.");
             this.Write("ConnectionFactory>(\"");
             
             #line 35 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\ClassExtensionsTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(DatabaseName));
-            
+            this.Write(this.ToStringHelper.ToStringWithCulture(ServiceKey));
+
             #line default
             #line hidden
             this.Write("\");\r\n");
@@ -138,8 +138,8 @@ using Socigy.OpenSource.DB.");
             this.Write(".MigrationManager>(\"");
             
             #line 39 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\ClassExtensionsTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(DatabaseName));
-            
+            this.Write(this.ToStringHelper.ToStringWithCulture(ServiceKey));
+
             #line default
             #line hidden
             this.Write("\");\r\n            return collection;\r\n        }\r\n    }\r\n\r\n    public static partia" +
@@ -153,8 +153,8 @@ using Socigy.OpenSource.DB.");
             this.Write("Name = \"");
             
             #line 46 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\ClassExtensionsTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture(DatabaseName));
-            
+            this.Write(this.ToStringHelper.ToStringWithCulture(ServiceKey));
+
             #line default
             #line hidden
             this.Write("\";\r\n\r\n        public static async Task EnsureLatest");
@@ -196,6 +196,8 @@ using Socigy.OpenSource.DB.");
         #line 62 "D:\Socigy\OpenSource\Socigy.OpenSource.DB\Socigy.OpenSource.DB.SourceGenerator\Templates\ClassExtensionsTemplate.tt"
 
     public string DatabaseName { get; set; }
+    // Raw databaseName: the DI keyed-service / connection-string lookup key (separate from DatabaseName).
+    public string ServiceKey { get; set; }
     public string DatabasePrefix { get; set; }
     public string AssemblyBaseNamespace { get; set; }
 

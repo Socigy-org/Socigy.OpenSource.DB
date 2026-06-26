@@ -440,7 +440,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <paramref name="includeAutoFields"/> = <see langword="true"/> to insert them too (supply your own
         /// values). Returns the total rows inserted.
         /// </summary>
-        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, bool includeAutoFields = false, System.Threading.CancellationToken cancellationToken = default)
+        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, System.Threading.CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -453,6 +453,13 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
             var plan = __planProvider.GetInsertPlan(includeAutoFields);
             var cols = plan.Columns;
+            // Omit columns with a DB [Default] so the server default applies instead of the property's CLR value.
+            if (excludeDbDefaults)
+            {
+                var __kept = new List<InsertColumnDescriptor>(cols.Length);
+                foreach (var __d in cols) if (!__d.HasDbDefault) __kept.Add(__d);
+                cols = __kept.ToArray();
+            }
             int colCount = cols.Length;
             if (colCount == 0) return 0;
 

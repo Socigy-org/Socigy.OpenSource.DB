@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Npgsql" Version="10.0.3" />
-    <PackageReference Include="Socigy.OpenSource.DB" Version="0.3.1" />
+    <!-- Npgsql now flows transitively from Socigy.OpenSource.DB (>= 0.3.4); no explicit reference needed. -->
+    <PackageReference Include="Socigy.OpenSource.DB" Version="0.3.4" />
   </ItemGroup>
 
 </Project>

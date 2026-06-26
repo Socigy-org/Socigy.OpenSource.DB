@@ -11,7 +11,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     {
         public static void Execute(SourceProductionContext ctx, Compilation compilation, Program program)
         {
-            string databaseName = program.Settings?.Database?.DatabaseName ?? "UnnamedDb";
+            // typeName = identifier base (clean even for a lowercase databaseName); serviceKey = raw databaseName
+            // used as the DI keyed-service / connection-string lookup key.
+            string typeName = program.DatabaseTypeName;
+            string serviceKey = program.Settings?.Database?.DatabaseName ?? "UnnamedDb";
 
             // No configured provider for this project (e.g. API project without socigy.json)
             if (string.IsNullOrWhiteSpace(program.DatabasePrefix))
@@ -21,11 +24,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
             if (program.Settings?.Database?.GenerateWebAppExtensions ?? true)
             {
-                ctx.AddSource($"{databaseName}Extensions.g.cs", new ClassExtensionsTemplate()
+                ctx.AddSource($"{typeName}Extensions.g.cs", new ClassExtensionsTemplate()
                 {
                     AssemblyBaseNamespace = compilation.AssemblyName,
-                    BaseNamespace = $"Socigy.OpenSource.DB.{databaseName}.Extensions",
-                    DatabaseName = databaseName,
+                    BaseNamespace = $"Socigy.OpenSource.DB.{typeName}.Extensions",
+                    DatabaseName = typeName,
+                    ServiceKey = serviceKey,
                     DatabasePrefix = program.DatabasePrefix,
                     IncludeConnectionFactory = includeConnectionFactory
                 }.TransformText());
@@ -38,7 +42,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     case DatabasePrefixes.Postgresql:
                         ctx.AddSource($"{program.DatabasePrefix}DbConnectionFactory.g.cs", new DbConnectionFactoryTemplate()
                         {
-                            BaseNamespace = $"Socigy.OpenSource.DB.{databaseName}.Factory",
+                            BaseNamespace = $"Socigy.OpenSource.DB.{typeName}.Factory",
                             ConnectionClassName = "NpgsqlConnection",
                             Usings = ["Npgsql"],
                             DatabasePrefix = program.DatabasePrefix,

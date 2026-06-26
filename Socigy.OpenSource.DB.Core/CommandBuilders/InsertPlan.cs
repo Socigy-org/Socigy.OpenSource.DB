@@ -14,14 +14,18 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         public Type Type { get; }
         public bool IsJson { get; }
         public bool IsEncrypted { get; }
+        /// <summary>True when this column has a DB-level <c>DEFAULT</c> (from <c>[Default]</c>); lets the insert
+        /// paths omit it (so the server default applies) when the caller excludes DB-defaulted columns.</summary>
+        public bool HasDbDefault { get; }
         public Func<object, object?> GetValue { get; }
 
-        public InsertColumnDescriptor(string parameterName, Type type, bool isJson, Func<object, object?> getValue, bool isEncrypted = false)
+        public InsertColumnDescriptor(string parameterName, Type type, bool isJson, Func<object, object?> getValue, bool isEncrypted = false, bool hasDbDefault = false)
         {
             ParameterName = parameterName;
             Type = type;
             IsJson = isJson;
             IsEncrypted = isEncrypted;
+            HasDbDefault = hasDbDefault;
             GetValue = getValue;
         }
     }

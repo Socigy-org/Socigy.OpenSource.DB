@@ -15,7 +15,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     {
         public static void Execute(SourceProductionContext ctx, Compilation compilation, Program program)
         {
-            string dbName = program.Settings?.Database.DatabaseName ?? "UnnamedDb";
+            // No platform/socigy.json -> nothing to generate. Guard like ContextGenerator/ExtensionGenerator so
+            // the generator no-ops (instead of feeding a null DatabasePrefix into a template, which throws
+            // ArgumentNullException('objectToConvert') in ToStringWithCulture) on consumer projects with no config.
+            if (string.IsNullOrWhiteSpace(program.DatabasePrefix))
+                return;
+
+            // Identifier base (the generated `partial class {dbName}` holder etc.) — uses the type name so a
+            // lowercase databaseName doesn't produce an all-lowercase type name (CS8981).
+            string dbName = program.DatabaseTypeName;
 
             var migrationTableNamespace = $"{compilation.AssemblyName}.Socigy.Generated";
             ctx.AddSource("Migrations.g.cs", new MigrationTableTemplate()
@@ -78,6 +86,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             {
                 BaseNamespace = migrationTableNamespace,
                 DatabaseName = dbName,
+                // Raw databaseName for the [FromKeyedServices(...)] connection-factory lookup (matches the keyed
+                // registration in the DI extension); separate from dbName which is the C# type-name base.
+                ServiceKey = program.Settings?.Database?.DatabaseName ?? "UnnamedDb",
                 MigrationClassNames = []
             };
             foreach (var migration in program.LocalMigrations)

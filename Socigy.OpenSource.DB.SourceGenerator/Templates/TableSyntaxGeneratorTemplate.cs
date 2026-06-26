@@ -22,6 +22,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
 	public string Namespace { get; set; }
 	public string ClassName { get; set; }
     public string DbEnginePrefix { get; set; }
+    // "[global::System.Diagnostics.CodeAnalysis.SetsRequiredMembers]" when the consumer's compilation has the
+    // attribute; empty otherwise. Default empty so callers that don't set it emit nothing.
+    public string SetsRequiredMembersAttribute { get; set; } = "";
 
     public string CustomPreClass { get; set; } = "";
     public string CustomPostClass { get; set; } = "";
@@ -400,7 +403,9 @@ using Socigy.OpenSource.DB.Core.Parsers.");
                     "string columnName, Dictionary<string, string>? columnOverrides = null)\r\n        " +
                     "{\r\n            if (columnOverrides != null && columnOverrides.ContainsKey(column" +
                     "Name))\r\n                columnName = columnOverrides[columnName];\r\n\r\n           " +
-                    " return reader.GetOrdinal(columnName);\r\n        }\r\n\r\n        public ");
+                    " return reader.GetOrdinal(columnName);\r\n        }\r\n\r\n        ");
+            this.Write(this.ToStringHelper.ToStringWithCulture( SetsRequiredMembersAttribute ));
+            this.Write("\r\n        public ");
             
             #line default
             #line hidden
@@ -412,11 +417,13 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 108 "TableSyntaxGeneratorTemplate.tt"
-            this.Write("() {}\r\n        public ");
-            
+            this.Write("() {}\r\n        ");
+            this.Write(this.ToStringHelper.ToStringWithCulture( SetsRequiredMembersAttribute ));
+            this.Write("\r\n        public ");
+
             #line default
             #line hidden
-            
+
             #line 109 "TableSyntaxGeneratorTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
@@ -1382,7 +1389,7 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             
             #line 257 "TableSyntaxGeneratorTemplate.tt"
             this.Write("> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transa" +
-                    "ction = null, bool includeAutoFields = false, global::System.Threading.Cancellat" +
+                    "ction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.Cancellat" +
                     "ionToken cancellationToken = default)\r\n            => ");
             
             #line default
@@ -1407,8 +1414,22 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 258 "TableSyntaxGeneratorTemplate.tt"
-            this.Write(">.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, cancellat" +
-                    "ionToken);\r\n\r\n        /// <summary>Returns a new update command builder for this" +
+            this.Write(">.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellat" +
+                    "ionToken);\r\n\r\n        /// <summary>Inserts many instances via PostgreSQL binar" +
+                    "y COPY (much faster than the multi-row INSERT for large batches, and not bound by" +
+                    " the 65535-parameter limit). COPY cannot use RETURNING, so database-generated val" +
+                    "ues are not propagated back. Pass excludeDbDefaults: true to omit [Default] colum" +
+                    "ns so the server default applies. Returns the number of rows written.</summary>\r\n   " +
+                    "     public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyA" +
+                    "sync(global::System.Collections.Generic.IEnumerable<");
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            this.Write("> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transac" +
+                    "tion = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.Cancellatio" +
+                    "nToken cancellationToken = default)\r\n            => global::Socigy.OpenSource.DB" +
+                    ".Core.Bulk.BulkCopy.InsertMultipleCopyAsync<");
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            this.Write(">(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellationToken);\r\n\r\n   " +
+                    "     /// <summary>Returns a new update command builder for this" +
                     " instance.</summary>\r\n        public ");
             
             #line default
