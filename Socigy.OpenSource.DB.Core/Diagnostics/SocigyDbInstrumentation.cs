@@ -55,6 +55,14 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
         /// <summary>Number of SQL commands that threw during execution.</summary>
         internal static readonly Counter<long> ErrorCounter = Meter.CreateCounter<long>(
             "socigy.db.command.errors", unit: "{error}", description: "Number of SQL commands that threw.");
+
+        /// <summary>Number of SQL commands whose duration exceeded the configured slow-query threshold.</summary>
+        internal static readonly Counter<long> SlowQueryCounter = Meter.CreateCounter<long>(
+            "socigy.db.slow_queries", unit: "{command}", description: "Number of SQL commands exceeding the slow-query threshold.");
+
+        /// <summary>Time taken to open a database connection, in seconds (OTel semantic-conventions metric).</summary>
+        internal static readonly Histogram<double> ConnectionOpenHistogram = Meter.CreateHistogram<double>(
+            "db.client.connection.create_time", unit: "s", description: "Time to establish a new database connection.");
     }
 #nullable disable
 }

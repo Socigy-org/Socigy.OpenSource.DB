@@ -42,6 +42,23 @@ namespace Socigy.OpenSource.DB.Core.Encryption
 
         public static object? Decrypt(object? dbValue, Type clrType, string context)
             => Decrypt(dbValue, clrType, Encoding.UTF8.GetBytes(context));
+
+        /// <summary>
+        /// Profile-aware overloads emitted for <c>[Encrypted(Profile = "…")]</c> columns: the column routes to
+        /// the encryptor registered under <paramref name="profile"/> (null/empty -> the default encryptor)
+        /// instead of the ambient default.
+        /// </summary>
+        public static object? Encrypt(object? value, Type clrType, string context, string? profile)
+        {
+            if (value == null || value is DBNull) return null;
+            return SocigyFieldEncryption.Require(profile).Encrypt(FieldValueCodec.Encode(value, clrType), Encoding.UTF8.GetBytes(context));
+        }
+
+        public static object? Decrypt(object? dbValue, Type clrType, string context, string? profile)
+        {
+            if (dbValue == null || dbValue is DBNull) return null;
+            return FieldValueCodec.Decode(SocigyFieldEncryption.Require(profile).Decrypt((byte[])dbValue, Encoding.UTF8.GetBytes(context)), clrType);
+        }
     }
 #nullable disable
 }

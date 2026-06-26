@@ -9,13 +9,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     /// suppressed from a project's <c>.editorconfig</c> via
     /// <c>dotnet_diagnostic.SCGDB###.severity = error|warning|none</c>.
     ///
-    /// next free id = SCGDB019
+    /// next free id = SCGDB025
     /// </summary>
     internal static class Diagnostics
     {
         private const string Category = "Socigy.DB";
-
-        // ── Table binding diagnostics ──────────────────────────────────────────────
 
         public static readonly DiagnosticDescriptor AutoIncrementTypeError = new(
             id: "SCGDB001",
@@ -32,8 +30,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
-
-        // ── SQL procedure diagnostics ──────────────────────────────────────────────
 
         public static readonly DiagnosticDescriptor MissingPlaceholder = new(
             id: "SCGDB003",
@@ -139,8 +135,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
-        // ── Table definition quality diagnostics ───────────────────────────────────
-
         public static readonly DiagnosticDescriptor TableNoPrimaryKey = new(
             id: "SCGDB016",
             title: "[Table] class has no primary key",
@@ -161,6 +155,54 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             id: "SCGDB018",
             title: "[Column] name is empty",
             messageFormat: "[Column] on '{0}' has an empty or whitespace name",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor ScalarReturnTypeInvalid = new(
+            id: "SCGDB019",
+            title: "@returns scalar type is not a supported scalar",
+            messageFormat: "'-- @returns scalar' type '{0}' in procedure '{1}' is not a supported scalar (a primitive, string, Guid, DateTime, DateTimeOffset, TimeSpan, DateOnly, TimeOnly, or a nullable thereof)",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor ConflictingReturns = new(
+            id: "SCGDB020",
+            title: "Conflicting @returns directives",
+            messageFormat: "Procedure '{0}' declares more than one '-- @returns' directive; the first is used and the rest are ignored",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor DtoNotMappable = new(
+            id: "SCGDB021",
+            title: "@returns DTO type cannot be mapped",
+            messageFormat: "'-- @returns' type '{0}' has no public parameterless constructor with settable properties, nor a single public constructor with parameters, so no result mapper can be generated",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor MalformedReturns = new(
+            id: "SCGDB022",
+            title: "Malformed @returns directive",
+            messageFormat: "Malformed '-- @returns' directive in procedure '{0}'; expected '-- @returns: Type', '-- @returns scalar: Type', or '-- @returns affected'",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor EncryptedKeyColumn = new(
+            id: "SCGDB023",
+            title: "[Encrypted] cannot be applied to a key column",
+            messageFormat: "[Encrypted] on '{0}' cannot be combined with [PrimaryKey] or [AutoIncrement]; encrypted values are stored as non-deterministic bytea and cannot be used as a key or auto-incremented",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor DuplicateColumnName = new(
+            id: "SCGDB024",
+            title: "Duplicate column name",
+            messageFormat: "Table class '{0}' maps more than one property to the column name '{1}'; column names must be unique after snake_case normalization",
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);

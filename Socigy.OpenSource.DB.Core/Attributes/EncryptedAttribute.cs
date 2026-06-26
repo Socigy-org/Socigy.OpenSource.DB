@@ -27,6 +27,16 @@ namespace Socigy.OpenSource.DB.Attributes
         /// </para>
         /// </summary>
         public bool AutoDecrypt { get; set; } = true;
+
+        /// <summary>
+        /// Routes this column to a named encryptor <b>profile</b> instead of the default. Leave
+        /// <see langword="null"/>/empty (the default) to use the ambient default encryptor; set it to a name
+        /// registered via <c>SocigyFieldEncryption.Configure("name", encryptor)</c> (or a DI helper such as
+        /// <c>AddSocigyVaultTransitEncryption(o => o.Profile = "name")</c>) to encrypt just this column with a
+        /// different encryptor — e.g. a few highly-sensitive columns using Vault Transit while the rest use a
+        /// local envelope encryptor.
+        /// </summary>
+        public string? Profile { get; set; }
     }
 #nullable disable
 }

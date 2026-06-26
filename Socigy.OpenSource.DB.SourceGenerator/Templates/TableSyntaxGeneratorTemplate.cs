@@ -27,7 +27,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt, string? EncryptionProfile)> Columns { get; set; } = [];
+
+    // Emits the optional 4th argument to FieldCrypto.Decrypt selecting a non-default encryptor profile; empty
+    // for the common (default-profile) case so the generated call is unchanged.
+    string ProfileArgLiteral(string? profile)
+        => string.IsNullOrEmpty(profile) ? "" : ", \"" + profile.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 
@@ -323,7 +328,9 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 60 "TableSyntaxGeneratorTemplate.tt"
-            this.Write("ColumnName) ?? default(");
+            this.Write("ColumnName");
+            this.Write(this.ToStringHelper.ToStringWithCulture( ProfileArgLiteral(column.EncryptionProfile) ));
+            this.Write(") ?? default(");
             
             #line default
             #line hidden
@@ -496,7 +503,9 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 117 "TableSyntaxGeneratorTemplate.tt"
-            this.Write("ColumnName) ?? default(");
+            this.Write("ColumnName");
+            this.Write(this.ToStringHelper.ToStringWithCulture( ProfileArgLiteral(column.EncryptionProfile) ));
+            this.Write(") ?? default(");
             
             #line default
             #line hidden
@@ -946,7 +955,9 @@ using Socigy.OpenSource.DB.Core.Parsers.");
             #line hidden
             
             #line 190 "TableSyntaxGeneratorTemplate.tt"
-            this.Write("ColumnName) ?? default(");
+            this.Write("ColumnName");
+            this.Write(this.ToStringHelper.ToStringWithCulture( ProfileArgLiteral(column.EncryptionProfile) ));
+            this.Write(") ?? default(");
             
             #line default
             #line hidden

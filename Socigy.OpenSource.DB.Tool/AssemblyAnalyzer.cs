@@ -501,7 +501,6 @@ namespace Socigy.OpenSource.DB.Tool
             for (int i = 0; i < mainPks.Count; i++)
             {
                 var pk = mainPks[i];
-                // Check if explicit mapping provided for this PK
                 string? junctionColName = null;
                 for (int k = 0; k + 1 < keyMappings.Count; k += 2)
                 {
@@ -535,7 +534,6 @@ namespace Socigy.OpenSource.DB.Tool
             // Enum FK column
             var enumPkType = FindEnumTableValueType(enumType);
             string enumJunctionColName = $"{enumTableName}_id";
-            // Check if explicit mapping given for enum
             for (int k = 0; k + 1 < keyMappings.Count; k += 2)
             {
                 if (keyMappings[k] == enumType.Name)

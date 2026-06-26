@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Socigy.OpenSource.DB.Core.Diagnostics;
@@ -69,7 +70,7 @@ namespace Socigy.OpenSource.DB.Core.Context
             if (_pinned == null)
                 _pinned = _factory.Create(Options.ConnectionKey);
             if (_pinned.State != ConnectionState.Open)
-                await _pinned.OpenAsync(cancellationToken).ConfigureAwait(false);
+                await OpenWithTimingAsync(_pinned, cancellationToken).ConfigureAwait(false);
             return _pinned;
         }
 
@@ -97,7 +98,7 @@ namespace Socigy.OpenSource.DB.Core.Context
             }
 
             DbConnection fresh = _factory.Create(Options.ConnectionKey);
-            await fresh.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await OpenWithTimingAsync(fresh, cancellationToken).ConfigureAwait(false);
             return (fresh, true);
         }
 
@@ -155,6 +156,22 @@ namespace Socigy.OpenSource.DB.Core.Context
             if (_pinned != null)
                 await DisposeConnectionAsync(_pinned).ConfigureAwait(false);
             _pinned = null;
+        }
+
+        // Opens the connection, recording the elapsed time into the connection-open histogram. When no meter
+        // listener is subscribed this is a plain OpenAsync with no timing overhead.
+        private static async Task OpenWithTimingAsync(DbConnection connection, CancellationToken cancellationToken)
+        {
+            if (!SocigyDbInstrumentation.ConnectionOpenHistogram.Enabled)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            long start = Stopwatch.GetTimestamp();
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            double seconds = (Stopwatch.GetTimestamp() - start) / (double)Stopwatch.Frequency;
+            SocigyDbInstrumentation.ConnectionOpenHistogram.Record(seconds);
         }
 
         internal static async ValueTask DisposeConnectionAsync(DbConnection connection)

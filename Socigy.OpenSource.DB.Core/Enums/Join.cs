@@ -10,23 +10,20 @@ namespace Socigy.OpenSource.DB.Core.Enums
         // 0 is usually reserved for None/Default
         None = 0,
 
-        // --- Base Types ---
-        Inner = 1 << 0, // 1
-        Cross = 1 << 1, // 2
+        Inner = 1 << 0,
+        Cross = 1 << 1,
 
-        // --- Directionals (Implicitly Outer) ---
-        Left = 1 << 2, // 4
-        Right = 1 << 3, // 8
+        Left = 1 << 2,
+        Right = 1 << 3,
 
         // Composite: Full is semantically both Left AND Right
-        Full = Left | Right, // 12
+        Full = Left | Right,
 
-        // --- Modifiers ---
         // "NATURAL" changes how columns are matched
-        Natural = 1 << 4, // 16
+        Natural = 1 << 4,
 
         // "OUTER" is often optional syntax (LEFT JOIN vs LEFT OUTER JOIN),
         // but this flag allows you to be explicit if your SQL dialect requires it.
-        ExplicitOuter = 1 << 5  // 32
+        ExplicitOuter = 1 << 5
     }
 }

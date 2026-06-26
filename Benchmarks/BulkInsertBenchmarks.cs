@@ -48,6 +48,14 @@ public class BulkInsertBenchmarks
         return await BenchWrite.InsertMultipleAsync(_rows, conn);
     }
 
+    [Benchmark(Description = "Socigy (binary COPY)")]
+    public async Task<ulong> Socigy_Copy()
+    {
+        await using var conn = new NpgsqlConnection(_cs);
+        await conn.OpenAsync();
+        return await global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync(_rows, conn);
+    }
+
     [Benchmark(Description = "Socigy (per-row loop, 1 tx)")]
     public async Task<int> Socigy_Loop()
     {

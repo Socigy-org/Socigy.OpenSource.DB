@@ -17,7 +17,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         {
             string dbName = program.Settings?.Database.DatabaseName ?? "UnnamedDb";
 
-            // Migrations table, needed everytime
             var migrationTableNamespace = $"{compilation.AssemblyName}.Socigy.Generated";
             ctx.AddSource("Migrations.g.cs", new MigrationTableTemplate()
             {
@@ -48,11 +47,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 CustomPostClass = "}",
                 Columns =
                 [
-                    ("Id", typeof(long).FullName, true, null, true, "_scg_migrations_id_seq", false, null, false, true),
-                    ("HumanId", typeof(string).FullName, false, null, false, null, false, null, false, true),
-                    ("IsRollback", typeof(bool).FullName, false, null, false, null, false, null, false, true),
-                    ("AppliedAt", typeof(DateTime).FullName, false, null, false, null, false, null, false, true),
-                    ("ExecutedBy", typeof(string).FullName, false, null, false, null, false, null, false, true),
+                    ("Id", typeof(long).FullName, true, null, true, "_scg_migrations_id_seq", false, null, false, true, null),
+                    ("HumanId", typeof(string).FullName, false, null, false, null, false, null, false, true, null),
+                    ("IsRollback", typeof(bool).FullName, false, null, false, null, false, null, false, true, null),
+                    ("AppliedAt", typeof(DateTime).FullName, false, null, false, null, false, null, false, true, null),
+                    ("ExecutedBy", typeof(string).FullName, false, null, false, null, false, null, false, true, null),
                 ],
             }.TransformText());
 

@@ -23,3 +23,9 @@ SCGDB015 | Socigy.DB | Error | Duplicate generated procedure
 SCGDB016 | Socigy.DB | Warning | [Table] class has no primary key
 SCGDB017 | Socigy.DB | Warning | [Table] class has no columns
 SCGDB018 | Socigy.DB | Error | [Column] name is empty
+SCGDB019 | Socigy.DB | Error | @returns scalar type is not a supported scalar
+SCGDB020 | Socigy.DB | Warning | Conflicting @returns directives
+SCGDB021 | Socigy.DB | Error | @returns DTO type cannot be mapped
+SCGDB022 | Socigy.DB | Error | Malformed @returns directive
+SCGDB023 | Socigy.DB | Error | [Encrypted] cannot be applied to a key column
+SCGDB024 | Socigy.DB | Error | Duplicate column name

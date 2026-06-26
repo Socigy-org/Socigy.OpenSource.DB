@@ -57,7 +57,7 @@ namespace <#= Namespace #>
             {
                 if (!_<#= column.SourceName #>Decrypted)
                 {
-                    <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(<#= column.SourceName #>RawEncrypted, typeof(<#= encType #>), TableName + ":" + <#= column.SourceName #>ColumnName) ?? default(<#= column.TypeName #>));
+                    <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(<#= column.SourceName #>RawEncrypted, typeof(<#= encType #>), TableName + ":" + <#= column.SourceName #>ColumnName<#= ProfileArgLiteral(column.EncryptionProfile) #>) ?? default(<#= column.TypeName #>));
                     _<#= column.SourceName #>Decrypted = true;
                 }
                 return <#= column.SourceName #>;
@@ -113,7 +113,7 @@ namespace <#= Namespace #>
             {
                 if (column.IsEncrypted && column.EncryptAutoDecrypt)
                 {
-#>          { var __enc = ReadValue<byte[]?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>), TableName + ":" + <#= column.SourceName #>ColumnName) ?? default(<#= column.TypeName #>)); }
+#>          { var __enc = ReadValue<byte[]?>(reader, <#= column.SourceName #>ColumnName, columnOverrides); <#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>), TableName + ":" + <#= column.SourceName #>ColumnName<#= ProfileArgLiteral(column.EncryptionProfile) #>) ?? default(<#= column.TypeName #>)); }
 <#
                 }
                 else if (column.IsEncrypted)
@@ -180,7 +180,7 @@ namespace <#= Namespace #>
             {
                 if (column.IsEncrypted && column.EncryptAutoDecrypt)
                 {
-#>          { int __o = ordinals[<#= __ci #>]; var __enc = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<byte[]>(__o); __row.<#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>), TableName + ":" + <#= column.SourceName #>ColumnName) ?? default(<#= column.TypeName #>)); }
+#>          { int __o = ordinals[<#= __ci #>]; var __enc = (__o < 0 || reader.IsDBNull(__o)) ? null : reader.GetFieldValue<byte[]>(__o); __row.<#= column.SourceName #> = (<#= column.TypeName #>)(global::Socigy.OpenSource.DB.Core.Encryption.FieldCrypto.Decrypt(__enc, typeof(<#= column.TypeName.TrimEnd('?') #>), TableName + ":" + <#= column.SourceName #>ColumnName<#= ProfileArgLiteral(column.EncryptionProfile) #>) ?? default(<#= column.TypeName #>)); }
 <#
                 }
                 else if (column.IsEncrypted)
@@ -794,7 +794,12 @@ namespace <#= Namespace #>
     public string CustomPostClass { get; set; } = "";
 
     #nullable enable
-    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt)> Columns { get; set; } = [];
+    public IList<(string SourceName, string TypeName, bool IsPrimaryKey, string? Converter, bool IsAutoIncrement, string? SequenceName, bool IsJsonColumn, string? JsonContextType, bool IsEncrypted, bool EncryptAutoDecrypt, string? EncryptionProfile)> Columns { get; set; } = [];
+
+    // Emits the optional 4th argument to FieldCrypto.Decrypt selecting a non-default encryptor profile; empty
+    // for the common (default-profile) case so the generated call is unchanged.
+    string ProfileArgLiteral(string? profile)
+        => string.IsNullOrEmpty(profile) ? "" : ", \"" + profile.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 

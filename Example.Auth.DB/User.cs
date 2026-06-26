@@ -92,7 +92,7 @@ namespace Example.Auth.DB
         [PrimaryKey, ForeignKey(typeof(User))]
         public Guid UserId { get; set; }
         [PrimaryKey, ForeignKey(typeof(Course))]
-        public Guid CourseId { get; set; } // Test of type matching
+        public Guid CourseId { get; set; }
 
         public DateTime RegisteredAt { get; set; }
     }

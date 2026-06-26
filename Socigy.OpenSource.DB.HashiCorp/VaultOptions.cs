@@ -38,6 +38,61 @@ namespace Socigy.OpenSource.DB.HashiCorp
     }
 
     /// <summary>
+    /// Common settings for the two Vault Transit-backed field-encryption modes (data-key envelope and
+    /// EaaS-direct). Both encrypt <c>[Encrypted]</c> columns using Vault's <c>transit</c> engine.
+    /// </summary>
+    public abstract class VaultTransitOptions : VaultConnectionOptions
+    {
+        /// <summary>Transit secrets-engine mount point (default <c>transit</c>).</summary>
+        public string TransitMountPoint { get; set; } = "transit";
+
+        /// <summary>Name of the Transit key (the key-encryption key) to use (default <c>socigy-db</c>).</summary>
+        public string TransitKeyName { get; set; } = "socigy-db";
+
+        /// <summary>
+        /// Optional encryptor <b>profile</b> to register this encryptor under. Leave <see langword="null"/> to
+        /// install it as the default encryptor; set a name to route only <c>[Encrypted(Profile = "…")]</c>
+        /// columns here (so e.g. envelope mode is the default and Transit EaaS covers a few sensitive columns).
+        /// </summary>
+        public string? Profile { get; set; }
+
+        /// <summary>Run rotation automatically in the background on <see cref="RotationInterval"/> (default off).</summary>
+        public bool EnableBackgroundRotation { get; set; }
+
+        /// <summary>Interval for background rotation when <see cref="EnableBackgroundRotation"/> is set (default 90 days).</summary>
+        public TimeSpan RotationInterval { get; set; } = TimeSpan.FromDays(90);
+    }
+
+    /// <summary>
+    /// Settings for the <b>data-key envelope</b> mode: a versioned keyring of Transit-wrapped DEKs is kept in a
+    /// KV-v2 secret; per-field crypto is local AES and Transit is only contacted at startup/rotation. Old rows
+    /// stay readable across rotations because each value embeds the id of the DEK that produced it.
+    /// </summary>
+    public sealed class VaultEnvelopeEncryptionOptions : VaultTransitOptions
+    {
+        /// <summary>KV-v2 secrets-engine mount point that stores the keyring (default <c>secret</c>).</summary>
+        public string KvMountPoint { get; set; } = "secret";
+
+        /// <summary>Path of the KV-v2 secret that holds the wrapped-DEK keyring (default <c>socigy/db-keyring</c>).</summary>
+        public string KeyringSecretPath { get; set; } = "socigy/db-keyring";
+
+        /// <summary>Field within the secret that stores the serialized keyring (default <c>keyring</c>).</summary>
+        public string KeyringField { get; set; } = "keyring";
+    }
+
+    /// <summary>
+    /// Settings for the <b>EaaS-direct</b> mode: each field value is encrypted/decrypted by Vault Transit
+    /// directly (<c>vault:vN:…</c> ciphertext), matching the HashiCorp rewrap tutorial. This makes a Vault
+    /// round-trip per field, so it suits a few highly-sensitive columns (typically via <see cref="VaultTransitOptions.Profile"/>),
+    /// not bulk scans. The Transit key must be created with <c>derived=true</c> so the table:column context binds.
+    /// </summary>
+    public sealed class VaultTransitEncryptionOptions : VaultTransitOptions
+    {
+        /// <summary>Max number of decrypt results cached in memory to soften repeated reads (default 10,000).</summary>
+        public int DecryptCacheSize { get; set; } = 10_000;
+    }
+
+    /// <summary>
     /// Settings for Vault-managed (rotating) database credentials sourced from the Database secrets engine.
     /// </summary>
     public sealed class VaultCredentialsOptions : VaultConnectionOptions

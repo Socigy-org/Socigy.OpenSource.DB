@@ -70,7 +70,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
                 _tx = scope.AmbientTransaction;
         }
 
-        // ── Fluent configuration ───────────────────────────────────────────────────
         public DynamicTable<T> WithConnection(DbConnection connection) { _conn = connection; return this; }
         public DynamicTable<T> WithTransaction(DbTransaction transaction) { _tx = transaction; _conn = transaction.Connection; return this; }
         public DynamicTable<T> WithDiagnostics(DbDiagnosticsContext? diagnostics) { _diag = diagnostics; return this; }
@@ -91,7 +90,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             return this;
         }
 
-        // ── Reads ──────────────────────────────────────────────────────────────────
         public async IAsyncEnumerable<T> ExecuteAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -154,7 +152,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         public async Task<bool> ExistsAsync(CancellationToken cancellationToken = default)
             => await FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false) != null;
 
-        // ── Aggregates / scalars ────────────────────────────────────────────────────
         public async Task<long> CountAsync(CancellationToken cancellationToken = default)
         {
             var result = await RunScalarAsync("COUNT(*)", cancellationToken).ConfigureAwait(false);
@@ -201,7 +198,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
         }
 
-        // ── Writes ──────────────────────────────────────────────────────────────────
         public Task<int> InsertAsync(T row, bool includeAutoFields = false, CancellationToken cancellationToken = default)
             => InsertMultipleAsync(new[] { row }, includeAutoFields, cancellationToken);
 
@@ -252,6 +248,35 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
                         command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _diag).ConfigureAwait(false);
                 }
                 return total;
+            }
+            finally { await lease.DisposeAsync().ConfigureAwait(false); }
+        }
+
+        /// <summary>
+        /// Inserts <paramref name="rows"/> via PostgreSQL binary COPY — substantially faster than
+        /// <see cref="InsertMultipleAsync"/> for large batches and not bound by the 65535-parameter limit.
+        /// Returns the number of rows written. Like the rest of <see cref="BulkCopy"/>, DB-generated values
+        /// are NOT propagated back to the instances (COPY has no <c>RETURNING</c>); use
+        /// <see cref="InsertMultipleAsync"/> when you need generated keys.
+        /// </summary>
+        public async Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, bool includeAutoFields = false, CancellationToken cancellationToken = default)
+        {
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+            var list = rows as IReadOnlyList<T> ?? new List<T>(rows);
+            if (list.Count == 0) return 0UL;
+
+            InsertColumnDescriptor[] cols = _proto.InsertColumns(includeAutoFields);
+            if (cols.Length == 0) return 0UL;
+
+            var boxed = new object[list.Count];
+            for (int i = 0; i < list.Count; i++)
+                boxed[i] = list[i]!;
+
+            var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await Bulk.BulkCopy.CopyCoreAsync(
+                    lease.Connection, _tx, _tableName, cols, boxed, cancellationToken).ConfigureAwait(false);
             }
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
         }
@@ -309,7 +334,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
         }
 
-        // ── Auto-mapping (discover undeclared columns once, cached) ──────────────────
         public async Task<DynamicTable<T>> MapTypeAsync(bool force = false, CancellationToken cancellationToken = default)
         {
             var key = (typeof(T), _tableName);
@@ -347,7 +371,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             return this;
         }
 
-        // ── Lifecycle (DDL) ─────────────────────────────────────────────────────────
         public async Task<int> InstantiateAsync(bool ifNotExists = true, CancellationToken cancellationToken = default)
         {
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -392,7 +415,6 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
         }
 
-        // ── Helpers ──────────────────────────────────────────────────────────────────
         private static SqlQueryBuilderExpressionParser<T> NewParser(DbCommand command)
             => new SqlQueryBuilderExpressionParser<T>(command, _getColumnName, _newSelect, _newWhere, _newOrderBy);
 

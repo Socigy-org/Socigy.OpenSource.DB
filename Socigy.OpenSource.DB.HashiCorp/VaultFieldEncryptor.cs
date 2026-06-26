@@ -16,12 +16,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
     /// AES-256-CBC + HMAC-SHA256 encryption via <see cref="AesFieldEncryptor"/>. This keeps per-field
     /// crypto local (no Vault round-trip per field) while the key itself is managed in Vault.
     /// <para>
-    /// Rotating the key means updating the KV secret and re-encrypting existing rows (a deliberate v1
-    /// limitation). A future enhancement can switch to a Transit data-key envelope so old rows remain
-    /// decryptable across rotations.
+    /// Rotating the key means updating the KV secret and re-encrypting existing rows. To keep old rows
+    /// decryptable across rotations without re-encryption, use the Transit data-key envelope mode
+    /// (<see cref="VaultEnvelopeEncryptor"/> via <c>AddSocigyVaultEnvelopeEncryption</c>), which keeps a
+    /// versioned keyring of Transit-wrapped DEKs. For per-field Vault encryption with rewrap, see
+    /// <see cref="VaultTransitFieldEncryptor"/> (<c>AddSocigyVaultTransitEncryption</c>).
     /// </para>
     /// </summary>
-    public sealed class VaultFieldEncryptor : IFieldEncryptor
+    public sealed class VaultFieldEncryptor : IFieldEncryptor, IVaultPrimableEncryptor
     {
         private readonly VaultClientProvider _clients;
         private readonly VaultEncryptionOptions _options;

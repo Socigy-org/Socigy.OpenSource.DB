@@ -38,10 +38,6 @@ namespace Socigy.OpenSource.DB.Checks
     /// </summary>
     public static class DbCheck
     {
-        // ----------------------------------------------------------------
-        // Column references
-        // ----------------------------------------------------------------
-
         /// <summary>
         /// Creates a reference to a column identified by its C# property name.
         /// The name is automatically converted to snake_case and quoted.
@@ -57,10 +53,6 @@ namespace Socigy.OpenSource.DB.Checks
         /// </summary>
         public static DbCheckExpr Column(string dbColumnName)
             => new DbCheckExpr($"\"{dbColumnName}\"");
-
-        // ----------------------------------------------------------------
-        // String / pattern functions
-        // ----------------------------------------------------------------
 
         /// <summary>
         /// <c>length(<paramref name="value"/>) <paramref name="op"/> <paramref name="length"/></c>
@@ -92,10 +84,6 @@ namespace Socigy.OpenSource.DB.Checks
         public static DbCheckExpr Regex(DbCheckExpr value, string pattern)
             => new DbCheckExpr($"{value.Sql} ~ '{EscapeSql(pattern)}'");
 
-        // ----------------------------------------------------------------
-        // Logical operators
-        // ----------------------------------------------------------------
-
         /// <summary><c>NOT (<paramref name="expr"/>)</c></summary>
         public static DbCheckExpr Not(DbCheckExpr expr)
             => new DbCheckExpr($"NOT ({expr.Sql})");
@@ -116,10 +104,6 @@ namespace Socigy.OpenSource.DB.Checks
         public static DbCheckExpr Or(params DbCheckExpr[] exprs)
             => new DbCheckExpr($"({string.Join(" OR ", exprs.Select(e => e.Sql))})");
 
-        // ----------------------------------------------------------------
-        // Comparison helpers
-        // ----------------------------------------------------------------
-
         /// <summary><c><paramref name="left"/> = <paramref name="right"/></c></summary>
         public static DbCheckExpr Eq(DbCheckExpr left, DbCheckExpr right)
             => new DbCheckExpr($"{left.Sql} = {right.Sql}");
@@ -136,10 +120,6 @@ namespace Socigy.OpenSource.DB.Checks
         public static DbCheckExpr Literal(double value)
             => new DbCheckExpr(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-        // ----------------------------------------------------------------
-        // Comparison operator tokens — use with Len, Eq, etc.
-        // ----------------------------------------------------------------
-
         public static class Operators
         {
             public static readonly DbCheckExpr LessThan        = new("<");
@@ -149,10 +129,6 @@ namespace Socigy.OpenSource.DB.Checks
             public static readonly DbCheckExpr Equal           = new("=");
             public static readonly DbCheckExpr NotEqual        = new("<>");
         }
-
-        // ----------------------------------------------------------------
-        // Helpers
-        // ----------------------------------------------------------------
 
         private static string EscapeSql(string s) => s.Replace("'", "''");
 

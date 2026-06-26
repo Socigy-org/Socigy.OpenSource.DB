@@ -35,6 +35,13 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         public bool IsEncrypted { get; set; }
 
         /// <summary>
+        /// For an <c>[Encrypted(Profile = "…")]</c> column, the encryptor profile this column routes to;
+        /// <see langword="null"/>/empty means the default encryptor. Surfaced here so out-of-band tooling
+        /// (e.g. the bulk re-encryption utility) can resolve the correct per-column encryptor at runtime.
+        /// </summary>
+        public string? EncryptionProfile { get; set; }
+
+        /// <summary>
         /// Optional callback that writes a value read back from the database into the row instance.
         /// Used by <c>WithValuePropagation()</c> to fill auto-generated column values after INSERT.
         /// </summary>

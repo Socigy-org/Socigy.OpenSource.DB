@@ -74,8 +74,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _extractedNames;
         }
 
-        // ── Visitors ───────────────────────────────────────────────────────────────
-
         // x => new object?[] { x.Email, x.Username, ... }
         protected override Expression VisitNewArray(NewArrayExpression node)
         {

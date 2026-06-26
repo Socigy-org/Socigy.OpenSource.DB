@@ -127,7 +127,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     if (semanticModel.GetDeclaredSymbol(column) is not IPropertySymbol symbolInfo || symbolInfo.IsStatic)
                         continue;
 
-                    // Skip [Ignore] properties
                     if (member.AttributeLists.Count > 0)
                     {
                         var ignoreAttr = symbolInfo.GetAttributes().FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeFullName);
@@ -238,9 +237,17 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                                 .FirstOrDefault(na => na.Key == nameof(EncryptedAttribute.AutoDecrypt));
                             if (autoDecryptArg.Key != null && autoDecryptArg.Value.Value is bool ad)
                                 columnInfo.EncryptAutoDecrypt = ad;
+
+                            var profileArg = encAttr.NamedArguments
+                                .FirstOrDefault(na => na.Key == nameof(EncryptedAttribute.Profile));
+                            if (profileArg.Key != null && profileArg.Value.Value is string prof && !string.IsNullOrEmpty(prof))
+                                columnInfo.EncryptionProfile = prof;
                         }
                         if (columnInfo.IsEncrypted && (columnInfo.IsJsonColumn || !string.IsNullOrEmpty(columnInfo.Converter)))
                             ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EncryptedComboError, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
+                        // SCGDB023 — an encrypted column is non-deterministic bytea; it cannot be a key or auto-increment.
+                        if (columnInfo.IsEncrypted && (columnInfo.IsPrimaryKey || columnInfo.IsAutoIncrement))
+                            ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EncryptedKeyColumn, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
                     }
 
                     tableColNameClassTemplate.Columns.Add(columnInfo);
@@ -254,11 +261,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         IsJsonColumn: columnInfo.IsJsonColumn,
                         JsonContextType: columnInfo.JsonContextType,
                         IsEncrypted: columnInfo.IsEncrypted,
-                        EncryptAutoDecrypt: columnInfo.EncryptAutoDecrypt
+                        EncryptAutoDecrypt: columnInfo.EncryptAutoDecrypt,
+                        EncryptionProfile: columnInfo.EncryptionProfile
                     ));
                 }
 
-                // Process flagged enum properties
                 var mainPkColumns = tableColNameClassTemplate.Columns.Where(c => c.IsPrimaryKey).ToList();
                 foreach (var (symInfo, attr, isExplicit) in pendingFlaggedEnum)
                 {
@@ -335,6 +342,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 else if (!tableColNameClassTemplate.Columns.Any(c => c.IsPrimaryKey))
                     ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.TableNoPrimaryKey, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name));
 
+                // SCGDB024 — two properties resolving to the same DB column name would emit colliding SQL.
+                var seenColumnNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var col in tableColNameClassTemplate.Columns)
+                    if (!seenColumnNames.Add(col.DatabaseName))
+                        ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateColumnName, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name, col.DatabaseName));
+
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}.table.g.cs", tableColNameClassTemplate.TransformText());
                 ctx.AddSource($"{tableColNameClassTemplate.ClassName}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());
 
@@ -343,7 +356,96 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         $"{tableColNameClassTemplate.ClassName}.tabletype.g.cs",
                         EmitTableTypePartial(tableColNameClassTemplate.Namespace, tableColNameClassTemplate.ClassName, tableColNameClassTemplate.Columns));
             }
+
+            // Once per assembly that declares at least one [Table]/[TableType]: install the Npgsql binary-COPY
+            // bridge into the provider-agnostic Core, enabling BulkCopy / DynamicTable.InsertMultipleCopyAsync.
+            if (processed.Count > 0)
+                ctx.AddSource("__SocigyBulkCopyBridge.g.cs", BulkCopyBridgeSource);
         }
+
+        // Registers the Npgsql binary-COPY implementation into Core's BulkCopySupport at module load. Kept as
+        // a hand-written source string (not a T4 template) so it compiles into the consumer's assembly, where
+        // Npgsql is available, without depending on the build regenerating the preprocessed templates.
+        private const string BulkCopyBridgeSource = @"#pragma warning disable
+#nullable enable
+namespace Socigy.OpenSource.DB.Generated
+{
+    internal static class __SocigyBulkCopyBridge
+    {
+        [global::System.Runtime.CompilerServices.ModuleInitializer]
+        internal static void Initialize()
+            => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopySupport.Register(CopyAsync);
+
+        private static async global::System.Threading.Tasks.Task<ulong> CopyAsync(
+            global::System.Data.Common.DbConnection connection,
+            global::System.Data.Common.DbTransaction? transaction,
+            string copyCommand,
+            global::Socigy.OpenSource.DB.Core.Bulk.CopyColumn[] columns,
+            global::System.Collections.Generic.IReadOnlyList<object> rows,
+            global::System.Threading.CancellationToken cancellationToken)
+        {
+            var npg = connection as global::Npgsql.NpgsqlConnection
+                ?? throw new global::System.InvalidOperationException(""Binary COPY requires an NpgsqlConnection."");
+
+            await using var importer = await npg.BeginBinaryImportAsync(copyCommand, cancellationToken).ConfigureAwait(false);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                object row = rows[i];
+                await importer.StartRowAsync(cancellationToken).ConfigureAwait(false);
+                for (int c = 0; c < columns.Length; c++)
+                {
+                    var col = columns[c];
+                    object? value = col.GetValue(row);
+                    if (value is null || value is global::System.DBNull)
+                    {
+                        await importer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+                    if (col.IsEncrypted)
+                    {
+                        await importer.WriteAsync(value, global::NpgsqlTypes.NpgsqlDbType.Bytea, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+                    if (col.IsJson)
+                    {
+                        await importer.WriteAsync(value, global::NpgsqlTypes.NpgsqlDbType.Jsonb, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+                    var actualType = global::System.Nullable.GetUnderlyingType(col.ClrType) ?? col.ClrType;
+                    if (actualType.IsEnum)
+                        value = global::System.Convert.ChangeType(value, global::System.Enum.GetUnderlyingType(actualType));
+                    await importer.WriteAsync(value, GetDbType(col.ClrType), cancellationToken).ConfigureAwait(false);
+                }
+            }
+            return await importer.CompleteAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Mirrors PostgresqlInsertCommandBuilder<T>.GetDbType so the COPY wire types match the parameterized path.
+        private static global::NpgsqlTypes.NpgsqlDbType GetDbType(global::System.Type type)
+        {
+            type = global::System.Nullable.GetUnderlyingType(type) ?? type;
+            if (type.IsEnum)
+                type = global::System.Enum.GetUnderlyingType(type);
+
+            if (type == typeof(short) || type == typeof(byte) || type == typeof(sbyte)) return global::NpgsqlTypes.NpgsqlDbType.Smallint;
+            if (type == typeof(int) || type == typeof(ushort)) return global::NpgsqlTypes.NpgsqlDbType.Integer;
+            if (type == typeof(long) || type == typeof(uint)) return global::NpgsqlTypes.NpgsqlDbType.Bigint;
+            if (type == typeof(ulong)) return global::NpgsqlTypes.NpgsqlDbType.Numeric;
+            if (type == typeof(string)) return global::NpgsqlTypes.NpgsqlDbType.Text;
+            if (type == typeof(bool)) return global::NpgsqlTypes.NpgsqlDbType.Boolean;
+            if (type == typeof(global::System.DateTime)) return global::NpgsqlTypes.NpgsqlDbType.Timestamp;
+            if (type == typeof(float)) return global::NpgsqlTypes.NpgsqlDbType.Real;
+            if (type == typeof(double)) return global::NpgsqlTypes.NpgsqlDbType.Double;
+            if (type == typeof(decimal)) return global::NpgsqlTypes.NpgsqlDbType.Numeric;
+            if (type == typeof(global::System.Guid)) return global::NpgsqlTypes.NpgsqlDbType.Uuid;
+            if (type == typeof(byte[])) return global::NpgsqlTypes.NpgsqlDbType.Bytea;
+            if (type == typeof(char)) return global::NpgsqlTypes.NpgsqlDbType.Char;
+            return global::NpgsqlTypes.NpgsqlDbType.Text;
+        }
+    }
+}
+#nullable restore
+";
 
         // Emits the [TableType] partial: implements IDbTableType<T> (delegating to the generated statics),
         // the WithTableName / MapTypeAsync factories, and a baked CREATE TABLE for the declared shape.

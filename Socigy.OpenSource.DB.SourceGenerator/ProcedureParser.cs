@@ -5,6 +5,20 @@ using System.Linq;
 
 namespace Socigy.OpenSource.DB.SourceGenerator
 {
+    /// <summary>
+    /// How a procedure's <c>-- @returns</c> header maps to the generated method's signature.
+    /// <list type="bullet">
+    /// <item><see cref="Void"/> — no <c>@returns</c>; emits <c>Task&lt;bool&gt;</c>.</item>
+    /// <item><see cref="AffectedCount"/> — <c>@returns affected</c>; emits <c>Task&lt;int&gt;</c>.</item>
+    /// <item><see cref="Scalar"/> — <c>@returns scalar: T</c>; emits <c>Task&lt;T&gt;</c>.</item>
+    /// <item><see cref="Rows"/> — <c>@returns: SomeTable</c>; emits <c>IAsyncEnumerable&lt;SomeTable&gt;</c>.</item>
+    /// <item><see cref="Dto"/> — <c>@returns: SomePoco</c> (non-[Table]); emits <c>IAsyncEnumerable&lt;SomePoco&gt;</c>
+    /// with a generator-emitted mapper. The parser cannot tell Rows from Dto (only the generator has the
+    /// <c>Compilation</c>), so it records <see cref="Rows"/> provisionally and the generator downgrades.</item>
+    /// </list>
+    /// </summary>
+    public enum ProcedureReturnKind { Void, AffectedCount, Scalar, Rows, Dto }
+
     public class ProcedureInfo
     {
         /// <summary>C# identifier name of the generated static method (derived from file name).</summary>
@@ -13,11 +27,29 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         /// <summary>Namespace segments from sub-directory structure under Procedures/.</summary>
         public string[] NamespaceSegments { get; set; } = [];
 
-        /// <summary>Return-type annotation from <c>-- @returns: TypeName</c> or null for void.</summary>
+        /// <summary>Return-type annotation from <c>-- @returns[ scalar]: TypeName</c> or null for void/affected.</summary>
         public string? ReturnType { get; set; }
 
-        /// <summary>When true the method returns IAsyncEnumerable&lt;ReturnType&gt;; otherwise Task&lt;bool&gt; (void).</summary>
-        public bool ReturnsMany => ReturnType != null;
+        /// <summary>How <see cref="ReturnType"/> is materialized. See <see cref="ProcedureReturnKind"/>.</summary>
+        public ProcedureReturnKind ReturnKind { get; set; } = ProcedureReturnKind.Void;
+
+        /// <summary>True when the scalar/return annotation ended in <c>?</c> (drives NULL handling).</summary>
+        public bool ReturnTypeIsNullable { get; set; }
+
+        /// <summary>True when more than one <c>-- @returns</c> directive appeared (first wins; drives SCGDB020).</summary>
+        public bool ConflictingReturns { get; set; }
+
+        /// <summary>True when a <c>-- @returns</c> directive could not be parsed (drives SCGDB022).</summary>
+        public bool MalformedReturns { get; set; }
+
+        /// <summary>Fully-qualified name of the non-[Table] DTO return type. Set by the generator for <see cref="ProcedureReturnKind.Dto"/>.</summary>
+        public string? DtoFullName { get; set; }
+
+        /// <summary>Sanitized identifier keying the generated DTO mapper. Set by the generator for <see cref="ProcedureReturnKind.Dto"/>.</summary>
+        public string? DtoMapperId { get; set; }
+
+        /// <summary>When true the method returns IAsyncEnumerable&lt;ReturnType&gt; (a row stream or a DTO stream).</summary>
+        public bool ReturnsMany => ReturnKind == ProcedureReturnKind.Rows || ReturnKind == ProcedureReturnKind.Dto;
 
         /// <summary>Ordered list of parameters parsed from <c>-- @param name: CSharpType</c> lines.</summary>
         public List<ProcedureParam> Params { get; set; } = new();
@@ -55,7 +87,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
             var info = new ProcedureInfo();
 
-            // Derive method name from file name without extension
             string fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
             info.Name = ToValidIdentifier(fileNameNoExt);
 
@@ -76,6 +107,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             // Parse header comment lines
             var sqlLines = new List<string>();
             bool headerDone = false;
+            bool sawReturns = false;
 
             foreach (var line in content.Split('\n'))
             {
@@ -85,9 +117,18 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 {
                     string commentBody = trimmed.Substring(2).Trim();
 
-                    if (commentBody.StartsWith("@returns:", StringComparison.OrdinalIgnoreCase))
+                    if (commentBody.StartsWith("@returns", StringComparison.OrdinalIgnoreCase))
                     {
-                        info.ReturnType = commentBody.Substring("@returns:".Length).Trim();
+                        // First @returns wins; a later one is a conflict (SCGDB020), not an override.
+                        if (sawReturns)
+                        {
+                            info.ConflictingReturns = true;
+                        }
+                        else
+                        {
+                            sawReturns = true;
+                            ParseReturns(info, commentBody.Substring("@returns".Length));
+                        }
                     }
                     else if (commentBody.StartsWith("@param ", StringComparison.OrdinalIgnoreCase))
                     {
@@ -130,6 +171,53 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             return info;
         }
 
+        /// <summary>
+        /// Parses the text after the <c>@returns</c> keyword into a <see cref="ProcedureReturnKind"/>.
+        /// Recognized forms (longest-prefix first):
+        /// <c>@returns affected</c>, <c>@returns scalar: T</c>, <c>@returns: T</c>. Anything else sets
+        /// <see cref="ProcedureInfo.MalformedReturns"/>.
+        /// </summary>
+        private static void ParseReturns(ProcedureInfo info, string after)
+        {
+            string afterTrim = after.TrimStart();
+
+            if (after.StartsWith(":"))
+            {
+                // @returns: TypeName — row stream ([Table]) or DTO; the generator decides which.
+                string type = after.Substring(1).Trim();
+                if (type.Length == 0)
+                {
+                    info.MalformedReturns = true;
+                    return;
+                }
+                info.ReturnType = type;
+                info.ReturnTypeIsNullable = type.EndsWith("?");
+                info.ReturnKind = ProcedureReturnKind.Rows; // provisional
+            }
+            else if (afterTrim.StartsWith("scalar", StringComparison.OrdinalIgnoreCase))
+            {
+                string afterScalar = afterTrim.Substring("scalar".Length);
+                int colon = afterScalar.IndexOf(':');
+                string type = colon >= 0 ? afterScalar.Substring(colon + 1).Trim() : "";
+                if (colon < 0 || type.Length == 0)
+                {
+                    info.MalformedReturns = true;
+                    return;
+                }
+                info.ReturnType = type;
+                info.ReturnTypeIsNullable = type.EndsWith("?");
+                info.ReturnKind = ProcedureReturnKind.Scalar;
+            }
+            else if (afterTrim.StartsWith("affected", StringComparison.OrdinalIgnoreCase))
+            {
+                info.ReturnKind = ProcedureReturnKind.AffectedCount;
+            }
+            else
+            {
+                info.MalformedReturns = true;
+            }
+        }
+
         private static string ToValidIdentifier(string s)
         {
             if (string.IsNullOrEmpty(s)) return "_";
@@ -148,7 +236,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         private static string MakeRelative(string path, string basePath)
         {
-            // Normalize separators
             path = path.Replace('\\', '/').TrimEnd('/');
             basePath = basePath.Replace('\\', '/').TrimEnd('/');
 

@@ -16,4 +16,13 @@
 	  <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
 	</ItemGroup>
 
+	<!-- Public-API gate (1.0 SemVer): tracks the shipped surface in PublicAPI.*.txt so any accidental change
+	     is flagged at build (RS0016 etc.). Populate the baseline with the IDE "Add to public API" fix or
+	     `dotnet format analyzers`, then curate public->internal before tagging 1.0.0. -->
+	<ItemGroup>
+	  <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.11.0-beta1.24508.2" PrivateAssets="all" />
+	  <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+	  <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+	</ItemGroup>
+
 </Project>

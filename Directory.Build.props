@@ -1,8 +1,45 @@
 <Project>
 	<PropertyGroup>
-		<!-- Single source of truth for the version: the NuGet package version, every assembly version, and
-         the OpenTelemetry instrumentation-scope version (SocigyDbInstrumentation) all derive from this.
-         Bump it here on each release. -->
-		<Version>0.3.2</Version>
+		<!-- Base library version. Drives every assembly version, including the Core assembly's
+		     informational version that the OpenTelemetry instrumentation scope reports as
+		     "SocigyDbInstrumentation". It is also the default NuGet version for each package
+		     when that package does not set its own version below. Bump it on each release. -->
+		<Version>0.3.3</Version>
+
+		<!-- Per-package NuGet versions, settable independently so each package can ship at a
+		     different version. Edit a value to release that package on its own track, or leave
+		     it blank to keep tracking the base <Version> above. -->
+		<DbPackageVersion>0.3.3</DbPackageVersion>
+		<HashiCorpPackageVersion>0.3.3</HashiCorpPackageVersion>
 	</PropertyGroup>
+
+	<!-- A blank per-package version falls back to the base <Version>. -->
+	<PropertyGroup>
+		<DbPackageVersion Condition="'$(DbPackageVersion)' == ''">$(Version)</DbPackageVersion>
+		<HashiCorpPackageVersion Condition="'$(HashiCorpPackageVersion)' == ''">$(Version)</HashiCorpPackageVersion>
+	</PropertyGroup>
+
+	<!-- Release hygiene: reproducible builds + source-linked debug symbols for every packed assembly. -->
+	<PropertyGroup>
+		<!-- Reproducible output; ContinuousIntegrationBuild normalizes paths and is enabled only on CI. -->
+		<Deterministic>true</Deterministic>
+		<ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+		<!-- SourceLink: map PDB sequence points back to the exact GitHub commit so consumers can step
+		     through library source. EmbedUntrackedSources covers generated files not in git. -->
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+		<!-- Embedded PDBs ride inside each DLL. Deliberate over a separate .snupkg: the main package
+		     hand-injects the Core and SourceGenerator assemblies (IncludeBuildOutput=false), so a
+		     conventional symbol package would not carry their symbols. Embedding + SourceLink gives
+		     source-stepping into every shipped assembly regardless of how it is packaged. -->
+		<DebugType>embedded</DebugType>
+		<IncludeSymbols>false</IncludeSymbols>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Build-time only (PrivateAssets=All): never flows to consumers as a dependency. -->
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+	</ItemGroup>
 </Project>

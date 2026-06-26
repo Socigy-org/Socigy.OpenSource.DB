@@ -21,13 +21,10 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
                 return "NoChanges";
             }
 
-            // Step 1: Generate a deterministic, canonical string representation of the diff.
             string canonicalDiffString = GenerateCanonicalString(diff);
 
-            // Step 2: Generate a short, descriptive prefix.
             string prefix = GeneratePrefix(diff);
 
-            // Step 3: Hash the canonical string to create a unique identifier.
             using (var sha256 = SHA256.Create())
             {
                 byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(canonicalDiffString));
@@ -43,7 +40,6 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
         /// <returns>A unique name in the format: "DescriptiveName_Hash"</returns>
         public static string GenerateUniqueName(string name)
         {
-            // Step 3: Hash the canonical string to create a unique identifier.
             using (var sha256 = SHA256.Create())
             {
                 byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(name));

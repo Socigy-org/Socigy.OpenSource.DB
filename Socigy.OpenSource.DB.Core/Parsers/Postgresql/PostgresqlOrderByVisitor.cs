@@ -44,7 +44,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             _Sql.Append(paramName);
         }
 
-        // --- Main Entry Point: The Array ---
         protected override Expression VisitNewArray(NewArrayExpression node)
         {
             for (int i = 0; i < node.Expressions.Count; i++)
@@ -64,7 +63,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
             if (exp is MethodCallExpression methodCall)
             {
-                // 1. Explicit OrderBy.Asc(...) -> Force ASC, ignore parent context
                 if (methodCall.Method.DeclaringType == typeof(OrderBy) && methodCall.Method.Name == nameof(OrderBy.Asc))
                 {
                     Visit(methodCall.Arguments[0]);
@@ -73,7 +71,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                     return;
                 }
 
-                // 2. Explicit OrderBy.Desc(...) -> Force DESC, ignore parent context
                 if (methodCall.Method.DeclaringType == typeof(OrderBy) && methodCall.Method.Name == nameof(OrderBy.Desc))
                 {
                     Visit(methodCall.Arguments[0]);
@@ -81,7 +78,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                     return;
                 }
 
-                // 3. Select.Case() Chain
                 // We delegate back to standard Visit, which handles the Case logic
                 if (methodCall.Method.DeclaringType == typeof(Select) || methodCall.Method.ReturnType == typeof(Select))
                 {
@@ -92,17 +88,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 }
             }
 
-            // 4. Standard Column/Member
             Visit(exp);
 
-            // 5. Apply Default Direction if needed
             if (isDescendingContext)
             {
                 _Sql.Append(" DESC");
             }
         }
-
-        // --- Standard Visitor Overrides (Similar to SelectVisitor) ---
 
         protected override Expression VisitMember(MemberExpression node)
         {
@@ -122,7 +114,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            // Handle Select.Case / When / Then / Else recursion
             if (node.Method.DeclaringType == typeof(Select) || node.Method.ReturnType == typeof(Select))
             {
                 // Unwind the Fluent API stack (Else -> Then -> When -> Case)
@@ -151,7 +142,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             {
                 case "When":
                     _Sql.Append(" WHEN ");
-                    Visit(node.Arguments[0]); // Condition
+                    Visit(node.Arguments[0]);
                     break;
                 case "Then":
                     _Sql.Append(" THEN ");
@@ -195,7 +186,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return node;
         }
 
-        // --- Helpers ---
         private static Expression StripConversion(Expression node)
         {
             while (node.NodeType == ExpressionType.Convert || node.NodeType == ExpressionType.ConvertChecked)

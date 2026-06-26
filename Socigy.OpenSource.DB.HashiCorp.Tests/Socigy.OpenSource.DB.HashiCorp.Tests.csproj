@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Socigy.OpenSource.DB.HashiCorp\Socigy.OpenSource.DB.HashiCorp.csproj" />
+    <!-- HashiCorp references Core with PrivateAssets=all, so Core types (KeyringFieldEncryptor, etc.) don't
+         flow transitively; the encryption integration tests reference Core directly. -->
+    <ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

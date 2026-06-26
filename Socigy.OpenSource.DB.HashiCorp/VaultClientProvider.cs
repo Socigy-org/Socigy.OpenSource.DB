@@ -57,6 +57,8 @@ namespace Socigy.OpenSource.DB.HashiCorp
             try
             {
                 var before = (await client.V1.Auth.Token.LookupSelfAsync().ConfigureAwait(false)).Data;
+                activity?.SetTag("vault.token.renewable", before.Renewable);
+                activity?.SetTag("vault.token.ttl_s", before.TimeToLive);
 
                 if (before.Renewable)
                 {
@@ -91,6 +93,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             var fresh = VaultClientFactory.Create(_options); // performs a fresh AppRole login on first use
             _client = fresh;                                  // atomic swap; readers pick it up next call
             var info = (await fresh.V1.Auth.Token.LookupSelfAsync().ConfigureAwait(false)).Data;
+            activity?.SetTag("vault.token.ttl_s", info.TimeToLive);
             _logger?.LogInformation("Re-authenticated to Vault via AppRole; new token TTL {Ttl}s.", info.TimeToLive);
             return info.TimeToLive;
         }

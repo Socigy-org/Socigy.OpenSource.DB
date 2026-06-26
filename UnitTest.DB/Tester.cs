@@ -193,6 +193,25 @@ public partial class TestSecret
     public string Manual { get; set; } = "";
 }
 
+// ---------------------------------------------------------------------------
+// Procedure DTO return types (deliberately NOT [Table]) — exercise the
+// generator-emitted, AOT-safe DTO mappers used by `-- @returns: <non-table>`.
+// ---------------------------------------------------------------------------
+
+/// <summary>Positional record DTO returned by a procedure (constructor-bound mapping).</summary>
+public record ItemSummary(string Name, int Priority);
+
+/// <summary>
+/// Property-bag DTO returned by a procedure (settable-property mapping). <see cref="Missing"/> has no
+/// matching result column and must map to <c>default</c> via the safe-ordinal (-1) fallback.
+/// </summary>
+public class ItemReport
+{
+    public string Name { get; set; } = "";
+    public int Priority { get; set; }
+    public string? Missing { get; set; }
+}
+
 /// <summary>
 /// Runtime-named typed table (<c>[TableType]</c>) — exercises <c>DynamicTable&lt;T&gt;</c>: the column shape is
 /// fixed here, but the table name is bound at runtime via <c>WithTableName</c>/<c>MapTypeAsync</c>.

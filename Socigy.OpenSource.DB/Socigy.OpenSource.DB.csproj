@@ -13,8 +13,9 @@
 	<PropertyGroup>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Socigy DB</Title>
-		<!-- Version comes from Directory.Build.props (single source of truth) — bump it there. -->
-		<PackageVersion>$(Version)</PackageVersion>
+		<!-- NuGet version for this package. Defined in Directory.Build.props ($(DbPackageVersion)),
+		     independently of the HashiCorp package and the base $(Version). -->
+		<PackageVersion>$(DbPackageVersion)</PackageVersion>
 		<Company>Socigy s.r.o.</Company>
 		<Product>$(PackageTitle)</Product>
 		<Description>Automated cross-DB model generation and automation nuget. Auto-generates and propagates db model across multiple DB</Description>
@@ -25,7 +26,7 @@
 		<Version>$(PackageVersion)</Version>
 		<Authors>Socigy, PatrikStohanzl</Authors>
 		<Copyright>Copyright © 2024 Socigy s.r.o.</Copyright>
-		<RepositoryUrl>https://github.com/WailedParsley36/Socigy.OpenSource.DB</RepositoryUrl>
+		<RepositoryUrl>https://github.com/Socigy-org/Socigy.OpenSource.DB</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageProjectUrl>https://docs.socigy.com/database/</PackageProjectUrl>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>

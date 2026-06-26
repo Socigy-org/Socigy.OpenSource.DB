@@ -17,6 +17,14 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         /// <summary>Human-readable data-losing operations produced by the most recent <see cref="Generate"/> call.</summary>
         IReadOnlyList<string> DestructiveOperations { get; }
 
+        /// <summary>
+        /// Non-destructive but risky operations from the most recent <see cref="Generate"/> call that a
+        /// developer should review (e.g. a NOT NULL column added without a default, or a drop+add that looks
+        /// like an unmarked rename). Distinct from <see cref="DestructiveOperations"/>: these may fail at apply
+        /// time or silently lose data, but the generated SQL itself is not unconditionally destructive.
+        /// </summary>
+        IReadOnlyList<string> SafetyWarnings { get; }
+
         string GetDatabaseType(string csharpType);
     }
 }

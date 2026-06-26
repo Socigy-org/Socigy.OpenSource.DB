@@ -186,7 +186,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        public {t.ClassName}Set(SocigyDbScope scope) {{ _scope = scope; }}");
             sb.AppendLine();
 
-            // ToListAsync
             sb.AppendLine($"        public async Task<List<{e}>> ToListAsync({pred}? predicate = null)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -202,7 +201,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // FirstOrDefaultAsync
             sb.AppendLine($"        public async Task<{e}?> FirstOrDefaultAsync({pred} predicate)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -217,7 +215,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // ExistsAsync
             sb.AppendLine($"        public async Task<bool> ExistsAsync({pred} predicate)");
             sb.AppendLine("            => await FirstOrDefaultAsync(predicate) != null;");
             sb.AppendLine();
@@ -255,7 +252,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 sb.AppendLine();
             }
 
-            // InsertAsync
             sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, bool includeAutoFields = false)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -270,7 +266,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // InsertMultipleAsync (batched multi-row INSERT)
             sb.AppendLine($"        public async Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, bool includeAutoFields = false, CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -283,7 +278,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // UpdateAsync
             sb.AppendLine($"        public async Task<int> UpdateAsync({e} entity)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -297,7 +291,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // DeleteAsync
             sb.AppendLine($"        public async Task<int> DeleteAsync({pred} predicate)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
@@ -311,7 +304,6 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // ForEachAsync (streaming; busy-guarded)
             sb.AppendLine($"        public async Task ForEachAsync({pred}? predicate, Func<{e}, Task> onRow, CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __conn = await _scope.BeginStreamAsync(cancellationToken);");

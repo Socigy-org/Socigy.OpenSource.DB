@@ -37,7 +37,6 @@ namespace Socigy.OpenSource.DB.Core
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> Limit(int limit) { _plan.Limit = limit; return this; }
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> Offset(int offset) { _plan.Offset = offset; return this; }
 
-        // ── Chain a third table ─────────────────────────────────────────────────────
         public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> Join<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
             => Chain<T3>(JoinType.Inner, on);
         public PostgresqlJoinQueryCommandBuilder<T, TJoin, T3> LeftJoin<T3>(Expression<Func<T, TJoin, T3, bool>> on) where T3 : class, IDbTable, new()
@@ -61,7 +60,6 @@ namespace Socigy.OpenSource.DB.Core
             return next;
         }
 
-        // ── Terminal: tuples / projection / aggregates ──────────────────────────────
         // Elements are nullable: an outer-join (Left/Right/Full) miss yields null for the unmatched side.
         public async IAsyncEnumerable<(T? Left, TJoin? Right)> ExecuteAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {

@@ -183,24 +183,49 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                 bool hasLog = _logger != null && _logger.IsEnabled(_options.LogLevel);
                 bool durationEnabled = SocigyDbInstrumentation.DurationHistogram.Enabled;
                 bool counterEnabled = SocigyDbInstrumentation.CommandCounter.Enabled;
+                // Slow-query detection runs even when the per-command Debug log is off — its Warning, span tag
+                // and counter are separate sinks, so it has its own "is anyone listening" gate.
+                bool slowConfigured = _options.SlowQueryThresholdMs is double t && t > 0;
+                bool slowEnabled = slowConfigured && (SocigyDbInstrumentation.SlowQueryCounter.Enabled
+                    || hasActivity || (_logger != null && _logger.IsEnabled(LogLevel.Warning)));
 
                 // Fast path: when nothing is subscribed (no trace listener, no logger, no meter listener)
                 // skip all emission — including the elapsed computation and tag/parameter allocations.
-                if (!hasActivity && !hasLog && !durationEnabled && !counterEnabled)
+                if (!hasActivity && !hasLog && !durationEnabled && !counterEnabled && !slowEnabled)
                     return;
 
                 double seconds = ElapsedSeconds();
+                double elapsedMs = seconds * 1000.0;
 
                 if (durationEnabled)
                     SocigyDbInstrumentation.DurationHistogram.Record(seconds, OperationTag());
                 if (counterEnabled)
                     SocigyDbInstrumentation.CommandCounter.Add(1, OperationTag());
 
+                bool isSlow = slowEnabled && elapsedMs >= _options.SlowQueryThresholdMs!.Value;
+
                 if (hasActivity)
                 {
                     if (_rowsAffected >= 0) _activity!.SetTag("db.response.affected_rows", _rowsAffected);
                     if (_returnedRows >= 0) _activity!.SetTag("db.response.returned_rows", _returnedRows);
+                    _activity!.SetTag("db.operation.parameter_count", _command.Parameters.Count);
+                    if (isSlow) _activity!.SetTag("db.query.slow", true);
                     _activity!.SetTag("db.query.parameters", ParameterSerializer.Serialize(_command.Parameters, _options));
+                }
+
+                if (isSlow)
+                {
+                    if (SocigyDbInstrumentation.SlowQueryCounter.Enabled)
+                        SocigyDbInstrumentation.SlowQueryCounter.Add(1, OperationTag());
+                    if (_logger != null && _logger.IsEnabled(LogLevel.Warning))
+                        _logger.Log(
+                            LogLevel.Warning,
+                            _error,
+                            "Slow SQL {Operation} took {DurationMs} ms (threshold {ThresholdMs} ms): {Sql}",
+                            _operation,
+                            elapsedMs,
+                            _options.SlowQueryThresholdMs!.Value,
+                            _options.CaptureCommandText ? _command.CommandText : "(suppressed)");
                 }
 
                 if (hasLog)
@@ -211,7 +236,7 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                         _error,
                         "SQL {Operation} ({DurationMs} ms) rows~{Rows}: {Sql} | params: {Parameters}",
                         _operation,
-                        seconds * 1000.0,
+                        elapsedMs,
                         rows,
                         _options.CaptureCommandText ? _command.CommandText : "(suppressed)",
                         ParameterSerializer.Serialize(_command.Parameters, _options));

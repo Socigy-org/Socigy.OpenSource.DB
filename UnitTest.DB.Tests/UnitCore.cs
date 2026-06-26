@@ -158,5 +158,20 @@ public static class UnitCore
             ""note""           TEXT,
             PRIMARY KEY (""id"")
         );
+
+        -- ---------------------------------------------------------------
+        -- test_secrets  ([Encrypted] columns stored as bytea ciphertext)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_secrets"" (
+            ""id""        UUID NOT NULL DEFAULT gen_random_uuid(),
+            ""owner""     TEXT NOT NULL DEFAULT '',
+            ""ssn""       BYTEA,
+            ""pin""       BYTEA,
+            ""token""     BYTEA,
+            ""issued_at"" BYTEA,
+            ""note""      BYTEA,
+            ""manual""    BYTEA,
+            PRIMARY KEY (""id"")
+        );
     ";
 }

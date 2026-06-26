@@ -51,6 +51,13 @@ jobs:
       - name: Test
         run: dotnet test UnitTest.DB.Tests/UnitTest.DB.Tests.csproj --no-restore --verbosity normal
 
+      # The Tool multi-targets net10.0-windows, so EnableWindowsTargeting is required on Linux. SOCIGY_TEST_PG
+      # points the introspection round-trip test at the Postgres service so it runs (rather than self-ignoring).
+      - name: Tool tests (scaffolding + introspection)
+        env:
+          SOCIGY_TEST_PG: "Host=localhost;Port=5432;Username=postgres;Password=1234;Database=postgres"
+        run: dotnet test Socigy.OpenSource.DB.Tool.Tests/Socigy.OpenSource.DB.Tool.Tests.csproj -p:EnableWindowsTargeting=true --verbosity normal
+
   publish:
     name: Publish to NuGet
     runs-on: ubuntu-latest
@@ -59,7 +66,7 @@ jobs:
     permissions:
       id-token: write   # required for NuGet.org Trusted Publishing (OIDC)
       packages: write
-      contents: read
+      contents: write   # required to create the GitHub Release and its tag
 
     steps:
       - uses: actions/checkout@v4
@@ -72,33 +79,38 @@ jobs:
       - name: Check published versions
         id: version_check
         run: |
-          # Version is the single source of truth in Directory.Build.props (both packages derive from it).
-          CURRENT=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
-          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          # Each package has its own version in Directory.Build.props; a blank per-package value
+          # falls back to the base <Version>. Read all three and resolve the fallbacks here.
+          read_prop() { grep -oP "(?<=<$1>)[^<]+" Directory.Build.props | head -1; }
+          BASE=$(read_prop "Version")
+          MAIN_VER=$(read_prop "DbPackageVersion"); MAIN_VER=${MAIN_VER:-$BASE}
+          HASHI_VER=$(read_prop "HashiCorpPackageVersion"); HASHI_VER=${HASHI_VER:-$BASE}
+          echo "main_version=$MAIN_VER" >> "$GITHUB_OUTPUT"
+          echo "hashicorp_version=$HASHI_VER" >> "$GITHUB_OUTPUT"
 
           # Echoes the version if that package@version already exists on nuget.org, else nothing.
           # (|| true keeps the step alive under bash pipefail when curl 404s or grep finds no match.)
           is_published() {
-            curl -sf "https://api.nuget.org/v3-flatcontainer/$1/index.json" | grep -o "\"$CURRENT\"" || true
+            curl -sf "https://api.nuget.org/v3-flatcontainer/$1/index.json" | grep -o "\"$2\"" || true
           }
 
-          MAIN_PUB=$(is_published "socigy.opensource.db")
-          HASHI_PUB=$(is_published "socigy.opensource.db.hashicorp")
+          MAIN_PUB=$(is_published "socigy.opensource.db" "$MAIN_VER")
+          HASHI_PUB=$(is_published "socigy.opensource.db.hashicorp" "$HASHI_VER")
 
           if [ -n "$MAIN_PUB" ]; then
             echo "publish_main=false" >> "$GITHUB_OUTPUT"
-            echo "Socigy.OpenSource.DB $CURRENT already published — skipping it"
+            echo "Socigy.OpenSource.DB $MAIN_VER already published - skipping it"
           else
             echo "publish_main=true" >> "$GITHUB_OUTPUT"
-            echo "Socigy.OpenSource.DB $CURRENT not published — will publish"
+            echo "Socigy.OpenSource.DB $MAIN_VER not published - will publish"
           fi
 
           if [ -n "$HASHI_PUB" ]; then
             echo "publish_hashicorp=false" >> "$GITHUB_OUTPUT"
-            echo "Socigy.OpenSource.DB.HashiCorp $CURRENT already published — skipping it"
+            echo "Socigy.OpenSource.DB.HashiCorp $HASHI_VER already published - skipping it"
           else
             echo "publish_hashicorp=true" >> "$GITHUB_OUTPUT"
-            echo "Socigy.OpenSource.DB.HashiCorp $CURRENT not published — will publish"
+            echo "Socigy.OpenSource.DB.HashiCorp $HASHI_VER not published - will publish"
           fi
 
           # Run the build/publish steps if at least one package needs publishing.
@@ -106,7 +118,7 @@ jobs:
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Both packages already published at $CURRENT — nothing to do"
+            echo "Both packages already published (main $MAIN_VER, hashicorp $HASHI_VER) - nothing to do"
           fi
 
       - name: Restore Tool
@@ -175,3 +187,37 @@ jobs:
             --source github \
             --api-key ${{ secrets.GITHUB_TOKEN }} \
             --skip-duplicate
+
+      # Cut a GitHub Release per package that was actually published this run, attaching that
+      # package's .nupkg. Because the two packages version independently, each gets its own
+      # id-prefixed tag (e.g. Socigy.OpenSource.DB-v0.3.2) so they never collide. Idempotent:
+      # an existing tag is left alone instead of failing.
+      - name: Create GitHub Releases
+        if: steps.version_check.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_MAIN: ${{ steps.version_check.outputs.publish_main }}
+          PUBLISH_HASHICORP: ${{ steps.version_check.outputs.publish_hashicorp }}
+          MAIN_VERSION: ${{ steps.version_check.outputs.main_version }}
+          HASHICORP_VERSION: ${{ steps.version_check.outputs.hashicorp_version }}
+        run: |
+          # release <id> <version> <nupkg-glob>
+          release() {
+            local id="$1" version="$2" glob="$3"
+            local tag="$id-v$version"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists - skipping"
+              return 0
+            fi
+            gh release create "$tag" $glob \
+              --target "$GITHUB_SHA" \
+              --title "$tag" \
+              --generate-notes
+          }
+
+          if [ "$PUBLISH_MAIN" = "true" ]; then
+            release "Socigy.OpenSource.DB" "$MAIN_VERSION" "./nupkgs/Socigy.OpenSource.DB.$MAIN_VERSION.nupkg"
+          fi
+          if [ "$PUBLISH_HASHICORP" = "true" ]; then
+            release "Socigy.OpenSource.DB.HashiCorp" "$HASHICORP_VERSION" "./nupkgs/Socigy.OpenSource.DB.HashiCorp.$HASHICORP_VERSION.nupkg"
+          fi

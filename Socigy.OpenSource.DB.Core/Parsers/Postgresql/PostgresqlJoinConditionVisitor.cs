@@ -50,8 +50,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return _Sql.ToString();
         }
 
-        // ── Visitors ──────────────────────────────────────────────────────────────
-
         protected override Expression VisitUnary(UnaryExpression node)
         {
             if (TryEvaluate(node, out var v)) { AddParameter(v); return node; }
@@ -133,8 +131,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             if (TryEvaluate(node, out var v)) { AddParameter(v); return node; }
             return base.VisitMethodCall(node);
         }
-
-        // ── Helpers ───────────────────────────────────────────────────────────────
 
         private void AddParameter(object? value)
         {

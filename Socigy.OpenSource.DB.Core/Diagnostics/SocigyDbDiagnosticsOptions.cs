@@ -41,6 +41,15 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
         public LogLevel LogLevel { get; set; } = LogLevel.Debug;
 
         /// <summary>
+        /// When set, any command whose execution exceeds this many milliseconds is reported as a slow query,
+        /// independently of <see cref="LogLevel"/>: a one-off <see cref="LogLevel.Warning"/> message is logged,
+        /// the span is tagged <c>db.query.slow=true</c>, and the <c>socigy.db.slow_queries</c> counter is
+        /// incremented. <see langword="null"/> (the default) disables slow-query detection. This catches
+        /// regressions even when per-command <see cref="LogLevel.Debug"/> logging is off in production.
+        /// </summary>
+        public double? SlowQueryThresholdMs { get; set; }
+
+        /// <summary>
         /// Optional redaction hook invoked per parameter when <see cref="CaptureParameterValues"/> is
         /// enabled. Receives the parameter name and raw value, returns the string to record (return
         /// <c>"***"</c> to mask). When <see langword="null"/>, values are rendered and truncated directly.

@@ -35,7 +35,72 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
             services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultFieldEncryptor>());
-            services.AddHostedService<VaultEncryptionPrimingService>();
+            services.AddHostedService(sp => new VaultEncryptionPrimingService(
+                sp.GetRequiredService<VaultFieldEncryptor>(), null,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            services.AddHostedService(sp => new VaultAuthRenewalService(
+                sp.GetRequiredService<VaultClientProvider>(),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
+            return services;
+        }
+
+        /// <summary>
+        /// Registers the Vault Transit <b>data-key envelope</b> mode for <c>[Encrypted]</c> columns: a versioned
+        /// keyring of Transit-wrapped DEKs is loaded at startup; per-field crypto stays local. Old rows remain
+        /// decryptable across rotations. Installed as the default encryptor, or under
+        /// <see cref="VaultTransitOptions.Profile"/> if set. Background rotation runs when
+        /// <see cref="VaultTransitOptions.EnableBackgroundRotation"/> is enabled.
+        /// </summary>
+        public static IServiceCollection AddSocigyVaultEnvelopeEncryption(this IServiceCollection services, Action<VaultEnvelopeEncryptionOptions> configure)
+        {
+            if (configure == null) throw new ArgumentNullException(nameof(configure));
+            var options = new VaultEnvelopeEncryptionOptions();
+            configure(options);
+
+            services.TryAddSingleton(sp => new VaultClientProvider(options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            services.AddSingleton(sp => new VaultEnvelopeEncryptor(
+                sp.GetRequiredService<VaultClientProvider>(), options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            if (string.IsNullOrEmpty(options.Profile))
+                services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultEnvelopeEncryptor>());
+
+            services.AddHostedService(sp => new VaultEncryptionPrimingService(
+                sp.GetRequiredService<VaultEnvelopeEncryptor>(), options.Profile,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            services.AddHostedService(sp => new VaultAuthRenewalService(
+                sp.GetRequiredService<VaultClientProvider>(),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
+            if (options.EnableBackgroundRotation)
+                services.AddHostedService(sp => new VaultEncryptionRotationService(
+                    sp.GetRequiredService<VaultEnvelopeEncryptor>(), options.RotationInterval,
+                    sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Rotation")));
+            return services;
+        }
+
+        /// <summary>
+        /// Registers the Vault Transit <b>EaaS-direct</b> mode for <c>[Encrypted]</c> columns: each field is
+        /// encrypted/decrypted by Vault per access (a round-trip per field). Intended for a few highly-sensitive
+        /// columns via <see cref="VaultTransitOptions.Profile"/>. The Transit key must be created with
+        /// <c>derived=true</c> so the table:column context binds.
+        /// </summary>
+        public static IServiceCollection AddSocigyVaultTransitEncryption(this IServiceCollection services, Action<VaultTransitEncryptionOptions> configure)
+        {
+            if (configure == null) throw new ArgumentNullException(nameof(configure));
+            var options = new VaultTransitEncryptionOptions();
+            configure(options);
+
+            services.TryAddSingleton(sp => new VaultClientProvider(options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            services.AddSingleton(sp => new VaultTransitFieldEncryptor(
+                sp.GetRequiredService<VaultClientProvider>(), options,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            if (string.IsNullOrEmpty(options.Profile))
+                services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultTransitFieldEncryptor>());
+
+            services.AddHostedService(sp => new VaultEncryptionPrimingService(
+                sp.GetRequiredService<VaultTransitFieldEncryptor>(), options.Profile,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
             services.AddHostedService(sp => new VaultAuthRenewalService(
                 sp.GetRequiredService<VaultClientProvider>(),
                 sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
@@ -116,26 +181,82 @@ namespace Socigy.OpenSource.DB.HashiCorp
         public void Dispose() => _timer?.Dispose();
     }
 
-    /// <summary>Loads the encryption key from Vault at startup and installs the ambient encryptor.</summary>
+    /// <summary>
+    /// Loads an encryptor's key material from Vault at startup and installs it as the ambient encryptor — as the
+    /// default when <see cref="_profile"/> is null/empty, or under that named profile otherwise.
+    /// </summary>
     internal sealed class VaultEncryptionPrimingService : IHostedService
     {
-        private readonly VaultFieldEncryptor _encryptor;
-        private readonly ILogger<VaultEncryptionPrimingService>? _logger;
+        private readonly IVaultPrimableEncryptor _encryptor;
+        private readonly string? _profile;
+        private readonly ILogger? _logger;
 
-        public VaultEncryptionPrimingService(VaultFieldEncryptor encryptor, ILogger<VaultEncryptionPrimingService>? logger = null)
+        public VaultEncryptionPrimingService(IVaultPrimableEncryptor encryptor, string? profile, ILogger? logger = null)
         {
             _encryptor = encryptor;
+            _profile = profile;
             _logger = logger;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await _encryptor.RefreshAsync(cancellationToken).ConfigureAwait(false);
-            SocigyFieldEncryption.Configure(_encryptor);
-            _logger?.LogInformation("Vault field encryption primed and activated.");
+            SocigyFieldEncryption.Configure(_profile, _encryptor);
+            _logger?.LogInformation("Vault field encryption primed and activated ({Profile}).",
+                string.IsNullOrEmpty(_profile) ? "default profile" : "profile '" + _profile + "'");
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    /// <summary>Rotates a Vault-backed encryptor's key on a background interval (one-shot timer re-armed each tick).</summary>
+    internal sealed class VaultEncryptionRotationService : IHostedService, IDisposable
+    {
+        private readonly IVaultRotatableEncryptor _encryptor;
+        private readonly TimeSpan _interval;
+        private readonly ILogger? _logger;
+        private Timer? _timer;
+        private volatile bool _stopped;
+
+        public VaultEncryptionRotationService(IVaultRotatableEncryptor encryptor, TimeSpan interval, ILogger? logger = null)
+        {
+            _encryptor = encryptor;
+            _interval = interval;
+            _logger = logger;
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            _timer = new Timer(async _ => await TickAsync().ConfigureAwait(false), null, _interval, Timeout.InfiniteTimeSpan);
+            return Task.CompletedTask;
+        }
+
+        private async Task TickAsync()
+        {
+            try
+            {
+                await _encryptor.RotateAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Keep serving the current key until the next attempt.
+                _logger?.LogWarning(ex, "Background encryption-key rotation failed; keeping current key.");
+            }
+            finally
+            {
+                if (!_stopped)
+                    try { _timer?.Change(_interval, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
+            }
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            _stopped = true;
+            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            return Task.CompletedTask;
+        }
+
+        public void Dispose() => _timer?.Dispose();
     }
 
     /// <summary>Primes leased credentials at startup and renews them on a timer.</summary>

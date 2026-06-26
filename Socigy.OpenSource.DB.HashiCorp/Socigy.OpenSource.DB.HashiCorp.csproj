@@ -10,15 +10,19 @@
 
 	<PropertyGroup>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<Title>Socigy DB — HashiCorp Vault</Title>
-		<!-- Version comes from Directory.Build.props (single source of truth). -->
-		<PackageVersion>$(Version)</PackageVersion>
+		<Title>Socigy DB - HashiCorp Vault</Title>
+		<!-- NuGet version for this package. Defined in Directory.Build.props ($(HashiCorpPackageVersion)),
+		     independently of the main package and the base $(Version). The DLL is stamped to match. -->
+		<PackageVersion>$(HashiCorpPackageVersion)</PackageVersion>
+		<AssemblyVersion>$(PackageVersion)</AssemblyVersion>
+		<FileVersion>$(PackageVersion)</FileVersion>
+		<Version>$(PackageVersion)</Version>
 		<Company>Socigy s.r.o.</Company>
-		<Description>Optional HashiCorp Vault integration for Socigy.OpenSource.DB: field encryption (key from Vault KV-v2) and rotating DB credentials (Database secrets engine).</Description>
-		<PackageTags>db;postgresql;hashicorp;vault;encryption;credentials;socigy</PackageTags>
+		<Description>Optional HashiCorp Vault / OpenBao integration for Socigy.OpenSource.DB: field encryption (KV-v2 key, Transit data-key envelope with key rotation, or Transit EaaS-direct) and rotating DB credentials (Database secrets engine).</Description>
+		<PackageTags>db;postgresql;hashicorp;vault;openbao;transit;encryption;credentials;socigy</PackageTags>
 		<Authors>Socigy, PatrikStohanzl</Authors>
 		<Copyright>Copyright © 2024 Socigy s.r.o.</Copyright>
-		<RepositoryUrl>https://github.com/WailedParsley36/Socigy.OpenSource.DB</RepositoryUrl>
+		<RepositoryUrl>https://github.com/Socigy-org/Socigy.OpenSource.DB</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageProjectUrl>https://docs.socigy.com/database/</PackageProjectUrl>
 		<PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>

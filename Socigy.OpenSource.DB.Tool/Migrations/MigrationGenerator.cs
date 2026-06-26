@@ -45,6 +45,13 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
                 Logger.Warning("Review the generated migration (search for [SOCIGY:DESTRUCTIVE]) before applying it.");
             }
 
+            if (sqlGenerator.SafetyWarnings.Count > 0)
+            {
+                Logger.Warning($"{Configuration.BaseNamespace}: This migration has potential safety issues to review before applying:");
+                foreach (var w in sqlGenerator.SafetyWarnings)
+                    Logger.Warning($"  - {w}");
+            }
+
 #if IsWindows
             string? migrationName = null;
             RunOnStaThread(() => migrationName = UI.MigrationNameInputDialog.Show($"{Configuration.BaseNamespace}: Please choose name for the new DB migration", "DB Migration Name:"));
@@ -55,13 +62,14 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
             }
 
             migrationName = Configuration.Settings.Database.MigrationNameTemplate.Replace("${Name}", migrationName).Replace("${Timestamp}", MigrationNamer.GetMigrationId());
-#else
-
-            string migrationName = MigrationNamer.GenerateCanonicalString(diff);
-#endif
-
             var formattedMigrationName = migrationName.Replace(" ", "_");
             migrationName = MigrationNamer.GenerateUniqueName(formattedMigrationName);
+#else
+            // Headless (non-Windows) build: there is no interactive name dialog. GenerateCanonicalString
+            // contains newlines and ':' separators, so it must NOT be used as a file/class name — derive a
+            // clean, deterministic identifier from the diff instead (valid C# identifier + filename).
+            string migrationName = MigrationNamer.GenerateUniqueName(diff);
+#endif
             await File.WriteAllTextAsync($"{Configuration.SocigyMigrationsFolderPath}{migrationName}.g.cs", new MigrationFileTemplate()
             {
                 Id = migrationName,

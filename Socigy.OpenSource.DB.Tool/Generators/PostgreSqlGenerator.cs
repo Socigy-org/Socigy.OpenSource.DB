@@ -19,6 +19,12 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         public IReadOnlyList<string> DestructiveOperations => _destructive;
         private readonly List<string> _destructive = new List<string>();
 
+        /// <inheritdoc/>
+        public IReadOnlyList<string> SafetyWarnings => _warnings;
+        private readonly List<string> _warnings = new List<string>();
+
+        private void Warn(string detail) => _warnings.Add(detail);
+
         /// <summary>Comment prefix for a type change whose in-place cast may fail or lose data (narrowing).</summary>
         public const string LossyMarker = "-- [SOCIGY:LOSSY]";
 
@@ -56,6 +62,8 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             var upCommands = new List<string>();
             var downCommands = new List<string>();
             _destructive.Clear();
+            _warnings.Clear();
+            CollectSafetyWarnings(diff);
 
             // --- UP: 1. Drop Removed Tables ---
             // --- DOWN: 5. Re-Create Removed Tables & Restore Data ---
@@ -151,6 +159,45 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             }
 
             return (upCommands, downCommands);
+        }
+
+        // Advisory checks that don't change the generated SQL but warn about migrations that can fail at apply
+        // time or silently lose data. Runs after ProvideDefaults(), so the alteration lists are non-null.
+        private void CollectSafetyWarnings(SchemaDiff diff)
+        {
+            foreach (var alteration in diff.AlteredTables)
+            {
+                var table = alteration.Table.Name;
+
+                // A NOT NULL column added with no default fails the moment the table already has rows.
+                foreach (var c in alteration.AddedColumns)
+                {
+                    if (c.Nullable == false && c.IsAutoIncrement != true && string.IsNullOrEmpty(c.DefaultValue))
+                        Warn($"Adds NOT NULL column \"{table}\".\"{c.Name}\" without a default; this fails if \"{table}\" " +
+                             "already contains rows. Add a [Default], make the property nullable, or backfill before applying.");
+                }
+
+                // SET NOT NULL on an existing column with no default has the same hazard for existing NULLs.
+                foreach (var mod in alteration.ModifiedColumns)
+                {
+                    if (mod.Changes.Contains("Nullable") && mod.NewColumn.Nullable == false
+                        && mod.NewColumn.IsAutoIncrement != true && string.IsNullOrEmpty(mod.NewColumn.DefaultValue))
+                        Warn($"Sets \"{table}\".\"{mod.NewColumn.Name}\" NOT NULL with no default; this fails if existing rows " +
+                             "hold NULL in that column. Backfill the column or add a [Default] first.");
+                }
+
+                // A column dropped while another of the same type+nullability is added is the classic unmarked
+                // rename: the data is dropped instead of carried over. Flag it (the fix is a [Renamed] attribute).
+                foreach (var removed in alteration.RemovedColumns)
+                    foreach (var added in alteration.AddedColumns)
+                    {
+                        if (string.Equals(removed.DatabaseType, added.DatabaseType, StringComparison.OrdinalIgnoreCase)
+                            && removed.Nullable == added.Nullable)
+                            Warn($"Column \"{table}\".\"{removed.Name}\" is dropped and \"{added.Name}\" added with the same " +
+                                 $"type ({added.DatabaseType}). If this is a rename, set [Renamed(\"{removed.Name}\")] on the new " +
+                                 "property so the data is preserved instead of dropped.");
+                    }
+            }
         }
 
         private string GenerateCreateTable(DbTable table)

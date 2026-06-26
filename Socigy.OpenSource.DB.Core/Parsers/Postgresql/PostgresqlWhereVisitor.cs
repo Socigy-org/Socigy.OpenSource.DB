@@ -66,9 +66,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             _recorded.Add(new RecordedParameter(source, transform, arrayElementType));
         }
 
-        // ---------------------------------------------------------
-        // 1. Unary Expressions
-        // ---------------------------------------------------------
         protected override Expression VisitUnary(UnaryExpression node)
         {
             if (TryEvaluate(node, out var value)) { EmitParam(node, ParamTransform.Value, value); return node; }
@@ -91,9 +88,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 $"Unsupported unary operator '{node.NodeType}' in SQL WHERE translation: {node}");
         }
 
-        // -------------------------------------------------------------------------
-        // 2. Binary Expressions
-        // -------------------------------------------------------------------------
         protected override Expression VisitBinary(BinaryExpression node)
         {
             if (TryEvaluate(node, out var value)) { EmitParam(node, ParamTransform.Value, value); return node; }
@@ -141,9 +135,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return node;
         }
 
-        // -------------------------------------------------------------------------
-        // 3. Member Access & Method Calls
-        // -------------------------------------------------------------------------
         protected override Expression VisitMember(MemberExpression node)
         {
             if (node.Expression == _rowParam)
@@ -229,10 +220,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 }
             }
 
-            // SQL Markers
             if (IsSqlMarker(node)) return VisitSqlMarkers(node);
 
-            // String methods
             if (IsDependentOnParam(node) && node.Method.DeclaringType == typeof(string))
                 return HandleStringMethods(node);
 
@@ -280,9 +269,6 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 $"Unsupported method call '{node.Method.DeclaringType?.Name}.{node.Method.Name}' in SQL WHERE translation: {node}");
         }
 
-        // -------------------------------------------------------------------------
-        // Helpers
-        // -------------------------------------------------------------------------
         private bool IsSqlMarker(MethodCallExpression node)
         {
             var type = node.Method.DeclaringType;

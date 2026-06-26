@@ -45,7 +45,6 @@ namespace Socigy.OpenSource.DB.Tool
             {
                 var alteration = CompareTableInternals(pair.Old, pair.New);
 
-                // Check if Schema OR Data has changed
                 bool hasSchemaChanges = alteration.AddedColumns.Any() || alteration.RemovedColumns.Any() ||
                                         alteration.ModifiedColumns.Any() || alteration.RenamedColumns.Any() ||
                                         alteration.AddedConstraints.Any() || alteration.RemovedConstraints.Any();
