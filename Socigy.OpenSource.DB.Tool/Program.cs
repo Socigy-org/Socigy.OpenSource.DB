@@ -74,7 +74,7 @@ var root = new RootCommand("Socigy.OpenSource.DB Model/Migration Generation Tool
 var result = root.Parse(args);
 return await result.InvokeAsync();
 
-async Task ExecuteScaffoldSchemaAsync(ParseResult result)
+async Task<int> ExecuteScaffoldSchemaAsync(ParseResult result, CancellationToken cancellationToken)
 {
     string connection = result.GetValue(schemaConnOpt)!;
     string schema = result.GetValue(schemaSchemaOpt) ?? "public";
@@ -88,9 +88,10 @@ async Task ExecuteScaffoldSchemaAsync(ParseResult result)
     await using var stream = File.Create(outputPath);
     await JsonSerializer.SerializeAsync(stream, dbSchema, Configuration.JsonOptions);
     Logger.Log($"Wrote {dbSchema.Tables.Count} table(s) to {outputPath}");
+    return 0;
 }
 
-async Task ExecuteScaffoldClassesAsync(ParseResult result)
+async Task<int> ExecuteScaffoldClassesAsync(ParseResult result, CancellationToken cancellationToken)
 {
     string? connection = result.GetValue(classesConnOpt);
     FileInfo? fromSchema = result.GetValue(classesFromSchemaOpt);
@@ -101,7 +102,7 @@ async Task ExecuteScaffoldClassesAsync(ParseResult result)
     if (string.IsNullOrEmpty(connection) && fromSchema == null)
     {
         Logger.Error("Provide either --connection (live database) or --from-schema (existing schema.json).");
-        return;
+        return 1;
     }
 
     DbSchema dbSchema;
@@ -110,7 +111,7 @@ async Task ExecuteScaffoldClassesAsync(ParseResult result)
         if (!fromSchema.Exists)
         {
             Logger.Error($"schema.json not found: {fromSchema.FullName}");
-            return;
+            return 1;
         }
         await using var input = fromSchema.OpenRead();
         dbSchema = (await JsonSerializer.DeserializeAsync<DbSchema>(input, Configuration.JsonOptions))
@@ -128,21 +129,22 @@ async Task ExecuteScaffoldClassesAsync(ParseResult result)
         await File.WriteAllTextAsync(Path.Combine(outputDir.FullName, fileName), content);
 
     Logger.Log($"Generated {files.Count} class(es) in namespace '{ns}' at {outputDir.FullName}");
+    return 0;
 }
 
-async Task ExecuteGenerateAsync(ParseResult result)
+async Task<int> ExecuteGenerateAsync(ParseResult result, CancellationToken cancellationToken)
 {
     FileInfo assemblyPath = result.GetValue(targetAssemblyOpt)!;
     bool shouldMigrate = result.GetValue(migrateOpt);
     DirectoryInfo projectDir = result.GetValue(projectDirOpt)!;
 
     if (Path.GetFileNameWithoutExtension(assemblyPath.FullName).Contains("Socigy.OpenSource.DB"))
-        return;
+        return 0; // building the library itself: nothing to generate, not an error
 
     if (!assemblyPath.Exists)
     {
         Logger.Error($"Assembly not found: {assemblyPath.FullName}");
-        return;
+        return 1;
     }
 
     if (shouldMigrate)
@@ -179,4 +181,5 @@ async Task ExecuteGenerateAsync(ParseResult result)
 
     Logger.Log($"Finished tasks in {watch.ElapsedMilliseconds}ms");
     watch.Stop();
+    return 0;
 }

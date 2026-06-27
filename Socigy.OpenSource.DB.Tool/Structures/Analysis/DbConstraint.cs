@@ -44,7 +44,19 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
                     StringBuilder builder = new();
                     foreach (var col in Columns)
                         builder.Append($"{col}_");
-                    _Name = $"{prefix}_{tablePrefix}{builder.ToString().TrimEnd('_')}";
+                    string colPart = builder.ToString().TrimEnd('_');
+
+                    // A single column can carry MORE THAN ONE CHECK (e.g. [Min(5)] + [Max(100)], or a [StringLength]
+                    // length check alongside a value check). Naming a check from its columns alone made both collapse
+                    // to one name, so the CREATE TABLE emitted two constraints with the same name (fails at apply:
+                    // "constraint already exists") and the ALTER ADD path collided with the existing one. Fold the
+                    // check expression into the name so each check over a column is uniquely and stably named.
+                    // UNIQUE / FK keep their column-only name (a column set has at most one of each), so their names
+                    // — and thus already-applied migrations — are unchanged.
+                    if (Type == Types.Check && !string.IsNullOrEmpty(Value))
+                        _Name = $"{prefix}_{tablePrefix}{colPart}_{StableHash(Value)}";
+                    else
+                        _Name = $"{prefix}_{tablePrefix}{colPart}";
                 }
                 else
                 {

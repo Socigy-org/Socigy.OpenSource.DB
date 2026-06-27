@@ -67,6 +67,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
 
             // --- UP: 1. Drop Removed Tables ---
             // --- DOWN: 5. Re-Create Removed Tables & Restore Data ---
+            var removedTableForeignKeys = new List<(string Table, DbConstraint Fk)>();
             foreach (var table in diff.RemovedTables)
             {
                 Destructive($"Drops table \"{table.Name}\" and ALL its rows (CASCADE also drops dependent " +
@@ -74,7 +75,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                             "are NOT recoverable.", upCommands);
                 upCommands.Add($"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
 
-                // Down: Recreate Schema
+                // Down: Recreate Schema (GenerateCreateTable deliberately excludes foreign keys)
                 downCommands.Add(GenerateCreateTable(table));
 
                 // Down: Restore Data (InstantiatedValues)
@@ -85,7 +86,16 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                         downCommands.Add(GenerateInsertStatement(table.Name, row));
                     }
                 }
+
+                // Collect this dropped table's foreign keys to re-add AFTER every removed table is recreated, so
+                // both endpoints exist (mirroring the AddedTables FK pass). Without this, rolling back a table drop
+                // restored the table WITHOUT its foreign keys — the schema differs from before the migration.
+                if (table.Constraints != null)
+                    foreach (var fk in table.Constraints.Where(c => c.Type == "foreign_key"))
+                        removedTableForeignKeys.Add((table.Name, fk));
             }
+            foreach (var (fkTable, fk) in removedTableForeignKeys)
+                downCommands.Add(GenerateAddConstraint(fkTable, fk));
 
             // --- UP: 2. Rename Tables ---
             // --- DOWN: 4. Rename Tables Back ---
@@ -158,6 +168,13 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 }
             }
 
+            // uuid_generate_v1mc() (emitted for a Guid.Sequential default) lives in the uuid-ossp extension, which
+            // is not installed by default — without this the CREATE TABLE / ALTER fails to apply with
+            // "function uuid_generate_v1mc() does not exist". Ensure the extension first. (gen_random_uuid(), used
+            // by Guid.Random, is built in to PostgreSQL 13+ and needs no extension.)
+            PrependUuidOsspExtensionIfNeeded(upCommands);
+            PrependUuidOsspExtensionIfNeeded(downCommands);
+
             return (upCommands, downCommands);
         }
 
@@ -220,8 +237,11 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     lines.Add("    " + GenerateConstraintDefinition(constraint, table));
                 }
 
-            // C. Primary Keys (Aggregated from Columns)
-            var pkColumns = table.Columns.Where(c => c.IsPrimaryKey == true).ToList();
+            // C. Primary Keys (Aggregated from Columns), ordered by the composite key position so a PK whose key
+            // order differs from the column declaration order is emitted correctly. A null/equal order keeps the
+            // column declaration order (stable sort), matching the prior behavior for ordinary keys.
+            var pkColumns = table.Columns.Where(c => c.IsPrimaryKey == true)
+                .OrderBy(c => c.PrimaryKeyOrder ?? int.MaxValue).ToList();
             if (pkColumns.Any())
             {
                 var pkName = $"PK_{table.Name}";
@@ -239,6 +259,11 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         {
             var up = new List<string>();
             var down = new List<string>();
+            // The DOWN re-add of a removed constraint must run AFTER any removed COLUMN it references has been
+            // re-added (section 2 below). Since the DOWN block executes in this list's order, defer these to the
+            // end — otherwise dropping a UNIQUE/CHECK/FK and its column together produced a DOWN that re-added the
+            // constraint before the column ("column ... does not exist"), failing the rollback.
+            var removedConstraintReAdds = new List<string>();
 
             var tableName = Quote(alteration.Table.Name);
 
@@ -246,7 +271,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             foreach (var c in alteration.RemovedConstraints)
             {
                 up.Add($"ALTER TABLE {tableName} DROP CONSTRAINT IF EXISTS {Quote(c.Name)};");
-                down.Add(GenerateAddConstraint(alteration.Table.Name, c));
+                removedConstraintReAdds.Add(GenerateAddConstraint(alteration.Table.Name, c));
             }
 
             // 2. Removed Columns
@@ -255,7 +280,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 Destructive($"Drops column \"{alteration.Table.Name}\".\"{c.Name}\"; its data cannot be " +
                             "recovered by the DOWN script.", up);
                 up.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
-                down.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c)};");
+                down.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c, alteration.Table.Name)};");
             }
 
             // 3. Added Columns (create sequences for new auto-increment columns first)
@@ -264,18 +289,34 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 if (c.IsAutoIncrement == true)
                 {
                     var seqName = GetSequenceName(alteration.Table.Name, c);
-                    up.Add($"CREATE SEQUENCE IF NOT EXISTS {Quote(seqName)};");
+                    // Type the sequence to the column (smallint/integer/bigint), matching the CREATE TABLE path.
+                    var seqType = GetSequenceType(c);
+                    up.Add(seqType == null
+                        ? $"CREATE SEQUENCE IF NOT EXISTS {Quote(seqName)};"
+                        : $"CREATE SEQUENCE IF NOT EXISTS {Quote(seqName)} AS {seqType};");
+                    // DOWN: drop the column (it depends on the sequence) BEFORE dropping the sequence, else the
+                    // sequence drop fails with "other objects depend on it".
+                    down.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
                     down.Add($"DROP SEQUENCE IF EXISTS {Quote(seqName)};");
                 }
-                up.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c)};");
-                down.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
+                else
+                {
+                    down.Add($"ALTER TABLE {tableName} DROP COLUMN {Quote(c.Name)};");
+                }
+                up.Add($"ALTER TABLE {tableName} ADD COLUMN {GenerateColumnDefinition(c, alteration.Table.Name)};");
             }
 
             // 4. Renamed Columns
+            // The DOWN rename-back must run AFTER the modified-column reverts (section 5), which reference the column
+            // by its NEW name, and BEFORE the PK re-add (section 6), which references it by its OLD name. A column can
+            // be renamed AND modified in one diff, so emitting the rename-back here (before section 5) made the modify
+            // revert target a column that the rename-back had already renamed away ("column ... does not exist").
+            // Collect the rename-backs and splice them in after section 5 instead.
+            var renameDowns = new List<string>();
             foreach (var renaming in alteration.RenamedColumns)
             {
                 up.Add($"ALTER TABLE {tableName} RENAME COLUMN {Quote(renaming.Old.Name)} TO {Quote(renaming.New.Name)};");
-                down.Add($"ALTER TABLE {tableName} RENAME COLUMN {Quote(renaming.New.Name)} TO {Quote(renaming.Old.Name)};");
+                renameDowns.Add($"ALTER TABLE {tableName} RENAME COLUMN {Quote(renaming.New.Name)} TO {Quote(renaming.Old.Name)};");
             }
 
             // 5. Modified Columns
@@ -310,15 +351,18 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                             break;
 
                         case "Default":
+                            // Route through TranslateDefault like the CREATE TABLE / ADD COLUMN paths, otherwise
+                            // a token such as $socigy$guid.random is emitted verbatim and the migration fails at
+                            // apply ("unterminated dollar-quoted string").
                             if (string.IsNullOrEmpty(mod.NewColumn.DefaultValue))
                                 up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} DROP DEFAULT;");
                             else
-                                up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT {mod.NewColumn.DefaultValue};");
+                                up.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT {TranslateDefault(mod.NewColumn.DefaultValue)};");
 
                             if (string.IsNullOrEmpty(mod.OldColumn.DefaultValue))
                                 down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} DROP DEFAULT;");
                             else
-                                down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT {mod.OldColumn.DefaultValue};");
+                                down.Add($"ALTER TABLE {tableName} ALTER COLUMN {colName} SET DEFAULT {TranslateDefault(mod.OldColumn.DefaultValue)};");
                             break;
 
                         case "AutoIncrement":
@@ -347,6 +391,10 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 }
             }
 
+            // Rename-backs run after the modified-column reverts (which use the new name) and before the PK re-add
+            // below (which uses the old name).
+            down.AddRange(renameDowns);
+
             // 6. Primary Key Changes
             bool pkChanged = alteration.ModifiedColumns.Any(m => m.Changes.Contains("PrimaryKey"))
                              || alteration.AddedColumns.Any(c => c.IsPrimaryKey == true)
@@ -364,6 +412,27 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     up.Add($"ALTER TABLE {tableName} ADD CONSTRAINT {Quote(pkName)} PRIMARY KEY ({cols});");
                 }
                 down.Add($"ALTER TABLE {tableName} DROP CONSTRAINT IF EXISTS {Quote(pkName)};");
+
+                // DOWN must restore the OLD primary key, not just drop the new one (otherwise rollback leaves
+                // the table with no primary key). Reconstruct the old PK column set from the diff: unchanged PK
+                // columns + columns whose PK flag changed away + removed-but-was-PK columns.
+                var modifiedNames = new HashSet<string>(alteration.ModifiedColumns.Select(m => m.NewColumn.Name));
+                var addedNames = new HashSet<string>(alteration.AddedColumns.Select(c => c.Name));
+                var oldPkCols = new List<string>();
+                foreach (var c in alteration.Table.Columns)
+                    if (c.IsPrimaryKey == true && !modifiedNames.Contains(c.Name) && !addedNames.Contains(c.Name))
+                        oldPkCols.Add(c.Name);
+                foreach (var m in alteration.ModifiedColumns)
+                    if (m.OldColumn.IsPrimaryKey == true)
+                        oldPkCols.Add(m.OldColumn.Name);
+                foreach (var c in alteration.RemovedColumns)
+                    if (c.IsPrimaryKey == true)
+                        oldPkCols.Add(c.Name);
+                if (oldPkCols.Count > 0)
+                {
+                    var oldCols = string.Join(", ", oldPkCols.Select(Quote));
+                    down.Add($"ALTER TABLE {tableName} ADD CONSTRAINT {Quote(pkName)} PRIMARY KEY ({oldCols});");
+                }
             }
 
             // 7. Added Constraints
@@ -373,6 +442,8 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 down.Add($"ALTER TABLE {tableName} DROP CONSTRAINT IF EXISTS {Quote(c.Name)};");
             }
 
+            // Re-add removed constraints LAST in the DOWN, after the columns they may reference are re-created.
+            down.AddRange(removedConstraintReAdds);
             return (up, down);
         }
         private (List<string> Up, List<string> Down) GenerateDataAlterations(TableAlteration alteration)
@@ -430,10 +501,13 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             }
             else
             {
-                // Fallback: If no PK, match ALL columns (safest best effort)
+                // Fallback: If no PK, match ALL columns (safest best effort). A null must use IS NULL, since
+                // "col = NULL" is never true and would make the delete (e.g. a seed-row rollback) a silent no-op.
                 foreach (var kvp in row)
                 {
-                    criteria.Add($"{Quote(kvp.Key)} = {FormatSqlValue(kvp.Value)}");
+                    criteria.Add(kvp.Value == null
+                        ? $"{Quote(kvp.Key)} IS NULL"
+                        : $"{Quote(kvp.Key)} = {FormatSqlValue(kvp.Value)}");
                 }
             }
 
@@ -490,9 +564,32 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     return $"'\\x{BitConverter.ToString(bytes).Replace("-", "")}'";
                 case Enum e:
                     return Convert.ToInt32(e).ToString();
+                // The SAVED schema is round-tripped through System.Text.Json, so its seed values come back as
+                // JsonElement, not the original CLR type. Branch on the JSON kind directly — a String stays quoted
+                // (a numeric-looking [Description] like "404" must NOT lose its quotes and become an int literal
+                // into a text column), a Number emits its invariant raw text, and bool/null map correctly. Deciding
+                // quoting by re-parsing the text with double.TryParse (below) produced broken/locale-dependent SQL.
+                case System.Text.Json.JsonElement je:
+                    switch (je.ValueKind)
+                    {
+                        case System.Text.Json.JsonValueKind.String:
+                            return $"'{je.GetString()!.Replace("'", "''")}'";
+                        case System.Text.Json.JsonValueKind.Number:
+                            return je.GetRawText();
+                        case System.Text.Json.JsonValueKind.True:
+                            return "TRUE";
+                        case System.Text.Json.JsonValueKind.False:
+                            return "FALSE";
+                        case System.Text.Json.JsonValueKind.Null:
+                        case System.Text.Json.JsonValueKind.Undefined:
+                            return "NULL";
+                        default:
+                            return $"'{je.GetRawText().Replace("'", "''")}'";
+                    }
                 default:
-                    // Numbers, etc.
-                    if (double.TryParse(value.ToString(), out _))
+                    // Numbers, etc. Parse culture-invariantly so the quote/no-quote decision is deterministic
+                    // across locales (a comma-decimal locale must not change which literals are treated as numbers).
+                    if (double.TryParse(value.ToString(), System.Globalization.NumberStyles.Any, CultureInfo.InvariantCulture, out _))
                         return Convert.ToString(value, CultureInfo.InvariantCulture);
 
                     // Fallback to string representation
@@ -500,15 +597,21 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             }
         }
 
-        private string GenerateColumnDefinition(DbColumn col)
+        private string GenerateColumnDefinition(DbColumn col, string? tableName = null)
         {
             var sb = new StringBuilder();
             sb.Append($"{Quote(col.Name)} {col.DatabaseType}");
-            if (col.Nullable == false) sb.Append(" NOT NULL");
+            // The analyzer marks a nullable column Nullable==true and a NON-nullable one Nullable==null (never
+            // false), so treat anything other than an explicit true as NOT NULL — otherwise every required,
+            // non-primary-key column would be created NULLABLE, silently dropping the model's NOT NULL contract.
+            if (col.Nullable != true) sb.Append(" NOT NULL");
 
             if (col.IsAutoIncrement == true)
             {
-                var seqName = GetSequenceName(null, col);
+                // Must resolve to the SAME sequence the ALTER path created (it is named with the table). A null
+                // tableName here produced "_id_seq", which is never created, so the column default referenced a
+                // missing sequence and the migration failed at apply.
+                var seqName = GetSequenceName(tableName, col);
                 sb.Append($" DEFAULT nextval('{seqName}')");
             }
             else if (!string.IsNullOrEmpty(col.DefaultValue))
@@ -523,7 +626,10 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         {
             var sb = new StringBuilder();
             sb.Append($"{Quote(col.Name)} {col.DatabaseType}");
-            if (col.Nullable == false) sb.Append(" NOT NULL");
+            // The analyzer marks a nullable column Nullable==true and a NON-nullable one Nullable==null (never
+            // false), so treat anything other than an explicit true as NOT NULL — otherwise every required,
+            // non-primary-key column would be created NULLABLE, silently dropping the model's NOT NULL contract.
+            if (col.Nullable != true) sb.Append(" NOT NULL");
 
             if (col.IsAutoIncrement == true)
             {
@@ -595,6 +701,14 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             };
         }
 
+        // If any statement uses a uuid-ossp function (uuid_generate_*), prepend a single idempotent
+        // CREATE EXTENSION so the migration applies on a database where the extension isn't installed yet.
+        private static void PrependUuidOsspExtensionIfNeeded(List<string> commands)
+        {
+            if (commands.Any(c => c != null && c.Contains("uuid_generate_")))
+                commands.Insert(0, "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";");
+        }
+
         private static string TranslateDefault(string token)
         {
             if (string.IsNullOrEmpty(token) || !token.StartsWith("$socigy$"))
@@ -625,18 +739,18 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             switch (con.Type.ToLower())
             {
                 case "unique":
-                    var uniqueCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
+                    var uniqueCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
                     sb.Append($"UNIQUE ({uniqueCols})");
                     break;
                 case "check":
                     sb.Append($"CHECK ({con.Value})");
                     break;
                 case "foreign_key":
-                    var fkCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
+                    var fkCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
                     var targetTable = Configuration.CurrentSchema.Tables.FirstOrDefault(x => x.SourceName == con.TargetTable);
                     var targetTableName = targetTable?.Name ?? con.TargetTable;
                     var targetCols = string.Join(", ", con.TargetColumns.Select(x =>
-                        Quote(targetTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? x)));
+                        Quote(targetTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
                     sb.Append($"FOREIGN KEY ({fkCols}) REFERENCES {Quote(targetTableName)} ({targetCols})");
                     if (!string.IsNullOrEmpty(con.OnDelete)) sb.Append($" ON DELETE {TranslateForeignKeyAction(con.OnDelete)}");
                     if (!string.IsNullOrEmpty(con.OnUpdate)) sb.Append($" ON UPDATE {TranslateForeignKeyAction(con.OnUpdate)}");
@@ -649,6 +763,13 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         {
             return $"ALTER TABLE {Quote(tableName)} ADD {GenerateConstraintDefinition(constraint, Configuration.CurrentSchema.Tables.FirstOrDefault(x => x.Name == tableName))};";
         }
+
+        // When a constraint column can't be matched to a current-table column (e.g. it was renamed, so the old
+        // constraint's old property name no longer resolves against the new schema), fall back to the snake_case
+        // column name rather than the raw PascalCase property name, which is never a valid column identifier and
+        // makes the generated DDL fail at apply. Uses the same policy the source generator uses for column names.
+        private static string ToColumnName(string propertyOrColumn)
+            => System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(propertyOrColumn);
 
         private string Quote(string id) => $"\"{id}\"";
 
@@ -665,7 +786,19 @@ namespace Socigy.OpenSource.DB.Tool.Generators
           { "int64", "bigint" },
           { "short", "smallint" },
           { "int16", "smallint" },
-          { "byte", "smallint" }, 
+          { "byte", "smallint" },
+
+          // Unsigned integers have no native PostgreSQL type, so the runtime widens them on read/write
+          // (ushort->integer, uint->bigint, ulong->numeric, sbyte->smallint — see TableBindingsGenerator.MapPgType).
+          // The DDL MUST match that widening or the column type diverges from what inserts/reads use. Without these
+          // the fallback returned the raw .NET name ("uint32"), producing invalid CREATE TABLE DDL.
+          { "sbyte", "smallint" },
+          { "ushort", "integer" },
+          { "uint16", "integer" },
+          { "uint", "bigint" },
+          { "uint32", "bigint" },
+          { "ulong", "numeric" },
+          { "uint64", "numeric" },
 
           // Decimals / Floats
           { "decimal", "numeric" }, // or "money" depending on use case

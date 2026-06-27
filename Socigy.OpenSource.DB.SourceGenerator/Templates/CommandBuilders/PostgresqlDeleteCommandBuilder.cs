@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
     public partial class PostgresqlDeleteCommandBuilder : PostgresqlDeleteCommandBuilderBase {
         
         
-        #line 179 "PostgresqlDeleteCommandBuilder.tt"
+        #line 213 "PostgresqlDeleteCommandBuilder.tt"
 
 	public string ClassName { get; set; }
 	public string Namespace { get; set; }
@@ -60,7 +60,7 @@ using ");
             #line hidden
             
             #line 21 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write(";\r\n\r\nnamespace Socigy.OpenSource.DB.CommandBuilders.Postgresql\r\n{\r\n    ");
+            this.Write(";\n\nnamespace Socigy.OpenSource.DB.CommandBuilders.Postgresql\n{\n    ");
             
             #line default
             #line hidden
@@ -72,7 +72,7 @@ using ");
             #line hidden
             
             #line 25 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("\r\n    public class Postgresql");
+            this.Write("\n    public class Postgresql");
             
             #line default
             #line hidden
@@ -96,9 +96,8 @@ using ");
             #line hidden
             
             #line 26 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("DeleteCommandBuilder<T>>\r\n        where T : IDbTable\r\n    {\r\n#if NET6_0_OR_GREATE" +
-                    "R\r\n        protected System.Data.Common.DbBatch? _Batch;\r\n\r\n        public Postg" +
-                    "resql");
+            this.Write("DeleteCommandBuilder<T>>\n        where T : IDbTable\n    {\n#if NET6_0_OR_GREATER\n " +
+                    "       protected System.Data.Common.DbBatch? _Batch;\n\n        public Postgresql");
             
             #line default
             #line hidden
@@ -110,26 +109,45 @@ using ");
             #line hidden
             
             #line 32 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("DeleteCommandBuilder<T> WithBatch(DbBatch? batch)\r\n        {\r\n            if (bat" +
-                    "ch == null)\r\n            {\r\n                if (_Connection == null && _Transact" +
-                    "ion == null)\r\n                    throw new ArgumentNullException(nameof(batch)," +
-                    " \"If batch is null, either connection or transaction must be specified!\");\r\n\r\n  " +
-                    "              _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.C" +
-                    "reateBatch() ?? throw new InvalidOperationException(\"The provided transaction ha" +
-                    "s no DbConnection from which a DbBatch could be created\");\r\n                _Bat" +
-                    "ch.Transaction = _Transaction;\r\n            }\r\n            else\r\n               " +
-                    " _Batch = batch;\r\n\r\n            return this;\r\n        }\r\n\r\n        public void A" +
-                    "ddToBatch()\r\n        {\r\n            if (_Batch == null)\r\n                throw n" +
-                    "ew InvalidOperationException(\"Cannot add to batch when no DbBatch was provided. " +
-                    "Please call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.Creat" +
-                    "eBatchCommand();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n        }" +
-                    "\r\n\r\n        public async Task AddToBatchAsync()\r\n        {\r\n            if (_Bat" +
-                    "ch == null)\r\n                throw new InvalidOperationException(\"Cannot add to " +
-                    "batch when no DbBatch was provided. Please call WithBatch() first.\");\r\n\r\n       " +
-                    "     var batchCommand = _Batch.CreateBatchCommand();\r\n            _Batch.BatchCo" +
-                    "mmands.Add(batchCommand);\r\n        }\r\n#endif\r\n\r\n        private readonly T? _Tab" +
-                    "leRow;\r\n        private Expression<Func<T, bool>>? _WhereClause;\r\n\r\n        publ" +
-                    "ic Postgresql");
+            this.Write(@"DeleteCommandBuilder<T> WithBatch(DbBatch? batch)
+        {
+            if (batch == null)
+            {
+                if (_Connection == null && _Transaction == null)
+                    throw new ArgumentNullException(nameof(batch), ""If batch is null, either connection or transaction must be specified!"");
+
+                _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.CreateBatch() ?? throw new InvalidOperationException(""The provided transaction has no DbConnection from which a DbBatch could be created"");
+                _Batch.Transaction = _Transaction;
+            }
+            else
+                _Batch = batch;
+
+            return this;
+        }
+
+        public void AddToBatch()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException(""Cannot add to batch when no DbBatch was provided. Please call WithBatch() first."");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+
+        public async Task AddToBatchAsync()
+        {
+            if (_Batch == null)
+                throw new InvalidOperationException(""Cannot add to batch when no DbBatch was provided. Please call WithBatch() first."");
+
+            var batchCommand = _Batch.CreateBatchCommand();
+            _Batch.BatchCommands.Add(batchCommand);
+        }
+#endif
+
+        private readonly T? _TableRow;
+        private Expression<Func<T, bool>>? _WhereClause;
+
+        public Postgresql");
             
             #line default
             #line hidden
@@ -141,7 +159,7 @@ using ");
             #line hidden
             
             #line 70 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("DeleteCommandBuilder() { }\r\n        public Postgresql");
+            this.Write("DeleteCommandBuilder() { }\n        public Postgresql");
             
             #line default
             #line hidden
@@ -153,8 +171,8 @@ using ");
             #line hidden
             
             #line 71 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("DeleteCommandBuilder(T rowInstance)\r\n        {\r\n            _TableRow = rowInstan" +
-                    "ce;\r\n        }\r\n\r\n\r\n        public Postgresql");
+            this.Write("DeleteCommandBuilder(T rowInstance)\n        {\n            _TableRow = rowInstance" +
+                    ";\n        }\n\n\n        public Postgresql");
             
             #line default
             #line hidden
@@ -177,7 +195,7 @@ using ");
             return new PostgresqlWhereVisitor(param, getColName, command);
         }
 
-        public async Task<int> ExecuteAsync()
+        public async Task<int> ExecuteAsync(global::System.Threading.CancellationToken cancellationToken = default)
         {
 #if NET6_0_OR_GREATER
             if (_Batch != null)
@@ -188,7 +206,7 @@ using ");
                 throw new InvalidOperationException(""No DbConnection provided."");
 
             if (_Connection.State != System.Data.ConnectionState.Open)
-                await _Connection.OpenAsync();
+                await _Connection.OpenAsync(cancellationToken);
 
             await using var command = _Connection.CreateCommand() as NpgsqlCommand;
             if (command == null) return 0;
@@ -211,95 +229,97 @@ using ");
             #line hidden
             
             #line 110 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write(@".GetColumnDbName, command).Parse(_WhereClause);
-            }
-            else if (_TableRow != null)
-            {
-                Dictionary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();
-
-                if (columns.Count == 0)
-                    throw new InvalidOperationException(""No WHERE clause provided and the entity has no primary keys. Execution aborted to prevent deleting all rows in the table."");
-
-                StringBuilder whereBuilder = new(""WHERE "");
-                bool isFirst = true;
-
-                foreach (var col in columns)
-                {
-                    if (!isFirst)
-                        whereBuilder.Append("" AND "");
-
-                    isFirst = false;
-
-                    string colDbName = col.Key;
-                    string paramName = $""@p{command.Parameters.Count}"";
-
-                    whereBuilder.Append($""\""{colDbName}\"" = {paramName}"");
-
-                    NpgsqlParameter param = new(paramName, GetDbType(col.Value.Type))
-                    {
-                        Value = col.Value.Value ?? DBNull.Value
-                    };
-
-                    command.Parameters.Add(param);
-                }
-
-                where = whereBuilder.ToString();
-            }
-
-            command.CommandText = $@""
-        DELETE FROM """"{");
+            this.Write(".GetColumnDbName, command).Parse(_WhereClause);\n            }\n            else if" +
+                    " (_TableRow != null)\n            {\n                Dictionary<string, ColumnInfo" +
+                    "> columns = _TableRow.GetPrimaryColumns();\n\n                if (columns.Count ==" +
+                    " 0)\n                    throw new InvalidOperationException(\"No WHERE clause pro" +
+                    "vided and the entity has no primary keys. Execution aborted to prevent deleting " +
+                    "all rows in the table.\");\n\n                StringBuilder whereBuilder = new(\"WHE" +
+                    "RE \");\n                bool isFirst = true;\n\n                foreach (var col in" +
+                    " columns)\n                {\n                    if (!isFirst)\n                  " +
+                    "      whereBuilder.Append(\" AND \");\n\n                    isFirst = false;\n\n     " +
+                    "               string colDbName = col.Key;\n                    string paramName " +
+                    "= $\"@p{command.Parameters.Count}\";\n\n                    whereBuilder.Append($\"\\\"" +
+                    "{colDbName}\\\" = {paramName}\");\n\n                    object? pkValue = col.Value." +
+                    "Value;\n                    // Whether the *original* PK value is a real enum (de" +
+                    "cided before the coercion below rewrites it\n                    // to its underl" +
+                    "ying int). A value convertor may already have produced a non-enum DB\n           " +
+                    "         // representation (e.g. enum -> string), in which case this is false an" +
+                    "d we must NOT force a type.\n                    bool pkValueIsEnum = pkValue != " +
+                    "null && pkValue != DBNull.Value && pkValue.GetType().IsEnum;\n                   " +
+                    " // Coerce only when the value is *actually* an enum at runtime. Matches insert/" +
+                    "update.\n                    if (pkValueIsEnum)\n                        pkValue =" +
+                    " Convert.ChangeType(pkValue, Enum.GetUnderlyingType(pkValue.GetType()));\n       " +
+                    "             if (pkValue is DateTime __dt && __dt.Kind == DateTimeKind.Utc)\n    " +
+                    "                    pkValue = DateTime.SpecifyKind(__dt, DateTimeKind.Unspecifie" +
+                    "d);\n                    else if (pkValue is DateTimeOffset __dto && __dto.Offset" +
+                    " != TimeSpan.Zero)\n                        pkValue = __dto.ToUniversalTime();\n  " +
+                    "                  else if (pkValue is ushort __us) pkValue = (int)__us;\n        " +
+                    "            else if (pkValue is uint __ui) pkValue = (long)__ui;\n               " +
+                    "     else if (pkValue is ulong __ul) pkValue = (decimal)__ul;\n\n                 " +
+                    "   // Mirror the UPDATE path: bind value-only so Npgsql infers the wire type fro" +
+                    "m the runtime value,\n                    // and only FORCE NpgsqlDbType for a nu" +
+                    "ll (no value to infer from) or a real enum (int value, but\n                    /" +
+                    "/ the column is the enum\'s integral type). Forcing GetDbType(col.Value.Type) unc" +
+                    "onditionally\n                    // broke a type-changing convertor PK (e.g. enu" +
+                    "m/Guid -> string): the string value was forced to\n                    // Integer" +
+                    "/Uuid and Npgsql threw, while the identical UPDATE-by-instance succeeded.\n      " +
+                    "              NpgsqlParameter param = new(paramName, pkValue ?? DBNull.Value);\n " +
+                    "                   if (pkValue == null || pkValue == DBNull.Value || pkValueIsEn" +
+                    "um)\n                        param.NpgsqlDbType = GetDbType(col.Value.Type);\n\n   " +
+                    "                 command.Parameters.Add(param);\n                }\n\n             " +
+                    "   where = whereBuilder.ToString();\n            }\n\n            command.CommandTe" +
+                    "xt = $@\"\n        DELETE FROM \"\"{");
             
             #line default
             #line hidden
             
-            #line 146 "PostgresqlDeleteCommandBuilder.tt"
+            #line 166 "PostgresqlDeleteCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 146 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write(@".TableName}""""
-        {where}"";
-
-            return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, ""DELETE"", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
-        }
-
-        public NpgsqlDbType GetDbType(Type type)
-        {
-            type = Nullable.GetUnderlyingType(type) ?? type;
-
-            return type switch
-            {
-                Type t when t == typeof(int) => NpgsqlDbType.Integer,
-                Type t when t == typeof(long) => NpgsqlDbType.Bigint,
-                Type t when t == typeof(string) => NpgsqlDbType.Text,
-                Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
-                Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
-                Type t when t == typeof(float) => NpgsqlDbType.Real,
-                Type t when t == typeof(double) => NpgsqlDbType.Double,
-                Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
-                Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
-                Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
-                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
-                Type t when t == typeof(char) => NpgsqlDbType.Char,
-                _ => NpgsqlDbType.Text
-            };
-        }
-    }
-    ");
+            #line 166 "PostgresqlDeleteCommandBuilder.tt"
+            this.Write(".TableName}\"\"\n        {where}\";\n\n            return await global::Socigy.OpenSour" +
+                    "ce.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, \"DELETE\", ct " +
+                    "=> command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);\n        }" +
+                    "\n\n        public NpgsqlDbType GetDbType(Type type)\n        {\n            type = " +
+                    "Nullable.GetUnderlyingType(type) ?? type;\n\n            if (type.IsEnum)\n        " +
+                    "        type = Enum.GetUnderlyingType(type);\n\n            return type switch\n   " +
+                    "         {\n                Type t when t == typeof(int) => NpgsqlDbType.Integer," +
+                    "\n                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,\n         " +
+                    "       Type t when t == typeof(long) => NpgsqlDbType.Bigint,\n                Typ" +
+                    "e t when t == typeof(ulong) => NpgsqlDbType.Numeric,\n                Type t when" +
+                    " t == typeof(short) => NpgsqlDbType.Smallint,\n                Type t when t == t" +
+                    "ypeof(ushort) => NpgsqlDbType.Integer,\n                Type t when t == typeof(b" +
+                    "yte) => NpgsqlDbType.Smallint,\n                Type t when t == typeof(sbyte) =>" +
+                    " NpgsqlDbType.Smallint,\n                Type t when t == typeof(string) => Npgsq" +
+                    "lDbType.Text,\n                Type t when t == typeof(bool) => NpgsqlDbType.Bool" +
+                    "ean,\n                Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp" +
+                    ",\n                Type t when t == typeof(DateTimeOffset) => NpgsqlDbType.Timest" +
+                    "ampTz,\n                Type t when t == typeof(TimeSpan) => NpgsqlDbType.Interva" +
+                    "l,\n#if NET6_0_OR_GREATER\n                Type t when t == typeof(DateOnly) => Np" +
+                    "gsqlDbType.Date,\n                Type t when t == typeof(TimeOnly) => NpgsqlDbTy" +
+                    "pe.Time,\n#endif\n                Type t when t == typeof(float) => NpgsqlDbType.R" +
+                    "eal,\n                Type t when t == typeof(double) => NpgsqlDbType.Double,\n   " +
+                    "             Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,\n         " +
+                    "       Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,\n                Type " +
+                    "t when t == typeof(byte[]) => NpgsqlDbType.Bytea,\n                Type t when t " +
+                    "== typeof(char) => NpgsqlDbType.Char,\n                _ => NpgsqlDbType.Text\n   " +
+                    "         };\n        }\n    }\n    ");
             
             #line default
             #line hidden
             
-            #line 174 "PostgresqlDeleteCommandBuilder.tt"
+            #line 208 "PostgresqlDeleteCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 174 "PostgresqlDeleteCommandBuilder.tt"
-            this.Write("\r\n}\r\n\r\n#nullable disable\r\n\r\n");
+            #line 208 "PostgresqlDeleteCommandBuilder.tt"
+            this.Write("\n}\n\n#nullable disable\n\n");
             
             #line default
             #line hidden

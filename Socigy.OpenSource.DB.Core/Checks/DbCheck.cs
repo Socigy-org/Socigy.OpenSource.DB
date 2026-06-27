@@ -132,16 +132,44 @@ namespace Socigy.OpenSource.DB.Checks
 
         private static string EscapeSql(string s) => s.Replace("'", "''");
 
+        // Matches System.Text.Json's JsonNamingPolicy.SnakeCaseLower, which the source generator uses for column
+        // names (ColumnNaming.cs). The previous naive "underscore before every uppercase" diverged on acronyms
+        // (IPAddress -> i_p_address instead of ip_address), so DbCheck.Value(nameof(IPAddress)) referenced a
+        // column that does not exist and the CHECK failed at apply time.
         private static string ToSnakeCase(string name)
         {
             if (string.IsNullOrEmpty(name)) return name;
-            var sb = new StringBuilder();
+            const int None = 0, Lower = 1, Upper = 2, Digit = 3;
+            var sb = new StringBuilder(name.Length + 8);
+            int prev = None;
             for (int i = 0; i < name.Length; i++)
             {
                 char c = name[i];
-                if (char.IsUpper(c) && i > 0)
+                // An underscore in the (identifier) name is preserved verbatim — leading, trailing, and repeated
+                // underscores are kept, matching JsonNamingPolicy.SnakeCaseLower (which does NOT strip a leading
+                // underscore or collapse "a__b" to "a_b"). Collapsing them produced a column name the generator
+                // never emitted, so the CHECK referenced a missing column and failed at apply.
+                if (c == '_')
+                {
                     sb.Append('_');
+                    prev = None;
+                    continue;
+                }
+                if (!char.IsLetterOrDigit(c))
+                {
+                    if (sb.Length > 0 && sb[sb.Length - 1] != '_') sb.Append('_');
+                    prev = None;
+                    continue;
+                }
+                int cur = char.IsUpper(c) ? Upper : char.IsDigit(c) ? Digit : Lower;
+                // A separator precedes an uppercase letter that starts a new word: after a lowercase/digit, or
+                // at the end of an acronym (uppercase run) when the next char is lowercase.
+                bool sep = cur == Upper
+                    && (prev == Lower || prev == Digit
+                        || (prev == Upper && i + 1 < name.Length && char.IsLower(name[i + 1])));
+                if (sep && sb.Length > 0 && sb[sb.Length - 1] != '_') sb.Append('_');
                 sb.Append(char.ToLowerInvariant(c));
+                prev = cur;
             }
             return sb.ToString();
         }

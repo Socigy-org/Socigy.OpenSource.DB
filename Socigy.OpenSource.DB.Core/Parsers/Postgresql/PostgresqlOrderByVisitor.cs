@@ -36,12 +36,29 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private void AddParameter(object? value)
         {
+            // Route through the single source of truth (enum->underlying, DateTime Kind=Utc->Unspecified,
+            // DateTimeOffset->UTC, unsigned widening) so a captured value in an ORDER BY CASE (When/Then/Else)
+            // binds identically to the WHERE/SELECT paths. Binding raw silently mis-ordered a UTC DateTime
+            // (session-tz shift) and threw on an offset DateTimeOffset / unsigned value.
+            value = global::Socigy.OpenSource.DB.Core.Parsers.WhereParameter.Normalize(value);
+
             string paramName = $"@p{_Command.Parameters.Count}";
             var p = _Command.CreateParameter();
             p.ParameterName = paramName;
             p.Value = value ?? DBNull.Value;
             _Command.Parameters.Add(p);
             _Sql.Append(paramName);
+        }
+
+        // An inline constructor reaching an ORDER BY value position (e.g. a CASE `.Then(new DateOnly(...))`,
+        // `.When(x.Id == new Guid("..."))`) must fold to a SINGLE normalized parameter. Without this the base
+        // visitor recurses into the constructor arguments, emitting "@p0@p1@p2" (invalid SQL) or binding a
+        // single-arg ctor's raw string. Mirrors the WHERE/SELECT/JOIN visitors.
+        protected override Expression VisitNew(NewExpression node)
+        {
+            if (TryEvaluate(node, out var value)) { AddParameter(value); return node; }
+            throw new NotSupportedException(
+                $"Unsupported constructor '{node.Type.Name}' in SQL ORDER BY translation: {node}");
         }
 
         protected override Expression VisitNewArray(NewArrayExpression node)
@@ -100,7 +117,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (node.Expression == _rowParam)
             {
-                _Sql.Append(_GetColumnName(node.Member.Name));
+                _Sql.Append('"').Append(_GetColumnName(node.Member.Name)).Append('"');
                 return node;
             }
 
@@ -122,7 +139,19 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
-            return base.VisitMethodCall(node);
+            // A param-independent method call (e.g. a captured factory) folds to a single ORDER BY value.
+            if (TryEvaluate(node, out var value))
+            {
+                AddParameter(value);
+                return node;
+            }
+
+            // A column-dependent method call (e.g. `x.Name.ToUpper()`, `x.Created.Date`) is an unsupported
+            // ORDER BY transform. base.VisitMethodCall would emit only the bare column ("name") and silently
+            // drop the transform, ordering by the wrong expression. Fail fast like VisitBinary does for
+            // unsupported operators, instead of degrading to a silently-wrong ordering.
+            throw new NotSupportedException(
+                $"Unsupported method call '{node.Method.Name}' in SQL ORDER BY translation: {node}");
         }
 
         // Recursively unwinds the Case fluent chain
@@ -159,6 +188,24 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         protected override Expression VisitBinary(BinaryExpression node)
         {
+            // char comparison inside an ORDER BY CASE (e.g. `Case().When(x.Initial == 'A')`): C# promotes char==char
+            // to int==int, so the int code point (65) would bind against the character(1) column. Bind the value
+            // back as a 1-char string. Mirrors the WHERE visitor.
+            if (IsCharComparisonOperator(node.NodeType))
+            {
+                bool leftChar = IsCharPromotion(node.Left);
+                bool rightChar = IsCharPromotion(node.Right);
+                if (leftChar ^ rightChar)
+                {
+                    _Sql.Append("(");
+                    EmitCharComparisonOperand(node.Left, leftChar);
+                    _Sql.Append(CharComparisonOperatorSql(node.NodeType));
+                    EmitCharComparisonOperand(node.Right, rightChar);
+                    _Sql.Append(")");
+                    return node;
+                }
+            }
+
             _Sql.Append("(");
             Visit(node.Left);
             switch (node.NodeType)
@@ -178,6 +225,34 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             Visit(node.Right);
             _Sql.Append(")");
             return node;
+        }
+
+        private static bool IsCharPromotion(Expression e) =>
+            e is UnaryExpression u && (u.NodeType == ExpressionType.Convert || u.NodeType == ExpressionType.ConvertChecked)
+                && u.Operand.Type == typeof(char);
+
+        private static bool IsCharComparisonOperator(ExpressionType t) =>
+            t is ExpressionType.Equal or ExpressionType.NotEqual or ExpressionType.GreaterThan
+              or ExpressionType.GreaterThanOrEqual or ExpressionType.LessThan or ExpressionType.LessThanOrEqual;
+
+        private static string CharComparisonOperatorSql(ExpressionType t) => t switch
+        {
+            ExpressionType.Equal => " = ",
+            ExpressionType.NotEqual => " <> ",
+            ExpressionType.GreaterThan => " > ",
+            ExpressionType.GreaterThanOrEqual => " >= ",
+            ExpressionType.LessThan => " < ",
+            ExpressionType.LessThanOrEqual => " <= ",
+            _ => " = "
+        };
+
+        private void EmitCharComparisonOperand(Expression side, bool isCharColumn)
+        {
+            if (isCharColumn) { Visit(((UnaryExpression)side).Operand); return; }
+            if (TryEvaluate(side, out var v) && v != null)
+                AddParameter(((char)System.Convert.ToInt32(v)).ToString());
+            else
+                Visit(side);
         }
 
         protected override Expression VisitConstant(ConstantExpression node)

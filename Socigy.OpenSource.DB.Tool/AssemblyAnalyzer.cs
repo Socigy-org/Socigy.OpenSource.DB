@@ -308,6 +308,11 @@ namespace Socigy.OpenSource.DB.Tool
                             Name = "description",
                             DotnetType = stringFullName,
                             DatabaseType = dbStringType,
+                            // description is OPTIONAL: an enum member without [Description] seeds it with NULL. Without
+                            // this the column was created NOT NULL (the analyzer's "Nullable==null means required"
+                            // convention) and the seed INSERT (..., NULL) failed at apply with a not-null violation,
+                            // breaking the very first migration for any enum table with an undescribed member.
+                            Nullable = true,
                         }
                     ];
                 }
@@ -372,6 +377,14 @@ namespace Socigy.OpenSource.DB.Tool
                         Logger.Error($"Missing 'TargetKeys' parameter in [ForeignKey] attribute on {table.SourceName} class");
                         Environment.Exit(-1);
                     }
+                    // Guard the missing-'Keys' case explicitly: without it, foreign.Columns is null and the
+                    // count comparison below threw a NullReferenceException that the outer catch swallowed into a
+                    // misleading "Unexpected error", silently dropping the FK instead of telling the user what to fix.
+                    else if (foreign.Columns == null)
+                    {
+                        Logger.Error($"Missing 'Keys' parameter in [ForeignKey] attribute on {table.SourceName} class");
+                        Environment.Exit(-1);
+                    }
                     else if (foreign.TargetColumns.Count() != foreign.Columns.Count())
                     {
                         Logger.Error($"'Keys x TargetKeys' count does not match in [ForeignKey] attribute on {table.SourceName} class");
@@ -402,6 +415,32 @@ namespace Socigy.OpenSource.DB.Tool
                         Value = sql,
                         Type = DbConstraint.Types.Check,
                     });
+                }
+                else if (attribute.AttributeType.FullName == UniqueAttributeFullName)
+                {
+                    // Class-level [Unique(col1, col2, ...)] — a COMPOSITE unique constraint (property-level [Unique]
+                    // is read in the per-property loop). The params columns are property names (typically nameof).
+                    var cols = new List<string>();
+                    if (attribute.ConstructorArguments.Count > 0 &&
+                        attribute.ConstructorArguments[0].Value is IEnumerable<CustomAttributeTypedArgument> arr)
+                        foreach (var item in arr)
+                            if (item.Value is string s) cols.Add(s);
+
+                    if (cols.Count > 0)
+                    {
+                        string? uqName = null;
+                        foreach (var namedArg in attribute.NamedArguments)
+                            if (namedArg.MemberName == nameof(UniqueAttribute.Name))
+                                uqName = namedArg.TypedValue.Value as string;
+
+                        table.Constraints ??= [];
+                        table.Constraints.Add(new DbConstraint
+                        {
+                            Name = uqName,
+                            Columns = cols,
+                            Type = DbConstraint.Types.Unique,
+                        });
+                    }
                 }
             }
 
@@ -458,6 +497,16 @@ namespace Socigy.OpenSource.DB.Tool
                     if (junctionTable != null)
                     {
                         StampConstraintTableName(junctionTable);
+                        // Two [FlaggedEnum] properties that resolve to the same junction name (e.g. two properties of
+                        // the same enum type on one table) would add two same-named tables: the generator then emits
+                        // two CREATE TABLE for it (apply fails "relation already exists"), and the next run crashes on
+                        // Tables.ToDictionary(t => t.Name). Fail loud with an actionable message instead.
+                        if (GeneratedSchema.Tables.Any(t => t.Name == junctionTable.Name))
+                        {
+                            Logger.Error($"Two [FlaggedEnum] properties resolve to the same junction table '{junctionTable.Name}' " +
+                                         $"(on {table.SourceName}). Give one a distinct name via [FlaggedEnum(TableName = \"...\")].");
+                            Environment.Exit(-1);
+                        }
                         GeneratedSchema.Tables.Add(junctionTable);
                     }
                 }
@@ -472,7 +521,13 @@ namespace Socigy.OpenSource.DB.Tool
 
         private static DbTable? ProcessAutoFlaggedEnumTable(DbTable mainTable, PropertyInfo property, CustomAttributeData flaggedAttr)
         {
+            // Unwrap a nullable flagged-enum property (UserRole? Roles): passing the wrapped Nullable<TEnum> made
+            // EnsureEnumIsTable look for [Table] on Nullable<T> (never present) and Environment.Exit(-1), crashing the
+            // whole tool. Use the string/GenericTypeArguments unwrap the single-enum-FK path uses — Nullable.GetUnderlyingType
+            // does NOT work here because the MetadataLoadContext type is a different universe than the runtime Nullable<>.
             var enumType = property.PropertyType;
+            if (enumType.FullName?.StartsWith(NullableTypeFullName) == true)
+                enumType = enumType.GenericTypeArguments.First();
             EnsureEnumIsTable(enumType);
 
             var enumTableAttr = enumType.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == TableAttributeFullName);
@@ -498,6 +553,12 @@ namespace Socigy.OpenSource.DB.Tool
             var junctionColumns = new List<DbColumn>();
             var junctionConstraints = new List<DbConstraint>();
 
+            // Collect the junction's main-table key columns; the FK back to the main table must be ONE composite
+            // FK over all of them (matching the main table's composite PK). Emitting a separate single-column FK
+            // per PK column produced N FKs that each fail at apply ("no unique constraint matching given keys"),
+            // because no individual PK column is unique on its own when the main PK is composite.
+            var mainFkJunctionColumns = new List<string>();
+            var mainFkTargetColumns = new List<string>();
             for (int i = 0; i < mainPks.Count; i++)
             {
                 var pk = mainPks[i];
@@ -521,15 +582,17 @@ namespace Socigy.OpenSource.DB.Tool
                     IsPrimaryKey = true,
                     Nullable = false
                 });
-                junctionConstraints.Add(new DbConstraint
-                {
-                    Type = DbConstraint.Types.ForeignKey,
-                    Columns = [junctionColName],
-                    TargetTable = mainTable.SourceName,
-                    TargetColumns = [pk.Name],
-                    OnDelete = "CASCADE"
-                });
+                mainFkJunctionColumns.Add(junctionColName);
+                mainFkTargetColumns.Add(pk.Name);
             }
+            junctionConstraints.Add(new DbConstraint
+            {
+                Type = DbConstraint.Types.ForeignKey,
+                Columns = mainFkJunctionColumns,
+                TargetTable = mainTable.SourceName,
+                TargetColumns = mainFkTargetColumns,
+                OnDelete = "CASCADE"
+            });
 
             // Enum FK column
             var enumPkType = FindEnumTableValueType(enumType);
@@ -639,18 +702,17 @@ namespace Socigy.OpenSource.DB.Tool
             };
 
             bool isEnum = false;
+            // The UNWRAPPED CLR type (the enum itself for a nullable enum FK). Used below for the enum-table lookup —
+            // passing the still-wrapped Nullable<TEnum> made EnsureEnumIsTable look for [Table] on Nullable<T> (which
+            // never has it) and Environment.Exit(-1), crashing the whole tool on an ordinary optional enum FK.
+            Type realType;
             if (column.Nullable == true && property.PropertyType.FullName!.StartsWith(NullableTypeFullName))
-            {
-                var realType = property.PropertyType.GenericTypeArguments.First();
-                isEnum = realType.IsEnum;
-                column.DotnetType = realType.FullName!;
-            }
+                realType = property.PropertyType.GenericTypeArguments.First();
             else
-            {
-                var realType = (underlayingType ?? property.PropertyType);
-                isEnum = realType.IsEnum;
-                column.DotnetType = realType.FullName!;
-            }
+                realType = (underlayingType ?? property.PropertyType);
+
+            isEnum = realType.IsEnum;
+            column.DotnetType = realType.FullName!;
 
             if (isEnum)
             {
@@ -662,11 +724,12 @@ namespace Socigy.OpenSource.DB.Tool
                     TargetColumns = ["Id"],
                 });
 
-                column.DotnetType = FindEnumTableValueType(property.PropertyType, property.DeclaringType!)?.FullName!;
+                column.DotnetType = FindEnumTableValueType(realType, property.DeclaringType!)?.FullName!;
             }
 
             column.DatabaseType = DbGenerator.GetDatabaseType(column.DotnetType) ?? "INVALID";
 
+            bool isEncrypted = false;
             foreach (var attribute in property.CustomAttributes)
             {
                 // [Column]
@@ -689,9 +752,13 @@ namespace Socigy.OpenSource.DB.Tool
                         }
                     }
                 }
-                // [PrimaryKey]
+                // [PrimaryKey] / [PrimaryKey(order)]
                 else if (attribute.AttributeType.FullName == PrimaryKeyAttributeFullName)
+                {
                     column.IsPrimaryKey = true;
+                    if (attribute.ConstructorArguments.Count > 0 && attribute.ConstructorArguments[0].Value is int pkOrder)
+                        column.PrimaryKeyOrder = pkOrder;
+                }
                 // [Renamed]
                 else if (attribute.AttributeType.FullName == RenamedAttributeFullName)
                     column.RenamedFrom = GetFirstAttributeArgumentValue(attribute);
@@ -755,6 +822,7 @@ namespace Socigy.OpenSource.DB.Tool
                 else if (attribute.AttributeType.FullName == EncryptedAttributeFullName)
                 {
                     column.DatabaseType = "bytea";
+                    isEncrypted = true;
                 }
                 // Comparison constraints
                 else if (attribute.AttributeType.FullName == MinAttributeFullName)
@@ -825,7 +893,12 @@ namespace Socigy.OpenSource.DB.Tool
                         switch (namedArg.MemberName)
                         {
                             case nameof(ForeignKeyAttribute.TargetKeys):
-                                foreign.TargetColumns = (namedArg.TypedValue.Value as IEnumerable<string>);
+                                // Under MetadataLoadContext an array attribute argument is a
+                                // ReadOnlyCollection<CustomAttributeTypedArgument>, NOT an IEnumerable<string> — so the
+                                // old `as IEnumerable<string>` always yielded null and the explicit TargetKeys were
+                                // silently dropped (then auto-resolved to the target's PK, or a hard crash for a
+                                // composite-PK target). Read it the same way the class-level [ForeignKey] path does.
+                                foreign.TargetColumns = (namedArg.TypedValue.Value as ReadOnlyCollection<CustomAttributeTypedArgument>)?.Select(x => x.Value as string);
                                 break;
                             case nameof(ForeignKeyAttribute.Name):
                                 foreign.Name = namedArg.TypedValue.Value as string;
@@ -870,9 +943,21 @@ namespace Socigy.OpenSource.DB.Tool
                 }
             }
 
+            // [Encrypted] is authoritative for both the column type and its default. The bytea type must win
+            // regardless of attribute order (a co-located [StringLength] or [Column(Type=...)] runs later in the
+            // attribute loop and would otherwise overwrite "bytea" with varchar/text, so the encrypted byte[] is
+            // then written into a text column). And an encrypted column can carry NO plaintext SQL default: a
+            // property initializer or [Default] would emit `DEFAULT 'plaintext'` on a bytea column, which fails at
+            // apply (invalid bytea literal) and is meaningless against ciphertext.
+            if (isEncrypted)
+            {
+                column.DatabaseType = "bytea";
+                column.DefaultValue = null;
+            }
+
             // If no [Default] attribute was found, check for a C# property initializer (e.g. = "DEFAULT NAME").
             // We instantiate the class via the execution-context assembly and read the value.
-            if (column.DefaultValue == null && column.IsAutoIncrement != true)
+            if (column.DefaultValue == null && column.IsAutoIncrement != true && !isEncrypted)
                 column.DefaultValue = ReadInitializerDefault(property);
 
             return (column, constraints);

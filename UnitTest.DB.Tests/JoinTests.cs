@@ -37,6 +37,34 @@ public class JoinTests : BaseUnitTest
         Assert.That(results[0].Right!.Id, Is.EqualTo(counterId));
     }
 
+    // A joined-table column whose name is long enough that "a1_<name>" exceeds Postgres's 63-byte identifier limit
+    // read back NULL with the old name-embedding alias (the result label truncated but the lookup string did not).
+    // With the positional alias it round-trips.
+    [Test]
+    public async Task InnerJoin_LongColumnName_RoundTrips()
+    {
+        var label = $"ljc-{Guid.NewGuid():N}";
+        var itemId = Guid.NewGuid();
+        const string longValue = "round-tripped";
+        await TestItem.InsertAsync(new TestItem { Id = itemId, Name = label, Priority = 1 }, Connection);
+        await TestCounter.InsertAsync(new TestCounter
+        {
+            Id = Guid.NewGuid(),
+            Label = label,
+            LongJoinColumnNameUsedToExceedSixtyThreeAliasBoundary = longValue,
+        }, Connection);
+
+        var results = await TestItem.Query()
+            .Join<TestCounter>((item, counter) => item.Name == counter.Label)
+            .Where((item, counter) => item.Id == itemId)
+            .WithConnection(Connection)
+            .ToListAsync();
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].Right!.LongJoinColumnNameUsedToExceedSixtyThreeAliasBoundary, Is.EqualTo(longValue),
+            "a joined column with a >63-byte output alias must round-trip, not read as NULL");
+    }
+
     [Test]
     public async Task InnerJoin_NoMatch_ReturnsEmpty()
     {
@@ -236,6 +264,26 @@ public class JoinTests : BaseUnitTest
             .WithConnection(Connection)
             .SumAsync<int>((item, counter) => item.Priority);
         Assert.That(sum, Is.EqualTo(30));
+    }
+
+    // A join aggregate over a DateTimeOffset column used raw Convert.ChangeType (which can't target
+    // DateTimeOffset — Npgsql returns timestamptz as a UTC DateTime), throwing InvalidCastException. It now
+    // routes through ApplyDbValue like the single-table aggregate.
+    [Test]
+    public async Task JoinAggregate_MaxDateTimeOffset_RoundTrips()
+    {
+        var label = $"jtz-{Guid.NewGuid():N}";
+        var when = new DateTimeOffset(2026, 6, 27, 12, 0, 0, TimeSpan.FromHours(2));
+        await TestItem.InsertAsync(new TestItem { Id = Guid.NewGuid(), Name = label, Priority = 1 }, Connection);
+        await TestCounter.InsertAsync(new TestCounter { Id = Guid.NewGuid(), Label = label, CreatedTz = when }, Connection);
+
+        var max = await TestItem.Query(item => item.Name == label)
+            .Join<TestCounter>((item, counter) => item.Name == counter.Label)
+            .WithConnection(Connection)
+            .MaxAsync<DateTimeOffset>((item, counter) => counter.CreatedTz);
+
+        Assert.That(max, Is.Not.Null);
+        Assert.That(max!.Value.ToUniversalTime(), Is.EqualTo(when.ToUniversalTime()));
     }
 
     [Test]

@@ -46,6 +46,25 @@ public class FlaggedEnumTests : BaseUnitTest
         Assert.That(count, Is.EqualTo(1));
     }
 
+    // The junction stores one row per flag bit and the read side rejects composite values; the write side must
+    // reject them too, so a composite like Reader|Writer can't be stored as a single unqueryable row (value 3).
+    [Test]
+    public void InsertRoleAsync_CompositeFlag_Throws()
+        => Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await TestUser.InsertRoleAsync(_alice, TestRole.Reader | TestRole.Writer, Connection));
+
+    [Test]
+    public void DeleteRoleAsync_CompositeFlag_Throws()
+        => Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await TestUser.DeleteRoleAsync(_alice, TestRole.Reader | TestRole.Admin, Connection));
+
+    [Test]
+    public async Task InsertRoleAsync_SingleFlag_StillWorks()
+    {
+        await TestUser.InsertRoleAsync(_alice, TestRole.Writer, Connection);
+        Assert.That(await TestUser.HasRoleFlagAsync(_alice, TestRole.Writer, Connection), Is.True);
+    }
+
     [Test]
     public async Task InsertRoleAsync_MultipleRoles_AllPresent()
     {

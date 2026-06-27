@@ -39,6 +39,10 @@ namespace Socigy.OpenSource.DB.Core.Migrations
                 using (var command = connection.CreateCommand())
                 {
                     command.Transaction = transaction;
+                    // Migrations may run long (e.g. ALTER COLUMN ... TYPE that rewrites a large table, or a
+                    // data backfill). Disable the command timeout so a slow DDL step isn't aborted mid-apply by
+                    // the default 30s and rolled back; the advisory lock already serializes concurrent migrators.
+                    command.CommandTimeout = 0;
                     command.CommandText = migrationSql;
                     await DbDiagnostics.ExecuteNonQueryAsync(command, "MIGRATE",
                         ct => command.ExecuteNonQueryAsync(ct), cancellationToken, diagnostics).ConfigureAwait(false);

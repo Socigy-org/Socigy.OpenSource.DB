@@ -12,6 +12,21 @@ public class InsertTests : BaseUnitTest
     // Basic insert
     // ------------------------------------------------------------------
 
+    // ExecuteReturningAsync<DateTimeOffset> used raw Convert.ChangeType, which throws for DateTimeOffset (Npgsql
+    // returns timestamptz as a UTC DateTime); it now routes through ApplyDbValue like the row/aggregate paths.
+    [Test]
+    public async Task ExecuteReturningAsync_DateTimeOffset_RoundTrips()
+    {
+        await ClearAsync("test_counters");
+        var when = new DateTimeOffset(2026, 6, 27, 9, 30, 0, TimeSpan.FromHours(3));
+
+        var dto = await new TestCounter { Id = Guid.NewGuid(), Label = "ret", CreatedTz = when }
+            .Insert().WithConnection(Connection)
+            .ExecuteReturningAsync<DateTimeOffset>("created_tz");
+
+        Assert.That(dto.ToUniversalTime(), Is.EqualTo(when.ToUniversalTime()));
+    }
+
     [Test]
     public async Task Insert_BasicInsert_RowAppearsInDb()
     {

@@ -235,7 +235,11 @@ namespace Socigy.OpenSource.DB.Tool
             return !GetMismatchedColumns(a, b).Any();
         }
 
-        // FIX: Robust value comparison that handles Type mismatches (Int32 vs Int64)
+        // FIX: Robust value comparison that handles Type mismatches (Int32 vs Int64), and seed values reloaded from
+        // structure.json (where non-null values come back boxed as JsonElement, and a JSON null comes back as a CLR
+        // null). The string fallback below normalizes a JsonElement to the same text as the freshly-analyzed CLR
+        // value (verified: Convert.ToString(JsonElement) yields "Active"/"1"/"True"), so the round-trip compares
+        // equal without special-casing JsonElement.
         private static bool ValuesMatch(object? a, object? b)
         {
             // 1. Handle Nulls

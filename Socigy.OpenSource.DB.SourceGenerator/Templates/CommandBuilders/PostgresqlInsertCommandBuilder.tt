@@ -243,13 +243,13 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             return true;
         }
 
-        public async Task<TReturning?> ExecuteReturningAsync<TReturning>(string returningColumn)
+        public async Task<TReturning?> ExecuteReturningAsync<TReturning>(string returningColumn, global::System.Threading.CancellationToken cancellationToken = default)
         {
             if (_Connection == null)
                 throw new InvalidOperationException("No DbConnection provided.");
 
             if (_Connection.State != System.Data.ConnectionState.Open)
-                await _Connection.OpenAsync();
+                await _Connection.OpenAsync(cancellationToken);
 
             await using var command = _Connection.CreateCommand() as NpgsqlCommand;
             if (command == null) return default;
@@ -270,9 +270,13 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         ({string.Join(", ", paramNames)})
         RETURNING ""{returningColumn}""";
 
-            var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "INSERT", ct => command.ExecuteScalarAsync(ct), default, _Diagnostics);
-            if (result == null || result == DBNull.Value) return default;
-            return (TReturning)Convert.ChangeType(result, typeof(TReturning));
+            var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "INSERT", ct => command.ExecuteScalarAsync(ct), cancellationToken, _Diagnostics);
+            // Route through ApplyDbValue so the RETURNING value converts the same way the row-materialization path
+            // does: it returns Guid/byte[] directly (the is-T fast path), maps a timestamptz (returned as a UTC
+            // DateTime) onto a DateTimeOffset target, narrows the widened unsigned types, handles enums, and only
+            // uses Convert.ChangeType for genuine IConvertible widening. A raw Convert.ChangeType here threw for a
+            // DateTimeOffset RETURNING column (DateTimeOffset is not IConvertible).
+            return global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<TReturning>(result);
         }
 
         /// <summary>
@@ -281,7 +285,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// </summary>
         /// <returns>A task whose result is <see langword="true"/> if one or more rows were inserted.</returns>
         /// <exception cref="InvalidOperationException">Thrown if a batch operation is configured or if no database connection has been provided.</exception>
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(global::System.Threading.CancellationToken cancellationToken = default)
         {
 #if NET6_0_OR_GREATER
             if (_Batch != null)
@@ -292,7 +296,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("No DbConnection provided.");
 
             if (_Connection.State != System.Data.ConnectionState.Open)
-                await _Connection.OpenAsync();
+                await _Connection.OpenAsync(cancellationToken);
 
             await using var command = _Connection.CreateCommand() as NpgsqlCommand;
             if (command == null) return false;
@@ -311,7 +315,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 foreach (var __col in __plan.Columns)
                     AddInsertParameter(command, __col.ParameterName, __col.GetValue(_TableRow!), __col.Type, __col.IsJson, __col.IsEncrypted);
                 command.CommandText = __plan.CommandText;
-                int __fastRows = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
+                int __fastRows = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);
                 return __fastRows > 0;
             }
 
@@ -332,15 +336,18 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         ({string.Join(", ", paramNames)})
         RETURNING *";
 
-                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "INSERT", ct => ((System.Data.Common.DbCommand)command).ExecuteReaderAsync(ct), default, _Diagnostics);
+                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "INSERT", ct => ((System.Data.Common.DbCommand)command).ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
                 var reader = __instr.Reader;
-                if (await __instr.ReadAsync())
+                if (await __instr.ReadAsync(cancellationToken))
                 {
                     foreach (var kvp in _ColumnInfo!)
                     {
                         if (kvp.Value.SetValue == null) continue;
                         int ordinal;
-                        try { ordinal = reader.GetOrdinal(kvp.Key); } catch { continue; }
+                        // GetOrdinal throws only when the column is genuinely absent from RETURNING *
+                        // (catch that narrowly); a real reader fault must propagate, not be swallowed,
+                        // or a server-generated key would silently stay unset on the returned row.
+                        try { ordinal = reader.GetOrdinal(kvp.Key); } catch (IndexOutOfRangeException) { continue; }
                         var dbVal = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal);
                         kvp.Value.SetValue(dbVal);
                     }
@@ -354,7 +361,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         VALUES
         ({string.Join(", ", paramNames)})";
 
-            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
+            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "INSERT", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);
             return rowsAffected > 0;
         }
 
@@ -381,13 +388,30 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         // dictionary path (BuildParameters) and the cached-plan fast path, so they behave identically.
         private static void AddInsertParameter(NpgsqlCommand command, string paramName, object? value, Type type, bool isJson, bool isEncrypted = false)
         {
-            var actualType = Nullable.GetUnderlyingType(type) ?? type;
-            if (actualType.IsEnum && value != null && value != DBNull.Value)
-                value = Convert.ChangeType(value, Enum.GetUnderlyingType(actualType));
+            // Coerce only when the value is *actually* an enum at runtime. A value convertor may have already
+            // turned an enum property into its DB representation (e.g. a string), in which case the declared
+            // type is still the enum but the value is not, and coercing it here would corrupt or throw.
+            bool valueIsEnum = value != null && value != DBNull.Value && value.GetType().IsEnum;
+            if (valueIsEnum)
+                value = Convert.ChangeType(value, Enum.GetUnderlyingType(value!.GetType()));
+
+            // A DateTime column is 'timestamp without time zone'. With Kind=Utc Npgsql would infer 'timestamptz'
+            // and PostgreSQL would shift the value by the session TimeZone on store. Relabel Utc as Unspecified
+            // so the wall-clock is stored verbatim regardless of session TimeZone.
+            if (value is DateTime __dt && __dt.Kind == DateTimeKind.Utc)
+                value = DateTime.SpecifyKind(__dt, DateTimeKind.Unspecified);
+            // Npgsql only writes a DateTimeOffset with offset 0 to 'timestamptz'; DateTimeOffset.Now carries the
+            // local offset. Normalize to UTC (same instant) so the common case doesn't throw.
+            else if (value is DateTimeOffset __dto && __dto.Offset != TimeSpan.Zero)
+                value = __dto.ToUniversalTime();
+            // Npgsql has no wire mapping for unsigned CLR types; widen to the signed/decimal type GetDbType targets.
+            else if (value is ushort __us) value = (int)__us;
+            else if (value is uint __ui) value = (long)__ui;
+            else if (value is ulong __ul) value = (decimal)__ul;
 
             var param = new NpgsqlParameter(paramName, value ?? DBNull.Value);
 
-            if (value == null || value == DBNull.Value || actualType.IsEnum)
+            if (value == null || value == DBNull.Value || valueIsEnum)
                 param.NpgsqlDbType = GetDbType(type);
 
             if (isJson)
@@ -423,6 +447,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
+                Type t when t == typeof(DateTimeOffset) => NpgsqlDbType.TimestampTz,
+                Type t when t == typeof(TimeSpan) => NpgsqlDbType.Interval,
+#if NET6_0_OR_GREATER
+                Type t when t == typeof(DateOnly) => NpgsqlDbType.Date,
+                Type t when t == typeof(TimeOnly) => NpgsqlDbType.Time,
+#endif
                 Type t when t == typeof(float) => NpgsqlDbType.Real,
                 Type t when t == typeof(double) => NpgsqlDbType.Double,
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
@@ -437,10 +467,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// Inserts many rows efficiently as batched multi-row INSERTs — one command per chunk of up to
         /// ~65535/columns rows (PostgreSQL's per-command parameter limit) instead of a command per row.
         /// Auto-increment columns are skipped by default (the database generates them); pass
-        /// <paramref name="includeAutoFields"/> = <see langword="true"/> to insert them too (supply your own
-        /// values). Returns the total rows inserted.
+        /// <see cref="global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.IncludeAutoIncrement"/>
+        /// to insert them too, or <see cref="global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults"/>
+        /// (optionally with <paramref name="keep"/>) to let the server fill <c>[Default]</c> columns.
+        /// Returns the total rows inserted.
         /// </summary>
-        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, System.Threading.CancellationToken cancellationToken = default)
+        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, System.Threading.CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -451,15 +483,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (list[0] is not IInsertPlanProvider __planProvider)
                 throw new InvalidOperationException($"{typeof(T).Name} does not provide an insert plan (IInsertPlanProvider).");
 
-            var plan = __planProvider.GetInsertPlan(includeAutoFields);
-            var cols = plan.Columns;
-            // Omit columns with a DB [Default] so the server default applies instead of the property's CLR value.
-            if (excludeDbDefaults)
-            {
-                var __kept = new List<InsertColumnDescriptor>(cols.Length);
-                foreach (var __d in cols) if (!__d.HasDbDefault) __kept.Add(__d);
-                cols = __kept.ToArray();
-            }
+            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve<T>(
+                __planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
+                fields, keep, list[0]);
             int colCount = cols.Length;
             if (colCount == 0) return 0;
 

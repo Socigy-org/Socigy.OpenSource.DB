@@ -109,7 +109,17 @@ namespace <#= BaseNamespace #>
                     using (var command = connection.CreateCommand())
                     {
                         command.CommandText = $"CREATE DATABASE \"{_ServiceKey}\"";
-                        await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DDL", ct => command.ExecuteNonQueryAsync(ct));
+                        try
+                        {
+                            await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DDL", ct => command.ExecuteNonQueryAsync(ct));
+                        }
+                        catch (global::Npgsql.PostgresException __ex) when (__ex.SqlState == "42P04" || __ex.SqlState == "23505")
+                        {
+                            // Another replica created the database first. CREATE DATABASE has no IF NOT EXISTS
+                            // and can't run in a transaction, so a concurrent-startup race surfaces as
+                            // 42P04 duplicate_database (or 23505 on the pg_database insert). Treat as success.
+                            databaseExists = true;
+                        }
                     }
                 }
             }

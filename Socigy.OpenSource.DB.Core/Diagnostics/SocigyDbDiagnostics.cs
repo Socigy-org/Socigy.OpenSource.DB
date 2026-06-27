@@ -31,8 +31,11 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
         }
 
         // Cache the logger so we don't call CreateLogger per command. Re-created only when the factory changes.
-        private static ILoggerFactory? _loggerFactoryCache;
-        private static ILogger? _loggerCache;
+        // volatile so the lock-free fast-path read can't observe the published _loggerFactoryCache while still
+        // seeing a stale/null _loggerCache (writes are ordered _loggerCache then _loggerFactoryCache below, and
+        // volatile gives the acquire/release pairing that returns a complete logger to a concurrent reader).
+        private static volatile ILoggerFactory? _loggerFactoryCache;
+        private static volatile ILogger? _loggerCache;
         private static readonly object _loggerLock = new();
 
         /// <summary>

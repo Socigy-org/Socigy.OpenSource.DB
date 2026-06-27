@@ -34,6 +34,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         private HashSet<string>? _extractedNames;
 
         private bool _firstAssignment = true;
+        private readonly HashSet<string> _emittedMembers = new();
 
         public PostgresqlUpdateVisitor(
             ParameterExpression rowParam,
@@ -112,23 +113,36 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             if (value == null || value == DBNull.Value)
                 return value;
 
+            // Match the insert/full-update/COPY/WHERE normalizations so a selective (WithFields) update binds the
+            // same value the full-field path would: a Kind=Utc DateTime relabeled Unspecified (a naive 'timestamp'
+            // column, else Npgsql infers 'timestamptz' and PostgreSQL shifts it by the session TimeZone); a
+            // non-zero-offset DateTimeOffset normalized to UTC (Npgsql rejects a non-UTC offset for 'timestamptz');
+            // unsigned types widened (no Npgsql wire mapping); and an enum bound as its underlying integer.
+            if (value is DateTime dt && dt.Kind == DateTimeKind.Utc)
+                return DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+            if (value is DateTimeOffset dto && dto.Offset != TimeSpan.Zero)
+                return dto.ToUniversalTime();
+            if (value is ushort us) return (int)us;
+            if (value is uint ui) return (long)ui;
+            if (value is ulong ul) return (decimal)ul;
             if (value is Enum enumValue)
-            {
-                var underlyingType = Enum.GetUnderlyingType(enumValue.GetType());
-                return Convert.ChangeType(enumValue, underlyingType);
-            }
+                return Convert.ChangeType(enumValue, Enum.GetUnderlyingType(enumValue.GetType()));
 
             return value;
         }
 
         private void EmitAssignment(string memberName)
         {
+            // Skip a member already assigned in this selector (e.g. WithFields(x => new[]{ x.Email, x.Email })),
+            // since PostgreSQL rejects "col = .., col = .." (multiple assignments to the same column).
+            if (!_emittedMembers.Add(memberName)) return;
             if (!_firstAssignment) _Sql.Append(", ");
             _firstAssignment = false;
 
             string column = _GetColumnName(memberName)
                 ?? throw new NotSupportedException($"No database column is mapped for member '{memberName}'.");
-            object? value = NormalizeDbValue(ReadEntityValue(memberName));
+            var info = ReadColumnInfo(memberName);
+            object? value = NormalizeDbValue(info.HasValue ? info.Value.Value : ReadEntityValueReflection(memberName));
             string paramName = $"@p{_Command.Parameters.Count}";
 
             var p = _Command.CreateParameter();
@@ -136,15 +150,15 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             p.Value = value ?? DBNull.Value;
             _Command.Parameters.Add(p);
 
-            _Sql.Append($"{column} = {paramName}");
+            // A jsonb column receives a serialized JSON *string*; cast it so PostgreSQL doesn't reject
+            // 'jsonb = text'. (Encrypted columns bind as byte[] which Npgsql already infers as bytea.)
+            _Sql.Append(info.HasValue && info.Value.IsJson ? $"{column} = {paramName}::jsonb" : $"{column} = {paramName}");
         }
 
-        private object? ReadEntityValue(string memberName)
+        // When the entity implements IDbTable, GetColumn returns the ColumnInfo so any ValueConvertor is
+        // applied (via ColumnInfo.Value) and column traits (IsJson/IsEncrypted) are available.
+        private global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo? ReadColumnInfo(string memberName)
         {
-            if (_Entity is null) return null;
-
-            // When the entity implements IDbTable, use GetColumn so that any
-            // ValueConvertor applied to the property is called via ColumnInfo.Value.
             if (_Entity is IDbTable dbTable)
             {
                 var dbColName = dbTable.GetDbColumnName(memberName);
@@ -152,10 +166,15 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 {
                     var col = dbTable.GetColumn(dbColName);
                     if (col.HasValue)
-                        return col.Value.Info.Value;
+                        return col.Value.Info;
                 }
             }
+            return null;
+        }
 
+        private object? ReadEntityValueReflection(string memberName)
+        {
+            if (_Entity is null) return null;
             var type = _Entity.GetType();
             return type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(_Entity)
                 ?? type.GetField(memberName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(_Entity);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,15 +28,16 @@ namespace Socigy.OpenSource.DB.Core.Bulk
         /// <summary>
         /// Binary-COPYs <paramref name="rows"/> into their mapped table over <paramref name="connection"/>,
         /// returning the number of rows written. The connection is opened if necessary; its lifetime is the
-        /// caller's. Pass <paramref name="includeAutoFields"/> = <see langword="true"/> to also write
-        /// auto-increment columns (e.g. when supplying your own identity values).
+        /// caller's. Pass <see cref="InsertFields.IncludeAutoIncrement"/> to also write auto-increment columns,
+        /// or <see cref="InsertFields.ServerDefaults"/> (optionally with <paramref name="keep"/>) to omit
+        /// <c>[Default]</c> columns so the server default applies.
         /// </summary>
         public static Task<ulong> InsertMultipleCopyAsync<T>(
             IEnumerable<T> rows,
             DbConnection connection,
             DbTransaction? transaction = null,
-            bool includeAutoFields = false,
-            bool excludeDbDefaults = false,
+            InsertFields fields = InsertFields.Default,
+            Expression<Func<T, object?[]>>? keep = null,
             CancellationToken cancellationToken = default)
             where T : class, IDbTable, IInsertPlanProvider
         {
@@ -45,14 +47,8 @@ namespace Socigy.OpenSource.DB.Core.Bulk
             IReadOnlyList<T> list = rows as IReadOnlyList<T> ?? new List<T>(rows);
             if (list.Count == 0) return Task.FromResult(0UL);
 
-            InsertColumnDescriptor[] cols = list[0].GetInsertPlan(includeAutoFields).Columns;
-            // Omit columns with a DB [Default] so the server default applies instead of the property's CLR value.
-            if (excludeDbDefaults)
-            {
-                var kept = new List<InsertColumnDescriptor>(cols.Length);
-                foreach (var d in cols) if (!d.HasDbDefault) kept.Add(d);
-                cols = kept.ToArray();
-            }
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
+                list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns, fields, keep, list[0]);
             if (cols.Length == 0) return Task.FromResult(0UL);
 
             string tableName = list[0].GetTableName();

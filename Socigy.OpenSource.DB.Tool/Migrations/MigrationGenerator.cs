@@ -81,12 +81,20 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
                 PreviousId = Configuration.SavedSchema?.Id
             }.TransformText());
 
-            File.Delete(Configuration.StructureBackupJsonPath);
-            if (File.Exists(Configuration.StructureJsonPath))
-                File.Move(Configuration.StructureJsonPath, Configuration.StructureBackupJsonPath);
-
+            // Advance the schema snapshot atomically. The previous code moved structure.json to the backup and
+            // THEN wrote the new one, leaving a window with no structure.json at all — a crash there made the next
+            // run see no saved schema and re-emit every migration. Instead: write the new snapshot to a temp file,
+            // copy the prior snapshot to the backup, then move the temp into place (an atomic same-volume rename),
+            // so structure.json is never missing and is never left half-written. (The .g.cs is written first on
+            // purpose: a crash before this point yields at worst a duplicate migration on the next run — recoverable
+            // — rather than advancing the snapshot without a migration file, which would silently lose the change.)
             Configuration.CurrentSchema!.Id = migrationName;
-            await File.WriteAllTextAsync(Configuration.StructureJsonPath, JsonSerializer.Serialize(Configuration.CurrentSchema, Configuration.JsonOptions));
+            var newSnapshotJson = JsonSerializer.Serialize(Configuration.CurrentSchema, Configuration.JsonOptions);
+            var tempSnapshotPath = Configuration.StructureJsonPath + ".tmp";
+            await File.WriteAllTextAsync(tempSnapshotPath, newSnapshotJson);
+            if (File.Exists(Configuration.StructureJsonPath))
+                File.Copy(Configuration.StructureJsonPath, Configuration.StructureBackupJsonPath, overwrite: true);
+            File.Move(tempSnapshotPath, Configuration.StructureJsonPath, overwrite: true);
         }
 
 #if IsWindows

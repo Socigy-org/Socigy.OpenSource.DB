@@ -97,20 +97,48 @@ namespace <#= BaseNamespace #>
             {
                 await _ConnectionFactory.EnsureDbExists();
 
+                if (!_idToIndex.TryGetValue(migration.Id, out int targetMigrationIndex))
+                    throw new InvalidDataException($"Target migration {migration.Id} not found locally.");
+
+                using var connection = _ConnectionFactory.Create();
+                await connection.OpenAsync();
+
+                // Serialize migration apply across every process/replica. Each replica calls
+                // EnsureLatest{Db}Migration() on startup; without this lock they race the same CREATE TABLE /
+                // DDL and crash with 42P07 / 42701 / 23505, or half-apply schema. pg_advisory_lock is
+                // session-scoped on this connection and auto-releases if the process dies, so a crashed
+                // migrator can't deadlock the fleet. ReadAppliedSet (below, under the lock) makes a waiter
+                // that acquires the lock after the winner skip everything the winner already applied.
+                static long __AdvisoryKey(string s)
+                {
+                    unchecked
+                    {
+                        // Deterministic FNV-1a 64-bit. string.GetHashCode is randomized per-process, so it
+                        // would give each replica a different key and defeat the lock.
+                        ulong h = 1469598103934665603UL;
+                        foreach (char c in s) { h ^= c; h *= 1099511628211UL; }
+                        return (long)h;
+                    }
+                }
+                long __migrationLockKey = __AdvisoryKey("socigy.migrations:" + "<#= ServiceKey #>");
+                using (var __lockCmd = connection.CreateCommand())
+                {
+                    __lockCmd.CommandText = "SELECT pg_advisory_lock(" + __migrationLockKey.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
+                    await __lockCmd.ExecuteNonQueryAsync();
+                }
+                try
+                {
+                // Read the current version UNDER the advisory lock. Doing it before the lock let the
+                // source==target short-circuit (and the apply/rollback direction) race a concurrent apply/rollback
+                // on another replica: this process could read "already at target" and return while another replica
+                // was mid-rollback, leaving the schema behind with no self-correction. The cost is that an
+                // already-current startup now briefly takes the lock too — negligible, and correct.
                 var dbVersion = await GetCurrentMigrationVersion();
                 int sourceMigrationIndex;
-                int targetMigrationIndex;
-
                 if (dbVersion == null)
                     sourceMigrationIndex = _idsOrderedDesc.Length;
-                else
-                {
-                    if (!_idToIndex.TryGetValue(dbVersion.HumanId, out sourceMigrationIndex))
-                        throw new InvalidDataException($"Unable to find local migration with ID {dbVersion.HumanId} that is in the Database. Aborting!");
-                }
-
-                if (!_idToIndex.TryGetValue(migration.Id, out targetMigrationIndex))
-                    throw new InvalidDataException($"Target migration {migration.Id} not found locally.");
+                else if (!_idToIndex.TryGetValue(dbVersion.HumanId, out sourceMigrationIndex))
+                    throw new InvalidDataException($"Unable to find local migration with ID {dbVersion.HumanId} that is in the Database. Aborting!");
 
                 if (sourceMigrationIndex == targetMigrationIndex)
                 {
@@ -118,15 +146,22 @@ namespace <#= BaseNamespace #>
                     return;
                 }
 
-                using var connection = _ConnectionFactory.Create();
-                await connection.OpenAsync();
-
                 if (sourceMigrationIndex > targetMigrationIndex)
                 {
+                    // Defensive: never re-run UP DDL for a migration that is currently applied,
+                    // even if version resolution above returned null for some reason. The set is
+                    // rollback-aware (a DOWN nets the migration back out), so an UP -> DOWN -> UP
+                    // is correctly re-applied rather than skipped.
+                    var applied = await ReadAppliedSet();
                     for (int i = sourceMigrationIndex - 1; i >= targetMigrationIndex; i--)
                     {
                         // Instantiate only for the duration of this loop body
                         var migToApply = _factoriesOrderedDesc[i]();
+                        if (applied.Contains(migToApply.Id))
+                        {
+                            _Logger.LogInformation($"Skipping already-applied UP migration: {migToApply.Id}");
+                            continue;
+                        }
                         _Logger.LogInformation($"Applying UP migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
                         // The schema change and its version row commit together or roll back together.
@@ -145,9 +180,19 @@ namespace <#= BaseNamespace #>
                 }
                 else
                 {
+                    // Mirror the UP guard: only roll back migrations that are CURRENTLY applied. sourceMigrationIndex
+                    // was computed before the advisory lock, so a concurrent (or already-completed) rollback could
+                    // otherwise re-run DownSql for a migration that is no longer applied, failing on the missing
+                    // object or recording a duplicate rollback row. The set is rollback-aware.
+                    var applied = await ReadAppliedSet();
                     for (int i = sourceMigrationIndex; i < targetMigrationIndex; i++)
                     {
                         var migToApply = _factoriesOrderedDesc[i]();
+                        if (!applied.Contains(migToApply.Id))
+                        {
+                            _Logger.LogInformation($"Skipping already-rolled-back DOWN migration: {migToApply.Id}");
+                            continue;
+                        }
                         _Logger.LogInformation($"Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}");
 
                         // The schema change and its version row commit together or roll back together.
@@ -162,6 +207,13 @@ namespace <#= BaseNamespace #>
                                 IsRollback = true
                             }, connection, tx));
                     }
+                }
+                }
+                finally
+                {
+                    using var __unlockCmd = connection.CreateCommand();
+                    __unlockCmd.CommandText = "SELECT pg_advisory_unlock(" + __migrationLockKey.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
+                    await __unlockCmd.ExecuteNonQueryAsync();
                 }
             }
 
@@ -181,14 +233,15 @@ namespace <#= BaseNamespace #>
                     if (connection.State != System.Data.ConnectionState.Open)
                         await connection.OpenAsync();
 
-                    // On first run the migrations table doesn't exist yet. Probe with to_regclass
-                    // (returns NULL, never throws) instead of letting the query raise 42P01 — which the
-                    // debugger otherwise breaks on as a first-chance exception during normal startup.
+                    // On first run the migrations table doesn't exist yet. Probe with to_regclass,
+                    // wrapped in "IS NOT NULL" so Npgsql materialises a boolean: reading the raw
+                    // regclass value as object throws InvalidCastException once the table exists,
+                    // which previously got swallowed below and re-ran every UP migration on restart.
                     using (var probe = connection.CreateCommand())
                     {
-                        probe.CommandText = "SELECT to_regclass('\"" + <#= DatabaseName #>.Migration.TableName + "\"')";
+                        probe.CommandText = "SELECT to_regclass('\"" + <#= DatabaseName #>.Migration.TableName + "\"') IS NOT NULL";
                         var exists = await probe.ExecuteScalarAsync();
-                        if (exists is null || exists is DBNull)
+                        if (!(exists is bool b && b))
                             return null;
                     }
 
@@ -199,24 +252,66 @@ namespace <#= BaseNamespace #>
                     await foreach (var row in <#= DatabaseName #>.Migration.Query().WithConnection(connection).ExecuteAsync())
                         rows.Add(row);
 
-                    var records = new System.Collections.Generic.List<(string, System.DateTime, bool)>(rows.Count);
+                    var records = new System.Collections.Generic.List<(long, string, System.DateTime, bool)>(rows.Count);
                     foreach (var row in rows)
-                        records.Add((row.HumanId, row.AppliedAt, row.IsRollback));
+                        records.Add((row.Id, row.HumanId, row.AppliedAt, row.IsRollback));
 
                     var currentId = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveCurrentVersion(records);
                     if (currentId == null)
                         return null;
 
+                    // Pick the most recently applied row for that id by the monotonic Id (true apply order), not AppliedAt.
                     <#= DatabaseName #>.Migration? current = null;
                     foreach (var row in rows)
-                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.AppliedAt >= current.AppliedAt))
+                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.Id >= current.Id))
                             current = row;
                     return current;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return null;
+                    // Never swallow a read failure into null: that path is read as "nothing applied"
+                    // by EnsureMigration and triggers a destructive re-apply of already-applied DDL.
+                    _Logger.LogError(ex,
+                        "Failed to read current migration version from {Table}. Refusing to treat this as an empty database.",
+                        <#= DatabaseName #>.Migration.TableName);
+                    throw;
                 }
+            }
+
+            // Reads the rollback-aware set of currently-applied migration ids using a plain command
+            // over only the columns we need, deliberately bypassing the row-materialisation query path
+            // so this guard stays usable even if that path regresses. Empty set means table absent.
+            private async Task<System.Collections.Generic.HashSet<string>> ReadAppliedSet()
+            {
+                using var connection = _ConnectionFactory.Create();
+                if (connection.State != System.Data.ConnectionState.Open)
+                    await connection.OpenAsync();
+
+                using (var probe = connection.CreateCommand())
+                {
+                    probe.CommandText = "SELECT to_regclass('\"" + <#= DatabaseName #>.Migration.TableName + "\"') IS NOT NULL";
+                    var exists = await probe.ExecuteScalarAsync();
+                    if (!(exists is bool b && b))
+                        return new System.Collections.Generic.HashSet<string>();
+                }
+
+                var records = new System.Collections.Generic.List<(long, string, System.DateTime, bool)>();
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText =
+                        "SELECT \"" + <#= DatabaseName #>.Migration.IdColumnName + "\", \"" +
+                        <#= DatabaseName #>.Migration.HumanIdColumnName + "\", \"" +
+                        <#= DatabaseName #>.Migration.AppliedAtColumnName + "\", \"" +
+                        <#= DatabaseName #>.Migration.IsRollbackColumnName + "\" FROM \"" +
+                        <#= DatabaseName #>.Migration.TableName + "\"";
+
+                    await using var instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(
+                        cmd, "SELECT", ct => cmd.ExecuteReaderAsync(ct));
+                    while (await instr.ReadAsync())
+                        records.Add((instr.Reader.GetInt64(0), instr.Reader.GetString(1), instr.Reader.GetDateTime(2), instr.Reader.GetBoolean(3)));
+                }
+
+                return global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveAppliedSet(records);
             }
         }
     }

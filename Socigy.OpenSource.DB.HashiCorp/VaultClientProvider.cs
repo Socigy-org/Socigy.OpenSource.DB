@@ -17,11 +17,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
     /// obtains a new token and the client is swapped. A static, non-renewable token cannot be saved — that is
     /// logged loudly so the operator switches to a periodic/renewable token or AppRole.
     /// </summary>
-    public sealed class VaultClientProvider
+    public class VaultClientProvider
     {
         private readonly VaultConnectionOptions _options;
         private readonly ILogger? _logger;
         private volatile IVaultClient _client;
+        // Serializes renewal/relogin so a timer tick racing a manual renewal cannot both relogin and overwrite
+        // _client (which wastes Vault logins and leaves a nondeterministic active token).
+        private readonly SemaphoreSlim _renewLock = new SemaphoreSlim(1, 1);
 
         public VaultClientProvider(VaultConnectionOptions options, ILogger? logger = null)
         {
@@ -50,6 +53,23 @@ namespace Socigy.OpenSource.DB.HashiCorp
         /// unknown.
         /// </summary>
         public async Task<double?> RenewOrReloginAsync(CancellationToken cancellationToken = default)
+        {
+            // Hold the renewal lock for the whole lookup/renew/relogin so concurrent callers run one at a time;
+            // a waiter re-reads _client below and sees any relogin the previous holder performed.
+            await _renewLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await RenewOrReloginCoreAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _renewLock.Release();
+            }
+        }
+
+        // The actual renewal body, run under _renewLock. Marked internal virtual so a test can prove the lock
+        // serializes concurrent callers without standing up a real Vault.
+        internal virtual async Task<double?> RenewOrReloginCoreAsync(CancellationToken cancellationToken)
         {
             // Trackable by admins via the "Socigy.OpenSource.DB" ActivitySource, like the other Vault ops.
             using var activity = SocigyDbInstrumentation.ActivitySource.StartActivity("vault.token.renew", ActivityKind.Client);

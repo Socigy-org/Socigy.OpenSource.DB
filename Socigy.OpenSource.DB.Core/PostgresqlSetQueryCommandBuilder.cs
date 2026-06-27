@@ -44,7 +44,11 @@ namespace Socigy.OpenSource.DB.Core
             if (_Connection.State != ConnectionState.Open)
                 await _Connection.OpenAsync(cancellationToken);
 
-            var command = _Connection.CreateCommand();
+            // using: the command must be disposed when enumeration ends (completion, early break, or exception).
+            // Without it every UNION/INTERSECT/EXCEPT execution leaked an NpgsqlCommand — the `await using instr`
+            // below disposes only the reader and the diagnostics scope, never the command. (netstandard2.0's
+            // DbCommand exposes only synchronous Dispose, like the JoinPlan path; that is sufficient for a command.)
+            using var command = _Connection.CreateCommand();
             if (_Transaction != null)
                 command.Transaction = _Transaction;
 
@@ -54,8 +58,8 @@ namespace Socigy.OpenSource.DB.Core
             string rhsSql = _Rhs.Compile(command);
 
             string sql = $"({lhsSql}) {_Operator} ({rhsSql})";
-            if (_Limit > 0) sql += $" LIMIT {_Limit}";
-            if (_Offset > 0) sql += $" OFFSET {_Offset}";
+            if (_Limit >= 0) sql += $" LIMIT {_Limit}";   // Limit(0) must return zero rows, not everything
+            if (_Offset >= 0) sql += $" OFFSET {_Offset}";
 
             command.CommandText = sql;
 

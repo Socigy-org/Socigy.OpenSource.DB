@@ -35,6 +35,53 @@ namespace Socigy.OpenSource.DB.UnitTests
             return h;
         }
 
+        private static bool IsCacheable(Expression<Func<Foo, bool>> p)
+            => ExpressionStructure.TryComputeHash(p.Body, p.Parameters[0], out _);
+
+        // A captured (closure) operand of a nullable-capable type can evaluate to null at runtime, where the WHERE
+        // visitor emits IS NULL instead of "= @p". That shape must not be cached, or a later non-null value (or an
+        // earlier null) would replay the wrong SQL. Literals stay cacheable (their null-ness is fixed/encoded).
+        [Test]
+        public void CapturedNullableStringOperand_Equality_IsUncacheable()
+        {
+            string captured = "x";
+            Assert.That(IsCacheable(x => x.Name == captured), Is.False);
+            Assert.That(IsCacheable(x => x.Name != captured), Is.False);
+        }
+
+        [Test]
+        public void CapturedNullableIntOperand_Equality_IsUncacheable()
+        {
+            int? captured = 5;
+            Assert.That(IsCacheable(x => x.Age == captured), Is.False);
+        }
+
+        [Test]
+        public void LiteralOperand_Equality_StaysCacheable()
+        {
+            // Guard against over-aggressively disabling the cache: literals (including lifted (int?)5) are fine.
+            Assert.That(IsCacheable(x => x.Name == "x"), Is.True);
+            Assert.That(IsCacheable(x => x.Age == 5), Is.True);
+            Assert.That(IsCacheable(x => x.Id == 5), Is.True);
+        }
+
+        [Test]
+        public void StringComparison_IgnoreCase_DiffersFromCaseSensitive()
+        {
+            // The *IgnoreCase variant emits LOWER(...) = LOWER(...); the case-sensitive one emits "= @p". The SQL
+            // shape depends on the StringComparison value, so the two must hash differently (not collide).
+            Assert.That(Hash(x => x.Name.Equals("a", StringComparison.Ordinal)),
+                Is.Not.EqualTo(Hash(x => x.Name.Equals("a", StringComparison.OrdinalIgnoreCase))));
+        }
+
+        // CustomField("col") splices the column NAME into the SQL text; two different names would otherwise
+        // collapse to one cache key and replay the wrong column. Must be uncacheable like Custom/HasFlag.
+        [Test]
+        public void CustomField_IsUncacheable()
+        {
+            Assert.That(IsCacheable(x => CustomField<int>("score") > 10), Is.False);
+        }
+
         private static (string Sql, NpgsqlParameter[] Ps, IReadOnlyList<RecordedParameter> Rec) Translate(Expression<Func<Foo, bool>> p)
         {
             var cmd = new NpgsqlCommand();

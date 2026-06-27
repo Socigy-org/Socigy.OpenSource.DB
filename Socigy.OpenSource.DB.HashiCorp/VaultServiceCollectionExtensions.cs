@@ -157,17 +157,21 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private async Task TickAsync()
         {
             double? ttl = null;
+            bool failed = false;
             try
             {
                 ttl = await _clients.RenewOrReloginAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Vault token renewal failed; will retry.");
+                failed = true;
+                _logger?.LogWarning(ex, "Vault token renewal failed; will retry shortly.");
             }
 
             if (_stopped) return;
-            var delay = Internal.VaultRenewal.NextDelay(ttl, TimeSpan.FromMinutes(30));
+            // On failure retry at the floor (~30s), not the 30-minute fallback: a short-lived token could
+            // otherwise expire long before the next attempt.
+            var delay = failed ? Internal.VaultRenewal.Floor : Internal.VaultRenewal.NextDelay(ttl, TimeSpan.FromMinutes(30));
             try { _timer?.Change(delay, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
         }
 
@@ -283,10 +287,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
             ScheduleNext();
         }
 
-        private void ScheduleNext()
+        private void ScheduleNext(bool retrySoon = false)
         {
             if (_stopped) return;
-            var delay = Internal.VaultRenewal.NextDelay(_provider.MinLeaseSeconds, _provider.Options.RefreshInterval);
+            // After a failed renewal, retry at the floor (~30s) rather than 2/3 of a now-stale lease, which
+            // could fall after the lease has actually expired.
+            var delay = retrySoon
+                ? Internal.VaultRenewal.Floor
+                : Internal.VaultRenewal.NextDelay(_provider.MinLeaseSeconds, _provider.Options.RefreshInterval);
             _logger?.LogInformation("Next Vault DB credential renewal in {Delay}.", delay);
             try { _timer?.Change(delay, Timeout.InfiniteTimeSpan); }
             catch (ObjectDisposedException) { /* stopping */ }
@@ -294,6 +302,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
 
         private async Task RenewTickAsync()
         {
+            bool failed = false;
             try
             {
                 _logger?.LogDebug("Renewing Vault DB credentials…");
@@ -302,11 +311,12 @@ namespace Socigy.OpenSource.DB.HashiCorp
             catch (Exception ex)
             {
                 // Keep serving the last good credentials until the next attempt.
+                failed = true;
                 _logger?.LogWarning(ex, "Vault DB credential renewal failed; keeping previous credentials.");
             }
             finally
             {
-                ScheduleNext();
+                ScheduleNext(retrySoon: failed);
             }
         }
 

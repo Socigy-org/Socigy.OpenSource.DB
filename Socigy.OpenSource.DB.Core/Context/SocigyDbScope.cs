@@ -50,6 +50,16 @@ namespace Socigy.OpenSource.DB.Core.Context
         /// <summary>Whether a transaction is currently active.</summary>
         public bool HasAmbientTransaction => _ambientTx != null;
 
+        /// <summary>
+        /// True when this scope targets the same physical database as <paramref name="factory"/> +
+        /// <paramref name="connectionKey"/>. Used to decide whether a nested unit-of-work may join this scope:
+        /// a different database has a different connection factory / key and must NOT join, or its queries would
+        /// run on this scope's connection (wrong database, wrong transaction).
+        /// </summary>
+        internal bool BelongsTo(IDbConnectionFactory factory, string? connectionKey)
+            => ReferenceEquals(_factory, factory)
+               && string.Equals(Options.ConnectionKey, connectionKey, StringComparison.Ordinal);
+
         internal void Enter()
         {
             _previous = _current.Value;
@@ -98,7 +108,16 @@ namespace Socigy.OpenSource.DB.Core.Context
             }
 
             DbConnection fresh = _factory.Create(Options.ConnectionKey);
-            await OpenWithTimingAsync(fresh, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await OpenWithTimingAsync(fresh, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Don't leak the connection object (and any pool slot it grabbed) if opening fails.
+                await DisposeConnectionAsync(fresh).ConfigureAwait(false);
+                throw;
+            }
             return (fresh, true);
         }
 

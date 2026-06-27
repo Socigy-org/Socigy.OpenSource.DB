@@ -28,6 +28,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers
     internal interface IParameterRecorder
     {
         IReadOnlyList<RecordedParameter> RecordedParameters { get; }
+
+        /// <summary>
+        /// True if the translation applied a per-column <c>[ValueConvertor]</c> to a bound value (so the bound
+        /// value differs from <c>Apply(transform, Evaluate(source))</c>). Such a predicate must NOT be cached: the
+        /// replay path rebinds from the source expression and would skip the convertor, binding the raw value.
+        /// </summary>
+        bool UsedConvertor { get; }
     }
 #nullable disable
 }

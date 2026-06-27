@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class TableColumnNameClassTemplate : TableColumnNameClassTemplateBase {
         
         
-        #line 243 "TableColumnNameClassTemplate.tt"
+        #line 283 "TableColumnNameClassTemplate.tt"
 
     public string ClassName { get; set; }
     public string TableName { get; set; }
@@ -35,6 +35,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
         public bool IsPrimaryKey { get; set; }
         public bool IsAutoIncrement { get; set; }
         public bool HasDbDefault { get; set; }
+        // The [Default("expr")] value (a DbDefaults token or raw SQL), or null for a naked [Default]. Emitted as a
+        // DEFAULT clause in the baked CREATE TABLE so a [TableType] InstantiateAsync schema matches the migration.
+        public string DefaultValueSql { get; set; }
         public string SequenceName { get; set; }
         public bool IsJsonColumn { get; set; }
         public string JsonContextType { get; set; }
@@ -42,6 +45,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
         public bool IsEncrypted { get; set; }
         public bool EncryptAutoDecrypt { get; set; } = true;
         public string EncryptionProfile { get; set; }
+        // For an enum column, the C# name of its underlying integral type (e.g. "int"); null otherwise. Used so a
+        // baked CREATE TABLE emits the integral SQL type the insert path binds, not "text".
+        public string EnumUnderlyingType { get; set; }
     }
 
     // Emits the optional 4th argument to FieldCrypto.Encrypt/Decrypt selecting a non-default encryptor profile;
@@ -85,9 +91,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             this.GenerationEnvironment = null;
             
             #line 6 "TableColumnNameClassTemplate.tt"
-            this.Write("#pragma warning disable\r\nusing Socigy.OpenSource.DB.Core.Interfaces;\r\nusing Syste" +
-                    "m.Collections.Generic;\r\nusing Socigy.OpenSource.DB.Core.CommandBuilders;\r\n\r\n#nul" +
-                    "lable enable\r\n\r\nnamespace ");
+            this.Write("#pragma warning disable\nusing Socigy.OpenSource.DB.Core.Interfaces;\nusing System." +
+                    "Collections.Generic;\nusing Socigy.OpenSource.DB.Core.CommandBuilders;\n\n#nullable" +
+                    " enable\n\nnamespace ");
             
             #line default
             #line hidden
@@ -99,7 +105,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line hidden
             
             #line 13 "TableColumnNameClassTemplate.tt"
-            this.Write("\r\n{\r\n\r\n    ");
+            this.Write("\n{\n\n    ");
             
             #line default
             #line hidden
@@ -111,7 +117,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line hidden
             
             #line 16 "TableColumnNameClassTemplate.tt"
-            this.Write("\r\n    public partial class ");
+            this.Write("\n    public partial class ");
             
             #line default
             #line hidden
@@ -123,49 +129,53 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line hidden
             
             #line 17 "TableColumnNameClassTemplate.tt"
-            this.Write(" : IDbTable, IInsertPlanProvider, IOrdinalReadable\r\n    {\r\n        protected Dict" +
-                    "ionary<string, object?> _CustomValues { get; set; }\r\n        public object? GetC" +
-                    "ustomValue(string key)\r\n        {\r\n            if (_CustomValues == null)\r\n     " +
-                    "           return null;\r\n\r\n            return _CustomValues.ContainsKey(key) ? _" +
-                    "CustomValues[key] : null;\r\n        }\r\n        public T? GetCustomValue<T>(string" +
-                    " key)\r\n        {\r\n            if (_CustomValues == null)\r\n                return" +
-                    " default(T);\r\n\r\n            return _CustomValues.ContainsKey(key) ? (T?)_CustomV" +
-                    "alues[key] : default;\r\n        }\r\n\r\n        /// <summary>Stores a value for a cu" +
-                    "stom (undeclared) column — used by DynamicTable&lt;T&gt; auto-mapping.</summary>" +
-                    "\r\n        public void SetCustomValue(string key, object? value)\r\n        {\r\n    " +
-                    "        _CustomValues ??= new Dictionary<string, object?>();\r\n            _Custo" +
-                    "mValues[key] = value;\r\n        }\r\n\r\n        /// <summary>Reads a captured custom" +
-                    " (undeclared) column value, converting if needed; false when absent.</summary>\r\n" +
-                    "        public bool TryGetCustomValue<TValue>(string key, out TValue? value)\r\n  " +
-                    "      {\r\n            if (_CustomValues != null && _CustomValues.TryGetValue(key," +
-                    " out var __raw))\r\n            {\r\n                if (__raw == null || __raw is S" +
-                    "ystem.DBNull) { value = default; return true; }\r\n                if (__raw is TV" +
-                    "alue __typed) { value = __typed; return true; }\r\n                try\r\n          " +
-                    "      {\r\n                    var __t = System.Nullable.GetUnderlyingType(typeof(" +
-                    "TValue)) ?? typeof(TValue);\r\n                    value = (TValue)System.Convert." +
-                    "ChangeType(__raw, __t);\r\n                    return true;\r\n                }\r\n  " +
-                    "              catch { value = default; return false; }\r\n            }\r\n         " +
-                    "   value = default;\r\n            return false;\r\n        }\r\n\r\n        public cons" +
-                    "t string TableName = \"");
+            this.Write(" : IDbTable, IInsertPlanProvider, IOrdinalReadable\n    {\n        protected Dictio" +
+                    "nary<string, object?> _CustomValues { get; set; }\n        public object? GetCust" +
+                    "omValue(string key)\n        {\n            if (_CustomValues == null)\n           " +
+                    "     return null;\n\n            return _CustomValues.ContainsKey(key) ? _CustomVa" +
+                    "lues[key] : null;\n        }\n        public T? GetCustomValue<T>(string key)\n    " +
+                    "    {\n            if (_CustomValues == null)\n                return default(T);\n" +
+                    "\n            return _CustomValues.ContainsKey(key) ? (T?)_CustomValues[key] : de" +
+                    "fault;\n        }\n\n        /// <summary>Stores a value for a custom (undeclared) " +
+                    "column — used by DynamicTable&lt;T&gt; auto-mapping.</summary>\n        public vo" +
+                    "id SetCustomValue(string key, object? value)\n        {\n            _CustomValues" +
+                    " ??= new Dictionary<string, object?>();\n            _CustomValues[key] = value;\n" +
+                    "        }\n\n        /// <summary>Reads a captured custom (undeclared) column valu" +
+                    "e, converting if needed; false when absent.</summary>\n        public bool TryGet" +
+                    "CustomValue<TValue>(string key, out TValue? value)\n        {\n            if (_Cu" +
+                    "stomValues != null && _CustomValues.TryGetValue(key, out var __raw))\n           " +
+                    " {\n                if (__raw == null || __raw is System.DBNull) { value = defaul" +
+                    "t; return true; }\n                if (__raw is TValue __typed) { value = __typed" +
+                    "; return true; }\n                try\n                {\n                    // Ro" +
+                    "ute through the width-tolerant converter (not Convert.ChangeType) so a custom co" +
+                    "lumn reads\n                    // back like a declared one: a timestamptz comes " +
+                    "back as a DateTime that maps onto a DateTimeOffset\n                    // target" +
+                    " (Convert.ChangeType throws for DateTimeOffset — it is not IConvertible), and en" +
+                    "um/byte/\n                    // unsigned widening is handled too.\n              " +
+                    "      value = global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.Apply" +
+                    "DbValue<TValue>(__raw);\n                    return true;\n                }\n     " +
+                    "           catch { value = default; return false; }\n            }\n            va" +
+                    "lue = default;\n            return false;\n        }\n\n        public const string " +
+                    "TableName = \"");
             
             #line default
             #line hidden
             
-            #line 61 "TableColumnNameClassTemplate.tt"
+            #line 64 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( TableName ));
             
             #line default
             #line hidden
             
-            #line 61 "TableColumnNameClassTemplate.tt"
-            this.Write("\";\r\n        public string GetTableName() => TableName;\r\n\r\n        public static s" +
-                    "tring? GetColumnDbName(string column)\r\n        {\r\n            return column swit" +
-                    "ch\r\n            {\r\n");
+            #line 64 "TableColumnNameClassTemplate.tt"
+            this.Write("\";\n        public string GetTableName() => TableName;\n\n        public static stri" +
+                    "ng? GetColumnDbName(string column)\n        {\n            return column switch\n  " +
+                    "          {\n");
             
             #line default
             #line hidden
             
-            #line 68 "TableColumnNameClassTemplate.tt"
+            #line 71 "TableColumnNameClassTemplate.tt"
 
             foreach(var col in Columns)
             {
@@ -176,39 +186,39 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 74 "TableColumnNameClassTemplate.tt"
+            #line 77 "TableColumnNameClassTemplate.tt"
             this.Write("                \"");
             
             #line default
             #line hidden
             
-            #line 74 "TableColumnNameClassTemplate.tt"
+            #line 77 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 74 "TableColumnNameClassTemplate.tt"
+            #line 77 "TableColumnNameClassTemplate.tt"
             this.Write("\" => throw new global::System.NotSupportedException(\"Column \'");
             
             #line default
             #line hidden
             
-            #line 74 "TableColumnNameClassTemplate.tt"
+            #line 77 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 74 "TableColumnNameClassTemplate.tt"
+            #line 77 "TableColumnNameClassTemplate.tt"
             this.Write("\' is [Encrypted] and cannot be used in a WHERE / ORDER BY / SELECT-projection / L" +
                     "IKE clause — encryption is non-deterministic. Filter by a non-encrypted key inst" +
-                    "ead.\"),\r\n");
+                    "ead.\"),\n");
             
             #line default
             #line hidden
             
-            #line 75 "TableColumnNameClassTemplate.tt"
+            #line 78 "TableColumnNameClassTemplate.tt"
 
                 }
                 else
@@ -218,37 +228,37 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 80 "TableColumnNameClassTemplate.tt"
+            #line 83 "TableColumnNameClassTemplate.tt"
             this.Write("                \"");
             
             #line default
             #line hidden
             
-            #line 80 "TableColumnNameClassTemplate.tt"
+            #line 83 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 80 "TableColumnNameClassTemplate.tt"
+            #line 83 "TableColumnNameClassTemplate.tt"
             this.Write("\" => ");
             
             #line default
             #line hidden
             
-            #line 80 "TableColumnNameClassTemplate.tt"
+            #line 83 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 80 "TableColumnNameClassTemplate.tt"
-            this.Write("ColumnName,\r\n");
+            #line 83 "TableColumnNameClassTemplate.tt"
+            this.Write("ColumnName,\n");
             
             #line default
             #line hidden
             
-            #line 81 "TableColumnNameClassTemplate.tt"
+            #line 84 "TableColumnNameClassTemplate.tt"
 
                 }
             }
@@ -257,23 +267,97 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 85 "TableColumnNameClassTemplate.tt"
+            #line 88 "TableColumnNameClassTemplate.tt"
             this.Write(@"                _ => null
             };
         }
 
         string? IDbTable.GetDbColumnName(string memberName) => GetColumnDbName(memberName);
 
-        public Dictionary<string, ColumnInfo> GetColumns()
+        // Maps a property name to a delegate that applies its [ValueConvertor].ConvertToDbValue, or null for a
+        // non-convertor column. The WHERE visitor uses this to bind the CONVERTED comparison value (the column
+        // stores the converted form) instead of the raw CLR value, which would match no rows. Only emitted for
+        // convertor columns; the static lambdas are cached by the compiler (no per-call allocation).
+        public static System.Func<object?, object?>? GetColumnConvertor(string column)
         {
-            return new Dictionary<string, ColumnInfo>()
+            return column switch
             {
 ");
             
             #line default
             #line hidden
             
-            #line 95 "TableColumnNameClassTemplate.tt"
+            #line 102 "TableColumnNameClassTemplate.tt"
+
+            foreach(var col in Columns)
+            {
+                if (!col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter))
+                {
+
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write("                \"");
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write("\" => static __v => new ");
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.Converter ));
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write("().ConvertToDbValue((");
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.Type ));
+            
+            #line default
+            #line hidden
+            
+            #line 108 "TableColumnNameClassTemplate.tt"
+            this.Write(")__v),\n");
+            
+            #line default
+            #line hidden
+            
+            #line 109 "TableColumnNameClassTemplate.tt"
+
+                }
+            }
+
+            
+            #line default
+            #line hidden
+            
+            #line 113 "TableColumnNameClassTemplate.tt"
+            this.Write("                _ => null\n            };\n        }\n\n        public Dictionary<str" +
+                    "ing, ColumnInfo> GetColumns()\n        {\n            return new Dictionary<string" +
+                    ", ColumnInfo>()\n            {\n");
+            
+            #line default
+            #line hidden
+            
+            #line 121 "TableColumnNameClassTemplate.tt"
 
                 foreach(var col in Columns)
                 {
@@ -298,124 +382,134 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 115 "TableColumnNameClassTemplate.tt"
-            this.Write("              {\r\n                    ");
+            #line 141 "TableColumnNameClassTemplate.tt"
+            this.Write("              {\n                    ");
             
             #line default
             #line hidden
             
-            #line 116 "TableColumnNameClassTemplate.tt"
+            #line 142 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 116 "TableColumnNameClassTemplate.tt"
-            this.Write("ColumnName,\r\n                    new ColumnInfo()\r\n                    {\r\n       " +
-                    "                 Type = typeof(");
+            #line 142 "TableColumnNameClassTemplate.tt"
+            this.Write("ColumnName,\n                    new ColumnInfo()\n                    {\n          " +
+                    "              Type = typeof(");
             
             #line default
             #line hidden
             
-            #line 119 "TableColumnNameClassTemplate.tt"
+            #line 145 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( typeExpr ));
             
             #line default
             #line hidden
             
-            #line 119 "TableColumnNameClassTemplate.tt"
-            this.Write("),\r\n                        Value = ");
+            #line 145 "TableColumnNameClassTemplate.tt"
+            this.Write("),\n                        Value = ");
             
             #line default
             #line hidden
             
-            #line 120 "TableColumnNameClassTemplate.tt"
+            #line 146 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( valueExpr ));
             
             #line default
             #line hidden
             
-            #line 120 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        IsJson = ");
+            #line 146 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        IsJson = ");
             
             #line default
             #line hidden
             
-            #line 121 "TableColumnNameClassTemplate.tt"
+            #line 147 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsJsonColumn ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 121 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        IsEncrypted = ");
+            #line 147 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        IsEncrypted = ");
             
             #line default
             #line hidden
             
-            #line 122 "TableColumnNameClassTemplate.tt"
+            #line 148 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsEncrypted ? "true" : "false" ));
-
+            
             #line default
             #line hidden
-
-            #line 122 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        ");
+            
+            #line 148 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 149 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ProfileAssign(col) ));
-            this.Write("\r\n                        IsPrimaryKey = ");
             
             #line default
             #line hidden
             
-            #line 123 "TableColumnNameClassTemplate.tt"
+            #line 149 "TableColumnNameClassTemplate.tt"
+            this.Write("\n                        IsPrimaryKey = ");
+            
+            #line default
+            #line hidden
+            
+            #line 150 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsPrimaryKey ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 123 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        IsAutoIncrement = ");
+            #line 150 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        IsAutoIncrement = ");
             
             #line default
             #line hidden
             
-            #line 124 "TableColumnNameClassTemplate.tt"
+            #line 151 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsAutoIncrement ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 124 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        HasDbDefault = ");
+            #line 151 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        HasDbDefault = ");
             
             #line default
             #line hidden
             
-            #line 125 "TableColumnNameClassTemplate.tt"
+            #line 152 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.HasDbDefault ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 125 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        SetValue = ");
+            #line 152 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        SetValue = ");
             
             #line default
             #line hidden
             
-            #line 126 "TableColumnNameClassTemplate.tt"
+            #line 153 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( setExpr ));
             
             #line default
             #line hidden
             
-            #line 126 "TableColumnNameClassTemplate.tt"
-            this.Write("\r\n                    }\r\n                },\r\n");
+            #line 153 "TableColumnNameClassTemplate.tt"
+            this.Write("\n                    }\n                },\n");
             
             #line default
             #line hidden
             
-            #line 129 "TableColumnNameClassTemplate.tt"
+            #line 156 "TableColumnNameClassTemplate.tt"
 
                 }
 
@@ -423,7 +517,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 132 "TableColumnNameClassTemplate.tt"
+            #line 159 "TableColumnNameClassTemplate.tt"
             this.Write(@"            };
         }
 
@@ -441,209 +535,209 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
+            #line 171 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( TableName ));
             
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
+            #line 171 "TableColumnNameClassTemplate.tt"
             this.Write("\\\" (");
             
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
+            #line 171 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( InsertColList(Columns) ));
             
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
+            #line 171 "TableColumnNameClassTemplate.tt"
             this.Write(") VALUES (");
             
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
+            #line 171 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( InsertParamList(Columns) ));
             
             #line default
             #line hidden
             
-            #line 144 "TableColumnNameClassTemplate.tt"
-            this.Write(")\",\r\n                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.In" +
-                    "sertColumnDescriptor[]\r\n                    {\r\n");
+            #line 171 "TableColumnNameClassTemplate.tt"
+            this.Write(")\",\n                    new global::Socigy.OpenSource.DB.Core.CommandBuilders.Ins" +
+                    "ertColumnDescriptor[]\n                    {\n");
             
             #line default
             #line hidden
             
-            #line 147 "TableColumnNameClassTemplate.tt"
+            #line 174 "TableColumnNameClassTemplate.tt"
  EmitInsertDescriptors(Columns); 
             
             #line default
             #line hidden
             
-            #line 148 "TableColumnNameClassTemplate.tt"
-            this.Write("                    });\r\n            return __InsertPlan ??= new global::Socigy.O" +
-                    "penSource.DB.Core.CommandBuilders.InsertPlan(\r\n                \"INSERT INTO \\\"");
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( TableName ));
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write("\\\" (");
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( InsertColList(Columns.Where(c => !c.IsAutoIncrement)) ));
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write(") VALUES (");
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( InsertParamList(Columns.Where(c => !c.IsAutoIncrement)) ));
-            
-            #line default
-            #line hidden
-            
-            #line 150 "TableColumnNameClassTemplate.tt"
-            this.Write(")\",\r\n                new global::Socigy.OpenSource.DB.Core.CommandBuilders.Insert" +
-                    "ColumnDescriptor[]\r\n                {\r\n");
-            
-            #line default
-            #line hidden
-            
-            #line 153 "TableColumnNameClassTemplate.tt"
- EmitInsertDescriptors(Columns.Where(c => !c.IsAutoIncrement)); 
-            
-            #line default
-            #line hidden
-            
-            #line 154 "TableColumnNameClassTemplate.tt"
-            this.Write("                });\r\n        }\r\n\r\n        public Dictionary<string, ColumnInfo> G" +
-                    "etPrimaryColumns()\r\n        {\r\n            return new Dictionary<string, ColumnI" +
-                    "nfo>()\r\n            {\r\n");
-            
-            #line default
-            #line hidden
-            
-            #line 161 "TableColumnNameClassTemplate.tt"
-
-             foreach(var col in Columns.Where(x => x.IsPrimaryKey))
-             {
-
-            
-            #line default
-            #line hidden
-            
-            #line 165 "TableColumnNameClassTemplate.tt"
-            this.Write("              {\r\n                    ");
-            
-            #line default
-            #line hidden
-            
-            #line 166 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
-            
-            #line default
-            #line hidden
-            
-            #line 166 "TableColumnNameClassTemplate.tt"
-            this.Write("ColumnName,\r\n                    new ColumnInfo()\r\n                    {\r\n       " +
-                    "                 Type = typeof(");
-            
-            #line default
-            #line hidden
-            
-            #line 169 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.Type.Replace("?", " ") ));
-            
-            #line default
-            #line hidden
-            
-            #line 169 "TableColumnNameClassTemplate.tt"
-            this.Write("),\r\n                        Value = ");
-            
-            #line default
-            #line hidden
-            
-            #line 170 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
-            
-            #line default
-            #line hidden
-            
-            #line 170 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        IsPrimaryKey = true,\r\n                        IsAutoIn" +
-                    "crement = ");
-            
-            #line default
-            #line hidden
-            
-            #line 172 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.IsAutoIncrement ? "true" : "false" ));
-            
-            #line default
-            #line hidden
-            
-            #line 172 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        HasDbDefault = ");
-            
-            #line default
-            #line hidden
-            
-            #line 173 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.HasDbDefault ? "true" : "false" ));
-            
-            #line default
-            #line hidden
-            
-            #line 173 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                        SetValue = v => ");
-            
-            #line default
-            #line hidden
-            
-            #line 174 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
-            
-            #line default
-            #line hidden
-            
-            #line 174 "TableColumnNameClassTemplate.tt"
-            this.Write(" = ColumnInfo.ApplyDbValue<");
-            
-            #line default
-            #line hidden
-            
-            #line 174 "TableColumnNameClassTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( col.Type ));
-            
-            #line default
-            #line hidden
-            
-            #line 174 "TableColumnNameClassTemplate.tt"
-            this.Write(">(v)\r\n                    }\r\n                },\r\n");
+            #line 175 "TableColumnNameClassTemplate.tt"
+            this.Write("                    });\n            return __InsertPlan ??= new global::Socigy.Op" +
+                    "enSource.DB.Core.CommandBuilders.InsertPlan(\n                \"INSERT INTO \\\"");
             
             #line default
             #line hidden
             
             #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( TableName ));
+            
+            #line default
+            #line hidden
+            
+            #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write("\\\" (");
+            
+            #line default
+            #line hidden
+            
+            #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( InsertColList(Columns.Where(c => !c.IsAutoIncrement)) ));
+            
+            #line default
+            #line hidden
+            
+            #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write(") VALUES (");
+            
+            #line default
+            #line hidden
+            
+            #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( InsertParamList(Columns.Where(c => !c.IsAutoIncrement)) ));
+            
+            #line default
+            #line hidden
+            
+            #line 177 "TableColumnNameClassTemplate.tt"
+            this.Write(")\",\n                new global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertC" +
+                    "olumnDescriptor[]\n                {\n");
+            
+            #line default
+            #line hidden
+            
+            #line 180 "TableColumnNameClassTemplate.tt"
+ EmitInsertDescriptors(Columns.Where(c => !c.IsAutoIncrement)); 
+            
+            #line default
+            #line hidden
+            
+            #line 181 "TableColumnNameClassTemplate.tt"
+            this.Write("                });\n        }\n\n        public Dictionary<string, ColumnInfo> GetP" +
+                    "rimaryColumns()\n        {\n            return new Dictionary<string, ColumnInfo>(" +
+                    ")\n            {\n");
+            
+            #line default
+            #line hidden
+            
+            #line 188 "TableColumnNameClassTemplate.tt"
+
+             foreach(var col in Columns.Where(x => x.IsPrimaryKey))
+             {
+                 // The PK feeds the UPDATE/DELETE WHERE clause, which compares against the DB column. If the column
+                 // has a value convertor, the stored value is the convertor's output, so the WHERE must bind that
+                 // same converted value (GetColumns does this for the SET clause) — otherwise the WHERE compares the
+                 // raw CLR value and matches no rows. (Encrypted/typed-json PKs are out of scope: non-deterministic
+                 // ciphertext can never match a WHERE.)
+                 bool pkHasConvertor = !col.IsJsonColumn && !string.IsNullOrEmpty(col.Converter);
+                 string pkValueExpr = pkHasConvertor
+                     ? "new " + col.Converter + "().ConvertToDbValue(" + col.Name + ")"
+                     : col.Name;
+                 string pkSetExpr = pkHasConvertor
+                     ? "v => " + col.Name + " = (" + col.Type + ")(new " + col.Converter + "().ConvertFromDbValue(v))"
+                     : "v => " + col.Name + " = ColumnInfo.ApplyDbValue<" + col.Type + ">(v)";
+
+            
+            #line default
+            #line hidden
+            
+            #line 204 "TableColumnNameClassTemplate.tt"
+            this.Write("              {\n                    ");
+            
+            #line default
+            #line hidden
+            
+            #line 205 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
+            
+            #line default
+            #line hidden
+            
+            #line 205 "TableColumnNameClassTemplate.tt"
+            this.Write("ColumnName,\n                    new ColumnInfo()\n                    {\n          " +
+                    "              Type = typeof(");
+            
+            #line default
+            #line hidden
+            
+            #line 208 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.Type.Replace("?", " ") ));
+            
+            #line default
+            #line hidden
+            
+            #line 208 "TableColumnNameClassTemplate.tt"
+            this.Write("),\n                        Value = ");
+            
+            #line default
+            #line hidden
+            
+            #line 209 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( pkValueExpr ));
+            
+            #line default
+            #line hidden
+            
+            #line 209 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        IsPrimaryKey = true,\n                        IsAutoIncr" +
+                    "ement = ");
+            
+            #line default
+            #line hidden
+            
+            #line 211 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.IsAutoIncrement ? "true" : "false" ));
+            
+            #line default
+            #line hidden
+            
+            #line 211 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        HasDbDefault = ");
+            
+            #line default
+            #line hidden
+            
+            #line 212 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( col.HasDbDefault ? "true" : "false" ));
+            
+            #line default
+            #line hidden
+            
+            #line 212 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                        SetValue = ");
+            
+            #line default
+            #line hidden
+            
+            #line 213 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( pkSetExpr ));
+            
+            #line default
+            #line hidden
+            
+            #line 213 "TableColumnNameClassTemplate.tt"
+            this.Write("\n                    }\n                },\n");
+            
+            #line default
+            #line hidden
+            
+            #line 216 "TableColumnNameClassTemplate.tt"
 
                 }
 
@@ -651,14 +745,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 180 "TableColumnNameClassTemplate.tt"
-            this.Write("            };\r\n        }\r\n\r\n        public (string Name, ColumnInfo Info)? GetCo" +
-                    "lumn(string name)\r\n        {\r\n            switch(name)\r\n            {\r\n");
+            #line 219 "TableColumnNameClassTemplate.tt"
+            this.Write("            };\n        }\n\n        public (string Name, ColumnInfo Info)? GetColum" +
+                    "n(string name)\n        {\n            switch(name)\n            {\n");
             
             #line default
             #line hidden
             
-            #line 187 "TableColumnNameClassTemplate.tt"
+            #line 226 "TableColumnNameClassTemplate.tt"
 
                foreach (var col in Columns)
                {
@@ -683,136 +777,146 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 207 "TableColumnNameClassTemplate.tt"
+            #line 246 "TableColumnNameClassTemplate.tt"
             this.Write("                case ");
             
             #line default
             #line hidden
             
-            #line 207 "TableColumnNameClassTemplate.tt"
+            #line 246 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 207 "TableColumnNameClassTemplate.tt"
-            this.Write("ColumnName:\r\n                    return (\r\n                        ");
+            #line 246 "TableColumnNameClassTemplate.tt"
+            this.Write("ColumnName:\n                    return (\n                        ");
             
             #line default
             #line hidden
             
-            #line 209 "TableColumnNameClassTemplate.tt"
+            #line 248 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 209 "TableColumnNameClassTemplate.tt"
-            this.Write("ColumnName,\r\n                        new ColumnInfo()\r\n                        {\r" +
-                    "\n                            Type = typeof(");
+            #line 248 "TableColumnNameClassTemplate.tt"
+            this.Write("ColumnName,\n                        new ColumnInfo()\n                        {\n  " +
+                    "                          Type = typeof(");
             
             #line default
             #line hidden
             
-            #line 212 "TableColumnNameClassTemplate.tt"
+            #line 251 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( typeExpr ));
             
             #line default
             #line hidden
             
-            #line 212 "TableColumnNameClassTemplate.tt"
-            this.Write("),\r\n                            Value = ");
+            #line 251 "TableColumnNameClassTemplate.tt"
+            this.Write("),\n                            Value = ");
             
             #line default
             #line hidden
             
-            #line 213 "TableColumnNameClassTemplate.tt"
+            #line 252 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( valueExpr ));
             
             #line default
             #line hidden
             
-            #line 213 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            IsJson = ");
+            #line 252 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            IsJson = ");
             
             #line default
             #line hidden
             
-            #line 214 "TableColumnNameClassTemplate.tt"
+            #line 253 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsJsonColumn ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 214 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            IsEncrypted = ");
+            #line 253 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            IsEncrypted = ");
             
             #line default
             #line hidden
             
-            #line 215 "TableColumnNameClassTemplate.tt"
+            #line 254 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsEncrypted ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 215 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            ");
-            this.Write(this.ToStringHelper.ToStringWithCulture( ProfileAssign(col) ));
-            this.Write("\r\n                            IsPrimaryKey = ");
+            #line 254 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            ");
             
             #line default
             #line hidden
             
-            #line 216 "TableColumnNameClassTemplate.tt"
+            #line 255 "TableColumnNameClassTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ProfileAssign(col) ));
+            
+            #line default
+            #line hidden
+            
+            #line 255 "TableColumnNameClassTemplate.tt"
+            this.Write("\n                            IsPrimaryKey = ");
+            
+            #line default
+            #line hidden
+            
+            #line 256 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsPrimaryKey ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 216 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            IsAutoIncrement = ");
+            #line 256 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            IsAutoIncrement = ");
             
             #line default
             #line hidden
             
-            #line 217 "TableColumnNameClassTemplate.tt"
+            #line 257 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.IsAutoIncrement ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 217 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            HasDbDefault = ");
+            #line 257 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            HasDbDefault = ");
             
             #line default
             #line hidden
             
-            #line 218 "TableColumnNameClassTemplate.tt"
+            #line 258 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.HasDbDefault ? "true" : "false" ));
             
             #line default
             #line hidden
             
-            #line 218 "TableColumnNameClassTemplate.tt"
-            this.Write(",\r\n                            SetValue = ");
+            #line 258 "TableColumnNameClassTemplate.tt"
+            this.Write(",\n                            SetValue = ");
             
             #line default
             #line hidden
             
-            #line 219 "TableColumnNameClassTemplate.tt"
+            #line 259 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( setExpr ));
             
             #line default
             #line hidden
             
-            #line 219 "TableColumnNameClassTemplate.tt"
-            this.Write("\r\n                        }\r\n                    );\r\n");
+            #line 259 "TableColumnNameClassTemplate.tt"
+            this.Write("\n                        }\n                    );\n");
             
             #line default
             #line hidden
             
-            #line 222 "TableColumnNameClassTemplate.tt"
+            #line 262 "TableColumnNameClassTemplate.tt"
 
                }
 
@@ -820,13 +924,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 225 "TableColumnNameClassTemplate.tt"
-            this.Write("            }\r\n\r\n            return null;\r\n        }\r\n");
+            #line 265 "TableColumnNameClassTemplate.tt"
+            this.Write("            }\n\n            return null;\n        }\n");
             
             #line default
             #line hidden
             
-            #line 229 "TableColumnNameClassTemplate.tt"
+            #line 269 "TableColumnNameClassTemplate.tt"
 
         foreach(var col in Columns)
         {
@@ -835,37 +939,37 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 233 "TableColumnNameClassTemplate.tt"
+            #line 273 "TableColumnNameClassTemplate.tt"
             this.Write("        public const string ");
             
             #line default
             #line hidden
             
-            #line 233 "TableColumnNameClassTemplate.tt"
+            #line 273 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.Name ));
             
             #line default
             #line hidden
             
-            #line 233 "TableColumnNameClassTemplate.tt"
+            #line 273 "TableColumnNameClassTemplate.tt"
             this.Write("ColumnName = \"");
             
             #line default
             #line hidden
             
-            #line 233 "TableColumnNameClassTemplate.tt"
+            #line 273 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( col.DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 233 "TableColumnNameClassTemplate.tt"
-            this.Write("\";\r\n");
+            #line 273 "TableColumnNameClassTemplate.tt"
+            this.Write("\";\n");
             
             #line default
             #line hidden
             
-            #line 234 "TableColumnNameClassTemplate.tt"
+            #line 274 "TableColumnNameClassTemplate.tt"
 
         }
         
@@ -873,20 +977,20 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             #line default
             #line hidden
             
-            #line 237 "TableColumnNameClassTemplate.tt"
-            this.Write("    }\r\n    ");
+            #line 277 "TableColumnNameClassTemplate.tt"
+            this.Write("    }\n    ");
             
             #line default
             #line hidden
             
-            #line 238 "TableColumnNameClassTemplate.tt"
+            #line 278 "TableColumnNameClassTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 238 "TableColumnNameClassTemplate.tt"
-            this.Write("\r\n}\r\n\r\n#nullable disable\r\n\r\n");
+            #line 278 "TableColumnNameClassTemplate.tt"
+            this.Write("\n}\n\n#nullable disable\n\n");
             
             #line default
             #line hidden

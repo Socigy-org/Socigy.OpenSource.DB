@@ -27,6 +27,21 @@ namespace Socigy.OpenSource.DB.SourceGenerator
         private static readonly string JsonColumnAttributeFullName = typeof(JsonColumnAttribute).FullName!;
         private static readonly string ValueConvertorAttributeFullName = typeof(ValueConvertorAttribute).FullName!;
         private static readonly string EncryptedAttributeFullName = typeof(EncryptedAttribute).FullName!;
+        private static readonly string StringLengthAttributeFullName = typeof(StringLengthAttribute).FullName!;
+
+        // Instance properties that are candidate columns, walked across the BASE CHAIN (most-derived first,
+        // deduped by name so a shadowing/overriding derived property wins). Static properties and indexers are
+        // excluded here (matching the previous syntax-based filter); further filtering (writable / [Ignore] /
+        // [FlaggedEnum]) happens in the caller. GetMembers() already aggregates all `partial` declarations of a
+        // type, so this also picks up properties declared in a different partial than the one carrying [Table].
+        private static IEnumerable<IPropertySymbol> EnumerateColumnProperties(INamedTypeSymbol type)
+        {
+            var seen = new HashSet<string>(System.StringComparer.Ordinal);
+            for (INamedTypeSymbol? t = type; t != null && t.SpecialType != SpecialType.System_Object; t = t.BaseType)
+                foreach (var p in t.GetMembers().OfType<IPropertySymbol>())
+                    if (!p.IsStatic && !p.IsIndexer && seen.Add(p.Name))
+                        yield return p;
+        }
 
         private static string GetNamespace(INamedTypeSymbol symbol)
         {
@@ -60,6 +75,17 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
                 if (!processed.Add(tableSymbolInfo.ToDisplayString()))
                     continue;
+
+                // The generated partial declares a non-generic, top-level `partial class <Name>`. A generic
+                // (User<T>) or nested (Outer.Inner) [Table] would produce an uncompilable partial (CS0264/CS0260)
+                // with no explanation — fail with a clear diagnostic and skip codegen for it instead.
+                if (tableSymbolInfo.IsGenericType || tableSymbolInfo.ContainingType != null)
+                {
+                    ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.UnsupportedTableShape,
+                        tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name,
+                        tableSymbolInfo.IsGenericType ? "generic" : "a nested type"));
+                    continue;
+                }
 
                 var allAttrs = tableSymbolInfo.GetAttributes();
                 var tableAttribute = allAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == TableAttributeFullName);
@@ -99,6 +125,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     Columns = []
                 };
 
+                // Hint names must be unique across the whole compilation. Two [Table] classes with the same simple
+                // name in different namespaces (e.g. Auth.User and Billing.User) would otherwise produce identical
+                // hint names and crash the generator with an opaque "hintName already added". Qualify with the
+                // namespace so each gets a distinct, stable file id.
+                string hintBase = (string.IsNullOrEmpty(tableColNameClassTemplate.Namespace)
+                    ? tableColNameClassTemplate.ClassName
+                    : tableColNameClassTemplate.Namespace + "." + tableColNameClassTemplate.ClassName).Replace('.', '_');
+
                 var tableSyntaxTemplate = new TableSyntaxGeneratorTemplate()
                 {
                     Namespace = tableColNameClassTemplate.Namespace,
@@ -114,7 +148,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     CustomPreClass = string.Empty,
                     CustomPostClass = string.Empty
                 };
-                ctx.AddSource($"{tableColNameClassTemplate.ClassName}.builder.update.g.cs", updateBuilderTemplate.TransformText());
+                ctx.AddSource($"{hintBase}.builder.update.g.cs", updateBuilderTemplate.TransformText());
                 var deleteBuilderTemplate = new PostgresqlDeleteCommandBuilder()
                 {
                     ClassName = tableColNameClassTemplate.ClassName,
@@ -122,32 +156,36 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     CustomPreClass = string.Empty,
                     CustomPostClass = string.Empty
                 };
-                ctx.AddSource($"{tableColNameClassTemplate.ClassName}.builder.delete.g.cs", deleteBuilderTemplate.TransformText());
+                ctx.AddSource($"{hintBase}.builder.delete.g.cs", deleteBuilderTemplate.TransformText());
 
                 // Two-pass: first collect regular columns, then handle flagged enums
                 var pendingFlaggedEnum = new List<(IPropertySymbol Symbol, AttributeData Attr, bool IsExplicit)>();
 
-                foreach (var member in table.Members)
+                // Walk the symbol's members across its BASE CHAIN (most-derived first, dedup by name). A [Table]
+                // that inherits columns from a base class, or splits its properties across several `partial`
+                // declarations, previously dropped every inherited / other-partial property because this loop read
+                // only the one ClassDeclarationSyntax's own members — silent data loss, and inconsistent with the
+                // procedure placeholder resolver / DTO mapper which already walk the base. For a flat single-class
+                // [Table] (the common case) GetMembers() yields the same properties in the same order, so generated
+                // output is unchanged; the walk only ADDS inherited / split-partial columns.
+                foreach (var symbolInfo in EnumerateColumnProperties(tableSymbolInfo))
                 {
-                    if (member is not PropertyDeclarationSyntax column)
+                    // A mapped column must be writable: the generated materialization assigns to it
+                    // (row.Prop = value). A get-only / expression-bodied (computed) / init-only property can't be
+                    // set that way, so treat it as a non-column (like [Ignore]) instead of emitting code that
+                    // fails to compile (CS0200 / CS8852).
+                    if (symbolInfo.SetMethod == null || symbolInfo.SetMethod.IsInitOnly)
                         continue;
 
-                    semanticModel = compilation.GetSemanticModel(column.SyntaxTree);
-                    if (semanticModel.GetDeclaredSymbol(column) is not IPropertySymbol symbolInfo || symbolInfo.IsStatic)
-                        continue;
+                    var memberAttrs = symbolInfo.GetAttributes();
 
-                    if (member.AttributeLists.Count > 0)
-                    {
-                        var ignoreAttr = symbolInfo.GetAttributes().FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeFullName);
-                        if (ignoreAttr != null) continue;
-                    }
+                    var ignoreAttr = memberAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeFullName);
+                    if (ignoreAttr != null) continue;
 
                     // Detect [FlaggedEnum] / [FlaggedEnumTable] — don't add to column list
-                    if (member.AttributeLists.Count > 0)
                     {
-                        var attrs = symbolInfo.GetAttributes();
-                        var feAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == FlaggedEnumAttributeFullName);
-                        var fetAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == FlaggedEnumTableAttributeFullName);
+                        var feAttr = memberAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == FlaggedEnumAttributeFullName);
+                        var fetAttr = memberAttrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == FlaggedEnumTableAttributeFullName);
                         if (feAttr != null) { pendingFlaggedEnum.Add((symbolInfo, feAttr, false)); continue; }
                         if (fetAttr != null) { pendingFlaggedEnum.Add((symbolInfo, fetAttr, true)); continue; }
                     }
@@ -159,9 +197,21 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         DatabaseName = ColumnNaming.ResolveDbColumnName(symbolInfo, ColumnAttributeFullName)
                     };
 
-                    if (member.AttributeLists.Count > 0)
+                    // Record the underlying integral type for an enum (unwrapping Nullable<TEnum>) so a baked
+                    // CREATE TABLE (DynamicTable.InstantiateAsync) emits the integer type the insert path binds,
+                    // not "text" (which the insert would then fail to write an integer into).
                     {
-                        var attrs = symbolInfo.GetAttributes();
+                        ITypeSymbol __t = symbolInfo.Type;
+                        if (__t is INamedTypeSymbol __nt && __nt.OriginalDefinition?.SpecialType == SpecialType.System_Nullable_T
+                            && __nt.TypeArguments.Length == 1)
+                            __t = __nt.TypeArguments[0];
+                        if (__t.TypeKind == TypeKind.Enum && __t is INamedTypeSymbol __enum && __enum.EnumUnderlyingType != null)
+                            columnInfo.EnumUnderlyingType = __enum.EnumUnderlyingType.ToDisplayString();
+                    }
+
+                    if (memberAttrs.Length > 0)
+                    {
+                        var attrs = memberAttrs;
 
                         var columnAttribute = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == ColumnAttributeFullName);
                         // SCGDB018 — an explicit but empty [Column("")] name; ColumnNaming already fell back to snake_case.
@@ -172,7 +222,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                             ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EmptyColumnName, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
 
                         columnInfo.IsPrimaryKey = attrs.Any(x => x.AttributeClass?.ToDisplayString() == PrimaryKeyAttributeFullName);
-                        columnInfo.HasDbDefault = attrs.Any(x => x.AttributeClass?.ToDisplayString() == DefaultAttributeFullName);
+                        var defaultAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == DefaultAttributeFullName);
+                        columnInfo.HasDbDefault = defaultAttr != null;
+                        // Capture the [Default("expr")] value so the baked CREATE TABLE can emit a DEFAULT clause
+                        // (a naked [Default] has no ctor arg -> null -> no clause, matching the migration generator).
+                        if (defaultAttr != null && defaultAttr.ConstructorArguments.Length > 0)
+                            columnInfo.DefaultValueSql = defaultAttr.ConstructorArguments[0].Value?.ToString();
 
                         var autoIncrAttr = attrs.FirstOrDefault(x => x.AttributeClass?.ToDisplayString() == AutoIncrementAttributeFullName);
                         if (autoIncrAttr != null)
@@ -252,7 +307,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                             if (profileArg.Key != null && profileArg.Value.Value is string prof && !string.IsNullOrEmpty(prof))
                                 columnInfo.EncryptionProfile = prof;
                         }
-                        if (columnInfo.IsEncrypted && (columnInfo.IsJsonColumn || !string.IsNullOrEmpty(columnInfo.Converter)))
+                        // [Encrypted] stores non-deterministic bytea ciphertext, so it cannot also be a JSON column,
+                        // carry a value convertor, or be length-constrained: [StringLength] would (in the migration
+                        // analyzer) produce an order-dependent character varying(n) DDL that contradicts the bytea the
+                        // runtime writes. Fail the build loudly rather than emit a silently-wrong/ambiguous column.
+                        bool hasStringLength = attrs.Any(x => x.AttributeClass?.ToDisplayString() == StringLengthAttributeFullName);
+                        if (columnInfo.IsEncrypted && (columnInfo.IsJsonColumn || !string.IsNullOrEmpty(columnInfo.Converter) || hasStringLength))
                             ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.EncryptedComboError, symbolInfo.Locations.FirstOrDefault(), symbolInfo.Name));
                         // SCGDB023 — an encrypted column is non-deterministic bytea; it cannot be a key or auto-increment.
                         if (columnInfo.IsEncrypted && (columnInfo.IsPrimaryKey || columnInfo.IsAutoIncrement))
@@ -348,7 +408,9 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 // SCGDB017 / SCGDB016 — table definition quality checks.
                 if (tableColNameClassTemplate.Columns.Count == 0)
                     ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.TableNoColumns, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name));
-                else if (!tableColNameClassTemplate.Columns.Any(c => c.IsPrimaryKey))
+                // SCGDB016 is about the generated update/delete-by-PK operations. A pure [TableType] (no [Table])
+                // is a runtime-named row shape used for projections and need not have a primary key, so don't warn.
+                else if (!tableColNameClassTemplate.Columns.Any(c => c.IsPrimaryKey) && !(isTableType && tableAttribute == null))
                     ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.TableNoPrimaryKey, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name));
 
                 // SCGDB024 — two properties resolving to the same DB column name would emit colliding SQL.
@@ -357,12 +419,12 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     if (!seenColumnNames.Add(col.DatabaseName))
                         ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateColumnName, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name, col.DatabaseName));
 
-                ctx.AddSource($"{tableColNameClassTemplate.ClassName}.table.g.cs", tableColNameClassTemplate.TransformText());
-                ctx.AddSource($"{tableColNameClassTemplate.ClassName}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());
+                ctx.AddSource($"{hintBase}.table.g.cs", tableColNameClassTemplate.TransformText());
+                ctx.AddSource($"{hintBase}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());
 
                 if (isTableType)
                     ctx.AddSource(
-                        $"{tableColNameClassTemplate.ClassName}.tabletype.g.cs",
+                        $"{hintBase}.tabletype.g.cs",
                         EmitTableTypePartial(tableColNameClassTemplate.Namespace, tableColNameClassTemplate.ClassName, tableColNameClassTemplate.Columns));
             }
 
@@ -420,10 +482,28 @@ namespace Socigy.OpenSource.DB.Generated
                         await importer.WriteAsync(value, global::NpgsqlTypes.NpgsqlDbType.Jsonb, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
-                    var actualType = global::System.Nullable.GetUnderlyingType(col.ClrType) ?? col.ClrType;
-                    if (actualType.IsEnum)
-                        value = global::System.Convert.ChangeType(value, global::System.Enum.GetUnderlyingType(actualType));
-                    await importer.WriteAsync(value, GetDbType(col.ClrType), cancellationToken).ConfigureAwait(false);
+                    // Coerce only when the value is *actually* an enum at runtime (a value convertor may have
+                    // produced a non-enum DB representation for an enum-declared column). Matches insert/update.
+                    if (value.GetType().IsEnum)
+                        value = global::System.Convert.ChangeType(value, global::System.Enum.GetUnderlyingType(value.GetType()));
+                    else if (value is global::System.DateTime __dt && __dt.Kind == global::System.DateTimeKind.Utc)
+                        // Binary COPY is strict: a 'timestamp without time zone' column rejects a Kind=Utc
+                        // DateTime. Relabel it Unspecified (same wall-clock) so DateTime.UtcNow round-trips
+                        // instead of throwing. The parameterized path never hits this because it does not set
+                        // an explicit NpgsqlDbType for a non-null DateTime, letting Npgsql infer from Kind.
+                        value = global::System.DateTime.SpecifyKind(__dt, global::System.DateTimeKind.Unspecified);
+                    // 'timestamptz' only accepts a DateTimeOffset at offset 0; normalize to the same UTC instant.
+                    else if (value is global::System.DateTimeOffset __dto && __dto.Offset != global::System.TimeSpan.Zero)
+                        value = __dto.ToUniversalTime();
+                    // No wire mapping for unsigned CLR types; widen to what GetDbType targets (Integer/Bigint/Numeric).
+                    else if (value is ushort __us) value = (int)__us;
+                    else if (value is uint __ui) value = (long)__ui;
+                    else if (value is ulong __ul) value = (decimal)__ul;
+                    // Derive the wire type from the (normalized) runtime value, not the declared column type: a
+                    // value convertor may store an enum-declared column as a different type (e.g. text), and the
+                    // value is non-null here (nulls were written above). For non-convertor columns the normalized
+                    // value's type maps to the same NpgsqlDbType the declared type would.
+                    await importer.WriteAsync(value, GetDbType(value.GetType()), cancellationToken).ConfigureAwait(false);
                 }
             }
             return await importer.CompleteAsync(cancellationToken).ConfigureAwait(false);
@@ -443,6 +523,12 @@ namespace Socigy.OpenSource.DB.Generated
             if (type == typeof(string)) return global::NpgsqlTypes.NpgsqlDbType.Text;
             if (type == typeof(bool)) return global::NpgsqlTypes.NpgsqlDbType.Boolean;
             if (type == typeof(global::System.DateTime)) return global::NpgsqlTypes.NpgsqlDbType.Timestamp;
+            if (type == typeof(global::System.DateTimeOffset)) return global::NpgsqlTypes.NpgsqlDbType.TimestampTz;
+            if (type == typeof(global::System.TimeSpan)) return global::NpgsqlTypes.NpgsqlDbType.Interval;
+#if NET6_0_OR_GREATER
+            if (type == typeof(global::System.DateOnly)) return global::NpgsqlTypes.NpgsqlDbType.Date;
+            if (type == typeof(global::System.TimeOnly)) return global::NpgsqlTypes.NpgsqlDbType.Time;
+#endif
             if (type == typeof(float)) return global::NpgsqlTypes.NpgsqlDbType.Real;
             if (type == typeof(double)) return global::NpgsqlTypes.NpgsqlDbType.Double;
             if (type == typeof(decimal)) return global::NpgsqlTypes.NpgsqlDbType.Numeric;
@@ -461,6 +547,7 @@ namespace Socigy.OpenSource.DB.Generated
         private static string EmitTableTypePartial(string ns, string className, List<TableColumnNameClassTemplate.ColumnInfo> columns)
         {
             string columnDefs = BuildCreateTableColumnDefs(columns);
+            string sequencePrefix = BuildCreateSequencesPrefix(columns);
             return $@"#pragma warning disable
 #nullable enable
 using System.Data.Common;
@@ -484,7 +571,7 @@ namespace {ns}
             => GetInsertPlan(includeAutoIncrement).Columns;
 
         string global::Socigy.OpenSource.DB.Core.Interfaces.IDbTableType<{className}>.GetCreateTableSql(string tableName, bool ifNotExists)
-            => ""CREATE TABLE "" + (ifNotExists ? ""IF NOT EXISTS "" : """") + ""\"""" + tableName.Replace(""\"""", ""\""\"""") + ""\"" ({columnDefs})"";
+            => ""{sequencePrefix}CREATE TABLE "" + (ifNotExists ? ""IF NOT EXISTS "" : """") + ""\"""" + tableName.Replace(""\"""", ""\""\"""") + ""\"" ({columnDefs})"";
 
         /// <summary>Binds this table type to a runtime table name.</summary>
         public static global::Socigy.OpenSource.DB.Core.Dynamic.DynamicTable<{className}> WithTableName(string tableName)
@@ -510,28 +597,59 @@ namespace {ns}
                 bool serial = false;
                 if (col.IsAutoIncrement)
                 {
-                    pgType = baseType.ToLowerInvariant() switch
+                    if (!string.IsNullOrEmpty(col.SequenceName))
                     {
-                        "short" or "int16" or "system.int16" => "smallserial",
-                        "long" or "int64" or "system.int64" => "bigserial",
-                        _ => "serial",
-                    };
+                        // A custom [AutoIncrement("name")] sequence: 'serial' would create {table}_{col}_seq, so the
+                        // runtime sequence accessors (which use the custom name) would hit a nonexistent sequence.
+                        // Emit the integer type with an explicit nextval of the custom sequence (the CREATE SEQUENCE
+                        // for it is prepended by BuildCreateSequencesPrefix).
+                        string intType = baseType.ToLowerInvariant() switch
+                        {
+                            "short" or "int16" or "system.int16" => "smallint",
+                            "long" or "int64" or "system.int64" => "bigint",
+                            _ => "integer",
+                        };
+                        pgType = intType + " DEFAULT nextval('\\\"" + col.SequenceName + "\\\"')";
+                    }
+                    else
+                    {
+                        pgType = baseType.ToLowerInvariant() switch
+                        {
+                            "short" or "int16" or "system.int16" => "smallserial",
+                            "long" or "int64" or "system.int64" => "bigserial",
+                            _ => "serial",
+                        };
+                    }
                     serial = true;
                 }
                 else if (col.IsEncrypted)
                     pgType = "bytea";
                 else if (col.IsJsonColumn)
                     pgType = "jsonb";
+                else if (!string.IsNullOrEmpty(col.EnumUnderlyingType))
+                    // An enum is stored as its underlying integer (the insert/COPY paths bind it that way), so the
+                    // baked DDL must use the integral type, not "text".
+                    pgType = MapPgType(col.EnumUnderlyingType);
                 else
                     pgType = MapPgType(baseType);
 
-                bool isReference = baseType == "string" || baseType == "byte[]";
-                bool nullable = col.Type.EndsWith("?") || isReference;
+                // Nullability follows the declared type exactly (col.Type carries the NRT "?" for a nullable
+                // reference type, e.g. "string?"), matching the migration analyzer, which marks a non-nullable
+                // reference type NOT NULL. Forcing every reference type nullable made the baked CREATE TABLE create
+                // a non-nullable string/byte[] column as NULLABLE while the migration created it NOT NULL — the two
+                // ways of creating the same table diverged, and a NULL could land in a non-nullable CLR property.
+                bool nullable = col.Type.EndsWith("?");
                 bool notNull = !serial && (col.IsPrimaryKey || !nullable);
 
                 // Quotes are doubled so the result is a valid C# string literal segment.
                 var def = "\\\"" + col.DatabaseName + "\\\" " + pgType;
                 if (notNull) def += " NOT NULL";
+                // A [Default("expr")] column emits a DEFAULT clause so the baked CREATE TABLE matches the migration
+                // generator. Without it a non-nullable [Default] column was created NOT NULL with no default, so an
+                // insert that omits it (the ServerDefaults / ExcludeAutoFields path) failed. Serial/auto-increment
+                // columns already carry their DEFAULT nextval in pgType; a naked [Default] has no value to emit.
+                if (!serial && !string.IsNullOrEmpty(col.DefaultValueSql))
+                    def += " DEFAULT " + TranslateDefaultSql(col.DefaultValueSql);
                 parts.Add(def);
             }
 
@@ -540,6 +658,51 @@ namespace {ns}
                 parts.Add("PRIMARY KEY (" + string.Join(", ", pkCols.Select(c => "\\\"" + c.DatabaseName + "\\\"")) + ")");
 
             return string.Join(", ", parts);
+        }
+
+        // Translates a DbDefaults token to its SQL default expression for the baked CREATE TABLE — the same mapping
+        // the migration generator (PostgreSqlGenerator.TranslateDefault) uses, so a [TableType] instantiated at
+        // runtime and the same model migrated produce identical DEFAULTs. A non-token value is emitted verbatim.
+        // The result is escaped for the surrounding C# string literal the DDL is assembled into.
+        private static string TranslateDefaultSql(string token)
+        {
+            string sql = token switch
+            {
+                DbDefaults.Guid.Random => "gen_random_uuid()",
+                DbDefaults.Guid.Sequential => "uuid_generate_v1mc()",
+                DbDefaults.Time.Now => "timezone('utc', now())",
+                DbDefaults.Time.NowLocal => "now()",
+                DbDefaults.Time.Date => "current_date",
+                DbDefaults.Bool.True => "TRUE",
+                DbDefaults.Bool.False => "FALSE",
+                DbDefaults.Number.Zero => "0",
+                DbDefaults.Number.One => "1",
+                DbDefaults.Text.Empty => "''",
+                _ => token
+            };
+            return sql.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        }
+
+        // Emits "CREATE SEQUENCE IF NOT EXISTS \"name\" AS <type>; " (escaped for the C# string literal) for each
+        // [AutoIncrement("name")] column with a CUSTOM sequence name, so the baked CREATE TABLE's nextval default
+        // and the runtime sequence accessors target a sequence that actually exists. Empty for the default
+        // (serial) case, which auto-creates {table}_{col}_seq.
+        private static string BuildCreateSequencesPrefix(List<TableColumnNameClassTemplate.ColumnInfo> columns)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var col in columns)
+            {
+                if (!col.IsAutoIncrement || string.IsNullOrEmpty(col.SequenceName)) continue;
+                string baseType = col.Type.TrimEnd('?').Trim().ToLowerInvariant();
+                string seqType = baseType switch
+                {
+                    "short" or "int16" or "system.int16" => "smallint",
+                    "long" or "int64" or "system.int64" => "bigint",
+                    _ => "integer",
+                };
+                sb.Append("CREATE SEQUENCE IF NOT EXISTS \\\"").Append(col.SequenceName).Append("\\\" AS ").Append(seqType).Append("; ");
+            }
+            return sb.ToString();
         }
 
         private static string MapPgType(string csharpType)
@@ -558,6 +721,17 @@ namespace {ns}
                 case "int16":
                 case "system.int16": return "smallint";
                 case "byte": return "smallint";
+                case "sbyte": return "smallint";
+                // Unsigned types are stored widened to fit their full range (the write side maps them the same way).
+                case "ushort":
+                case "uint16":
+                case "system.uint16": return "integer";
+                case "uint":
+                case "uint32":
+                case "system.uint32": return "bigint";
+                case "ulong":
+                case "uint64":
+                case "system.uint64": return "numeric";
                 case "decimal": return "numeric";
                 case "double": return "double precision";
                 case "float":
@@ -575,6 +749,10 @@ namespace {ns}
                 case "boolean": return "boolean";
                 case "guid": return "uuid";
                 case "byte[]": return "bytea";
+                // An `object` property maps to jsonb, matching the migration generator's CSharpTypeMapping, so a
+                // baked [TableType] CREATE TABLE and a migration CREATE TABLE for the same column agree.
+                case "object":
+                case "system.object": return "jsonb";
                 default: return "text";
             }
         }

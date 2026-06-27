@@ -64,6 +64,8 @@ public class PostgresSchemaReaderTests
                 CREATE TABLE ""{schema}"".""parent"" (
                     ""id""         uuid PRIMARY KEY,
                     ""name""       varchar(50) NOT NULL,
+                    ""bio""        varchar,
+                    ""meta""       json,
                     ""created_at"" timestamp without time zone DEFAULT timezone('utc', now())
                 );
                 CREATE TABLE ""{schema}"".""child"" (
@@ -86,8 +88,20 @@ public class PostgresSchemaReaderTests
 
             var name = parent.Columns.Single(c => c.Name == "name");
             Assert.That(name.DotnetType, Is.EqualTo("string"));
-            Assert.That(name.Nullable, Is.False);
+            // A NOT NULL column must read as Nullable==null (NOT false), matching the analyzer — otherwise every
+            // required column compares unequal (false != null) and emits a spurious SET NOT NULL on round-trip.
+            Assert.That(name.Nullable, Is.Null);
             Assert.That(name.MaxLength, Is.EqualTo(50));
+
+            // An unbounded varchar maps to text (a scaffolded string regenerates as text -> no spurious Type diff).
+            var bio = parent.Columns.Single(c => c.Name == "bio");
+            Assert.That(bio.DatabaseType, Is.EqualTo("text"));
+            Assert.That(bio.Nullable, Is.True, "a NULL-able column must read as Nullable==true");
+
+            // A json column canonicalizes to jsonb (the type the [RawJsonColumn] analyzer reports).
+            var meta = parent.Columns.Single(c => c.Name == "meta");
+            Assert.That(meta.DatabaseType, Is.EqualTo("jsonb"));
+            Assert.That(meta.IsJsonColumn, Is.True);
 
             var createdAt = parent.Columns.Single(c => c.Name == "created_at");
             Assert.That(createdAt.DotnetType, Is.EqualTo("DateTime"));

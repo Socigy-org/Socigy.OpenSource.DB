@@ -30,9 +30,22 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
                     continue;
                 }
 
-                string? rendered = options.RedactParameter != null
-                    ? options.RedactParameter(p.ParameterName, p.Value)
-                    : RenderValue(p.Value, options.MaxParameterValueLength);
+                // The length cap bounds emission size and must apply to a custom redaction hook too — otherwise
+                // a hook that echoes the value (or returns a long token) bypasses the cap and can bloat every span.
+                // Diagnostics must NEVER throw into the query path: a throwing redaction hook, or a value whose
+                // ToString() throws, would otherwise crash an already-successful command (or, on the failure path,
+                // mask the original DB exception). Substitute a placeholder instead.
+                string? rendered;
+                try
+                {
+                    rendered = options.RedactParameter != null
+                        ? Truncate(options.RedactParameter(p.ParameterName, p.Value), options.MaxParameterValueLength)
+                        : RenderValue(p.Value, options.MaxParameterValueLength);
+                }
+                catch
+                {
+                    rendered = "<unrenderable>";
+                }
 
                 sb.Append(rendered ?? "NULL");
             }
@@ -44,11 +57,56 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
             if (value == null || value is DBNull)
                 return "NULL";
 
-            string s = value is byte[] bytes
-                ? "0x[" + bytes.Length + " bytes]"
-                : Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            string s;
+            switch (value)
+            {
+                case byte[] bytes:
+                    s = "0x[" + bytes.Length + " bytes]";
+                    break;
+                // Round-trip format so a 'timestamp' vs 'timestamptz' / Kind / offset is visible when debugging
+                // timezone issues (the invariant default drops Kind, offset, and sub-second precision).
+                case DateTime dt:
+                    s = dt.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                case DateTimeOffset dto:
+                    s = dto.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                // string before IEnumerable (string is IEnumerable<char>).
+                case string str:
+                    s = str;
+                    break;
+                // Array / List (= ANY(@p) parameters) — render bounded contents, not "System.Int32[]".
+                case System.Collections.IEnumerable seq:
+                    s = RenderCollection(seq);
+                    break;
+                default:
+                    s = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                    break;
+            }
 
-            if (maxLength > 0 && s.Length > maxLength)
+            return Truncate(s, maxLength);
+        }
+
+        private static string RenderCollection(System.Collections.IEnumerable seq)
+        {
+            var sb = new StringBuilder("[");
+            int count = 0;
+            foreach (var item in seq)
+            {
+                if (count >= 20) { sb.Append(", …"); break; }   // bound the element count; Truncate bounds total length
+                if (count > 0) sb.Append(", ");
+                sb.Append(item == null || item is DBNull ? "NULL"
+                    : item is byte[] b ? "0x[" + b.Length + " bytes]"
+                    : Convert.ToString(item, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty);
+                count++;
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        private static string? Truncate(string? s, int maxLength)
+        {
+            if (s != null && maxLength > 0 && s.Length > maxLength)
                 return s.Substring(0, maxLength) + "…(truncated)";
 
             return s;

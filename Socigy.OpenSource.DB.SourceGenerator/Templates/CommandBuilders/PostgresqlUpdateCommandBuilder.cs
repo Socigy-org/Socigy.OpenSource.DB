@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
     public partial class PostgresqlUpdateCommandBuilder : PostgresqlUpdateCommandBuilderBase {
         
         
-        #line 383 "PostgresqlUpdateCommandBuilder.tt"
+        #line 423 "PostgresqlUpdateCommandBuilder.tt"
 
 	public string ClassName { get; set; }
 	public string Namespace { get; set; }
@@ -60,8 +60,8 @@ using ");
             #line hidden
             
             #line 21 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write(";\r\n\r\n#nullable enable\r\n\r\nnamespace Socigy.OpenSource.DB.CommandBuilders.Postgresq" +
-                    "l\r\n{\r\n    ");
+            this.Write(";\n\n#nullable enable\n\nnamespace Socigy.OpenSource.DB.CommandBuilders.Postgresql\n{\n" +
+                    "    ");
             
             #line default
             #line hidden
@@ -73,7 +73,7 @@ using ");
             #line hidden
             
             #line 27 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write("\r\n    public class Postgresql");
+            this.Write("\n    public class Postgresql");
             
             #line default
             #line hidden
@@ -128,41 +128,41 @@ using ");
             #line hidden
             
             #line 47 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write("UpdateCommandBuilder<T> WithBatch(DbBatch? batch)\r\n        {\r\n            if (bat" +
-                    "ch == null)\r\n            {\r\n                if (_Connection == null && _Transact" +
-                    "ion == null)\r\n                    throw new ArgumentNullException(nameof(batch)," +
-                    " \"If batch is null, either connection or transaction must be specified!\");\r\n\r\n  " +
-                    "              _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.C" +
-                    "reateBatch() ?? throw new InvalidOperationException(\"The provided transaction ha" +
-                    "s no DbConnection from which a DbBatch could be created\");\r\n                _Bat" +
-                    "ch.Transaction = _Transaction;\r\n            }\r\n            else\r\n               " +
-                    " _Batch = batch;\r\n\r\n            return this;\r\n        }\r\n\r\n        /// <summary>" +
-                    "\r\n        /// Adds a new command to the current batch operation.\r\n        /// </" +
-                    "summary>\r\n        /// <remarks>This method should be called only after a batch h" +
-                    "as been initialized using\r\n        /// WithBatch(). Attempting to add to a batch" +
-                    " without initialization will result in an exception.</remarks>\r\n        /// <exc" +
-                    "eption cref=\"InvalidOperationException\">Thrown if no batch has been provided. Ca" +
-                    "ll WithBatch() before invoking this method.</exception>\r\n        public void Add" +
-                    "ToBatch()\r\n        {\r\n            if (_Batch == null)\r\n                throw new" +
-                    " InvalidOperationException(\"Cannot add to batch when no DbBatch was provided. Pl" +
-                    "ease call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.CreateB" +
-                    "atchCommand();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n        }\r\n" +
-                    "\r\n        /// <summary>\r\n        /// Adds a new command to the current database " +
-                    "batch asynchronously.\r\n        /// </summary>\r\n        /// <remarks>This method " +
-                    "should be called only after a batch has been initialized using\r\n        /// With" +
-                    "Batch(). It is typically used to accumulate multiple commands for execution as a" +
-                    " single batch\r\n        /// operation.</remarks>\r\n        /// <returns>A task tha" +
-                    "t represents the asynchronous operation.</returns>\r\n        /// <exception cref=" +
-                    "\"InvalidOperationException\">Thrown if no database batch has been provided. Call " +
-                    "WithBatch() before invoking this method.</exception>\r\n        public async Task " +
-                    "AddToBatchAsync()\r\n        {\r\n            if (_Batch == null)\r\n                t" +
-                    "hrow new InvalidOperationException(\"Cannot add to batch when no DbBatch was prov" +
-                    "ided. Please call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch" +
-                    ".CreateBatchCommand();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n   " +
-                    "     }\r\n#endif\r\n\r\n        private readonly T _TableRow;\r\n        private Express" +
-                    "ion<Func<T, bool>> _WhereClause;\r\n\r\n        private bool AllFieldsSet = false;\r\n" +
-                    "        private Expression<Func<T, object?[]>> _UpdateClause;\r\n        private E" +
-                    "xpression<Func<T, object?[]>> _UpdateExceptClause;\r\n\r\n        public Postgresql");
+            this.Write("UpdateCommandBuilder<T> WithBatch(DbBatch? batch)\n        {\n            if (batch" +
+                    " == null)\n            {\n                if (_Connection == null && _Transaction " +
+                    "== null)\n                    throw new ArgumentNullException(nameof(batch), \"If " +
+                    "batch is null, either connection or transaction must be specified!\");\n\n         " +
+                    "       _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.CreateBa" +
+                    "tch() ?? throw new InvalidOperationException(\"The provided transaction has no Db" +
+                    "Connection from which a DbBatch could be created\");\n                _Batch.Trans" +
+                    "action = _Transaction;\n            }\n            else\n                _Batch = b" +
+                    "atch;\n\n            return this;\n        }\n\n        /// <summary>\n        /// Add" +
+                    "s a new command to the current batch operation.\n        /// </summary>\n        /" +
+                    "// <remarks>This method should be called only after a batch has been initialized" +
+                    " using\n        /// WithBatch(). Attempting to add to a batch without initializat" +
+                    "ion will result in an exception.</remarks>\n        /// <exception cref=\"InvalidO" +
+                    "perationException\">Thrown if no batch has been provided. Call WithBatch() before" +
+                    " invoking this method.</exception>\n        public void AddToBatch()\n        {\n  " +
+                    "          if (_Batch == null)\n                throw new InvalidOperationExceptio" +
+                    "n(\"Cannot add to batch when no DbBatch was provided. Please call WithBatch() fir" +
+                    "st.\");\n\n            var batchCommand = _Batch.CreateBatchCommand();\n            " +
+                    "_Batch.BatchCommands.Add(batchCommand);\n        }\n\n        /// <summary>\n       " +
+                    " /// Adds a new command to the current database batch asynchronously.\n        //" +
+                    "/ </summary>\n        /// <remarks>This method should be called only after a batc" +
+                    "h has been initialized using\n        /// WithBatch(). It is typically used to ac" +
+                    "cumulate multiple commands for execution as a single batch\n        /// operation" +
+                    ".</remarks>\n        /// <returns>A task that represents the asynchronous operati" +
+                    "on.</returns>\n        /// <exception cref=\"InvalidOperationException\">Thrown if " +
+                    "no database batch has been provided. Call WithBatch() before invoking this metho" +
+                    "d.</exception>\n        public async Task AddToBatchAsync()\n        {\n           " +
+                    " if (_Batch == null)\n                throw new InvalidOperationException(\"Cannot" +
+                    " add to batch when no DbBatch was provided. Please call WithBatch() first.\");\n\n " +
+                    "           var batchCommand = _Batch.CreateBatchCommand();\n            _Batch.Ba" +
+                    "tchCommands.Add(batchCommand);\n        }\n#endif\n\n        private readonly T _Tab" +
+                    "leRow;\n        private Expression<Func<T, bool>> _WhereClause;\n\n        private " +
+                    "bool AllFieldsSet = false;\n        private Expression<Func<T, object?[]>> _Updat" +
+                    "eClause;\n        private Expression<Func<T, object?[]>> _UpdateExceptClause;\n\n  " +
+                    "      public Postgresql");
             
             #line default
             #line hidden
@@ -174,8 +174,8 @@ using ");
             #line hidden
             
             #line 103 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write("UpdateCommandBuilder(T rowInstance)\r\n        {\r\n            _TableRow = rowInstan" +
-                    "ce;\r\n        }\r\n\r\n        public Postgresql");
+            this.Write("UpdateCommandBuilder(T rowInstance)\n        {\n            _TableRow = rowInstance" +
+                    ";\n        }\n\n        public Postgresql");
             
             #line default
             #line hidden
@@ -220,8 +220,8 @@ using ");
             #line hidden
             
             #line 129 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write("UpdateCommandBuilder{T}\"/> instance for method chaining.</returns>\r\n        publi" +
-                    "c Postgresql");
+            this.Write("UpdateCommandBuilder{T}\"/> instance for method chaining.</returns>\n        public" +
+                    " Postgresql");
             
             #line default
             #line hidden
@@ -307,7 +307,7 @@ using ");
             
             #line 167 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("UpdateCommandBuilder{T}\"/> instance with the specified fields excluded from updat" +
-                    "es.</returns>\r\n        public Postgresql");
+                    "es.</returns>\n        public Postgresql");
             
             #line default
             #line hidden
@@ -395,119 +395,154 @@ using ");
             #line hidden
             
             #line 208 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write(".GetColumnDbName,\r\n                command);\r\n\r\n            // IMPORTANT: only us" +
-                    "e explicit WithFields() when not in AllFields mode\r\n            if (_UpdateClaus" +
-                    "e != null && !AllFieldsSet)\r\n                return updateVisitor.Parse(_UpdateC" +
-                    "lause);\r\n\r\n            HashSet<string>? excludedDbColumns = BuildExcludedDbColum" +
-                    "ns(command);\r\n\r\n            Dictionary<string, ColumnInfo> allColumns = _TableRo" +
-                    "w.GetColumns();\r\n            var sb = new StringBuilder();\r\n            bool fir" +
-                    "st = true;\r\n\r\n            foreach (var kv in allColumns)\r\n            {\r\n       " +
-                    "         var dbColumnName = kv.Key;\r\n                var info = kv.Value;\r\n\r\n   " +
-                    "             if (excludedDbColumns != null && excludedDbColumns.Contains(dbColum" +
-                    "nName))\r\n                    continue;\r\n\r\n                if (!first)\r\n         " +
-                    "           sb.Append(\", \");\r\n\r\n                first = false;\r\n\r\n               " +
-                    " string paramName = $\"@p{command.Parameters.Count}\";\r\n\r\n                var p = " +
-                    "command.CreateParameter()\r\n                    ?? throw new InvalidOperationExce" +
-                    "ption(\"Expected NpgsqlCommand.\");\r\n\r\n                object? dbValue = Normalize" +
-                    "DbValue(info.Type, info.Value);\r\n\r\n                p.ParameterName = paramName;\r" +
-                    "\n                p.Value = dbValue ?? DBNull.Value;\r\n\r\n                if (dbVal" +
-                    "ue == null || dbValue == DBNull.Value || IsEnumType(info.Type))\r\n               " +
-                    "     p.NpgsqlDbType = GetDbType(info.Type);\r\n\r\n                if (info.IsJson)\r" +
-                    "\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;\r\n\r\n                if " +
-                    "(info.IsEncrypted)\r\n                    p.NpgsqlDbType = NpgsqlDbType.Bytea;\r\n\r\n" +
-                    "                command.Parameters.Add(p);\r\n                sb.Append($\"\\\"{dbCol" +
-                    "umnName}\\\" = {paramName}\");\r\n            }\r\n\r\n            return sb.ToString();\r" +
-                    "\n        }\r\n\r\n        /// <summary>\r\n        /// Executes the update command asy" +
-                    "nchronously against the database connection and returns the number of rows\r\n    " +
-                    "    /// affected.\r\n        /// </summary>\r\n        /// <remarks>If the database " +
-                    "connection is not already open, this method opens it before executing\r\n        /" +
-                    "// the command. The update is performed using either the specified WHERE clause " +
-                    "or the primary key columns of\r\n        /// the table row.</remarks>\r\n        ///" +
-                    " <returns>A task that represents the asynchronous operation. The task result con" +
-                    "tains the number of rows affected by\r\n        /// the update command. Returns 0 " +
-                    "if the command could not be created.</returns>\r\n        /// <exception cref=\"Inv" +
-                    "alidOperationException\">Thrown if a DbBatch was provided, or if no DbConnection " +
-                    "is available.</exception>\r\n        public async Task<int> ExecuteAsync()\r\n      " +
-                    "  {\r\n#if NET6_0_OR_GREATER\r\n            if (_Batch != null)\r\n                thr" +
-                    "ow new InvalidOperationException(\"Cannot execute command when DbBatch was provid" +
-                    "ed.\");\r\n#endif\r\n\r\n            if (_Connection == null)\r\n                throw ne" +
-                    "w InvalidOperationException(\"No DbConnection provided.\");\r\n\r\n            if (_Co" +
-                    "nnection.State != System.Data.ConnectionState.Open)\r\n                await _Conn" +
-                    "ection.OpenAsync();\r\n\r\n            await using var command = _Connection.CreateC" +
-                    "ommand() as NpgsqlCommand;\r\n            if (command == null) return 0;\r\n\r\n      " +
-                    "      if (_Transaction != null)\r\n                command.Transaction = _Transact" +
-                    "ion as NpgsqlTransaction;\r\n\r\n            string? where = null;\r\n            if (" +
-                    "_WhereClause != null)\r\n                where = GetWhereVisitor(_WhereClause.Para" +
-                    "meters[0], ");
+            this.Write(".GetColumnDbName,\n                command);\n\n            // IMPORTANT: only use e" +
+                    "xplicit WithFields() when not in AllFields mode\n            if (_UpdateClause !=" +
+                    " null && !AllFieldsSet)\n            {\n                var setClause = updateVisi" +
+                    "tor.Parse(_UpdateClause);\n                // An empty selector (WithFields(x => " +
+                    "new object[] { })) would emit \"SET  WHERE ...\" — malformed\n                // SQ" +
+                    "L. Fail with a clear message instead of a Postgres syntax error.\n               " +
+                    " if (string.IsNullOrWhiteSpace(setClause))\n                    throw new Invalid" +
+                    "OperationException(\n                        \"WithFields(...) selected no columns" +
+                    " to update. Select at least one non-key column, or use WithAllFields().\");\n     " +
+                    "           return setClause;\n            }\n\n            HashSet<string>? exclude" +
+                    "dDbColumns = BuildExcludedDbColumns(command);\n\n            Dictionary<string, Co" +
+                    "lumnInfo> allColumns = _TableRow.GetColumns();\n            var sb = new StringBu" +
+                    "ilder();\n            bool first = true;\n\n            foreach (var kv in allColum" +
+                    "ns)\n            {\n                var dbColumnName = kv.Key;\n                var" +
+                    " info = kv.Value;\n\n                if (excludedDbColumns != null && excludedDbCo" +
+                    "lumns.Contains(dbColumnName))\n                    continue;\n\n                // " +
+                    "Never write the primary key or a serial/auto-increment column into SET. With a c" +
+                    "ustom\n                // WHERE that matches multiple rows, writing the instance\'" +
+                    "s PK into every matched row would\n                // clobber their keys (duplica" +
+                    "te-key error or silent key reassignment).\n                if (info.IsPrimaryKey " +
+                    "|| info.IsAutoIncrement)\n                    continue;\n\n                if (!fir" +
+                    "st)\n                    sb.Append(\", \");\n\n                first = false;\n\n      " +
+                    "          string paramName = $\"@p{command.Parameters.Count}\";\n\n                v" +
+                    "ar p = command.CreateParameter()\n                    ?? throw new InvalidOperati" +
+                    "onException(\"Expected NpgsqlCommand.\");\n\n                object? dbValue = Norma" +
+                    "lizeDbValue(info.Type, info.Value);\n                // Only force the column\'s D" +
+                    "B type when the value is actually an enum at runtime, matching the\n             " +
+                    "   // insert path. A value convertor may have produced a string for an enum-decl" +
+                    "ared column, in which\n                // case forcing GetDbType (e.g. Integer) o" +
+                    "nto the string parameter would throw.\n                bool valueIsEnum = info.Va" +
+                    "lue != null && info.Value != DBNull.Value && info.Value.GetType().IsEnum;\n\n     " +
+                    "           p.ParameterName = paramName;\n                p.Value = dbValue ?? DBN" +
+                    "ull.Value;\n\n                if (dbValue == null || dbValue == DBNull.Value || va" +
+                    "lueIsEnum)\n                    p.NpgsqlDbType = GetDbType(info.Type);\n\n         " +
+                    "       if (info.IsJson)\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;" +
+                    "\n\n                if (info.IsEncrypted)\n                    p.NpgsqlDbType = Npg" +
+                    "sqlDbType.Bytea;\n\n                command.Parameters.Add(p);\n                sb." +
+                    "Append($\"\\\"{dbColumnName}\\\" = {paramName}\");\n            }\n\n            return s" +
+                    "b.ToString();\n        }\n\n        /// <summary>\n        /// Executes the update c" +
+                    "ommand asynchronously against the database connection and returns the number of " +
+                    "rows\n        /// affected.\n        /// </summary>\n        /// <remarks>If the da" +
+                    "tabase connection is not already open, this method opens it before executing\n   " +
+                    "     /// the command. The update is performed using either the specified WHERE c" +
+                    "lause or the primary key columns of\n        /// the table row.</remarks>\n       " +
+                    " /// <returns>A task that represents the asynchronous operation. The task result" +
+                    " contains the number of rows affected by\n        /// the update command. Returns" +
+                    " 0 if the command could not be created.</returns>\n        /// <exception cref=\"I" +
+                    "nvalidOperationException\">Thrown if a DbBatch was provided, or if no DbConnectio" +
+                    "n is available.</exception>\n        public async Task<int> ExecuteAsync(global::" +
+                    "System.Threading.CancellationToken cancellationToken = default)\n        {\n#if NE" +
+                    "T6_0_OR_GREATER\n            if (_Batch != null)\n                throw new Invali" +
+                    "dOperationException(\"Cannot execute command when DbBatch was provided.\");\n#endif" +
+                    "\n\n            if (_Connection == null)\n                throw new InvalidOperatio" +
+                    "nException(\"No DbConnection provided.\");\n\n            if (_Connection.State != S" +
+                    "ystem.Data.ConnectionState.Open)\n                await _Connection.OpenAsync(can" +
+                    "cellationToken);\n\n            await using var command = _Connection.CreateComman" +
+                    "d() as NpgsqlCommand;\n            if (command == null) return 0;\n\n            if" +
+                    " (_Transaction != null)\n                command.Transaction = _Transaction as Np" +
+                    "gsqlTransaction;\n\n            string? where = null;\n            if (_WhereClause" +
+                    " != null)\n                where = GetWhereVisitor(_WhereClause.Parameters[0], ");
             
             #line default
             #line hidden
             
-            #line 291 "PostgresqlUpdateCommandBuilder.tt"
+            #line 309 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 291 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write(".GetColumnDbName, command).Parse(_WhereClause);\r\n            else\r\n            {\r" +
-                    "\n                var predicates = new List<string>();\r\n\r\n                Diction" +
-                    "ary<string, ColumnInfo> columns = _TableRow.GetPrimaryColumns();\r\n              " +
-                    "  foreach (var col in columns)\r\n                {\r\n                    string pa" +
-                    "ramName = $\"@p{command.Parameters.Count}\";\r\n                    string colName =" +
-                    " col.Key;\r\n\r\n                    object? dbValue = NormalizeDbValue(col.Value.Ty" +
-                    "pe, col.Value.Value);\r\n\r\n                    var param = new NpgsqlParameter(par" +
-                    "amName, dbValue ?? DBNull.Value);\r\n\r\n                    if (dbValue == null || " +
-                    "dbValue == DBNull.Value || IsEnumType(col.Value.Type))\r\n                        " +
-                    "param.NpgsqlDbType = GetDbType(col.Value.Type);\r\n\r\n                    command.P" +
-                    "arameters.Add(param);\r\n                    predicates.Add($\"{colName} = {paramNa" +
-                    "me}\");\r\n                }\r\n\r\n                where = \"WHERE \" + string.Join(\" AN" +
-                    "D \", predicates);\r\n            }\r\n\r\n            command.CommandText = $@\"\r\n     " +
-                    "   UPDATE \"\"{_TableRow.GetTableName()}\"\"\r\n        SET {BuildSetClause(command)}\r" +
-                    "\n        {where}\";\r\n\r\n            int rowsAffected = await global::Socigy.OpenSo" +
-                    "urce.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, \"UPDATE\", c" +
-                    "t => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);\r\n            retu" +
-                    "rn rowsAffected;\r\n        }\r\n\r\n        public NpgsqlDbType GetDbType(Type type)\r" +
-                    "\n        {\r\n            type = Nullable.GetUnderlyingType(type) ?? type;\r\n\r\n    " +
-                    "        if (type.IsEnum)\r\n                type = Enum.GetUnderlyingType(type);\r\n" +
-                    "\r\n            return type switch\r\n            {\r\n                Type t when t =" +
-                    "= typeof(short) => NpgsqlDbType.Smallint,\r\n                Type t when t == type" +
-                    "of(byte) => NpgsqlDbType.Smallint,\r\n                Type t when t == typeof(sbyt" +
-                    "e) => NpgsqlDbType.Smallint,\r\n\r\n                Type t when t == typeof(int) => " +
-                    "NpgsqlDbType.Integer,\r\n                Type t when t == typeof(ushort) => Npgsql" +
-                    "DbType.Integer,\r\n\r\n                Type t when t == typeof(long) => NpgsqlDbType" +
-                    ".Bigint,\r\n                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,\r" +
-                    "\n\r\n                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,\r\n\r\n  " +
-                    "              Type t when t == typeof(string) => NpgsqlDbType.Text,\r\n           " +
-                    "     Type t when t == typeof(bool) => NpgsqlDbType.Boolean,\r\n                Typ" +
-                    "e t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,\r\n                Type " +
-                    "t when t == typeof(float) => NpgsqlDbType.Real,\r\n                Type t when t =" +
-                    "= typeof(double) => NpgsqlDbType.Double,\r\n                Type t when t == typeo" +
-                    "f(decimal) => NpgsqlDbType.Numeric,\r\n                Type t when t == typeof(Gui" +
-                    "d) => NpgsqlDbType.Uuid,\r\n                Type t when t == typeof(byte[]) => Npg" +
-                    "sqlDbType.Bytea,\r\n                Type t when t == typeof(char) => NpgsqlDbType." +
-                    "Char,\r\n                _ => NpgsqlDbType.Text\r\n            };\r\n        }\r\n\r\n    " +
-                    "    private static bool IsEnumType(Type type)\r\n        {\r\n            type = Nul" +
-                    "lable.GetUnderlyingType(type) ?? type;\r\n            return type.IsEnum;\r\n       " +
-                    " }\r\n\r\n        private static object? NormalizeDbValue(Type type, object? value)\r" +
-                    "\n        {\r\n            if (value == null || value == DBNull.Value)\r\n           " +
-                    "     return value;\r\n\r\n            var actualType = Nullable.GetUnderlyingType(ty" +
-                    "pe) ?? type;\r\n            if (!actualType.IsEnum)\r\n                return value;" +
-                    "\r\n\r\n            var enumUnderlyingType = Enum.GetUnderlyingType(actualType);\r\n  " +
-                    "          return Convert.ChangeType(value, enumUnderlyingType);\r\n        }\r\n    " +
-                    "}\r\n    ");
+            #line 309 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(".GetColumnDbName, command).Parse(_WhereClause);\n            else\n            {\n  " +
+                    "              var predicates = new List<string>();\n\n                Dictionary<s" +
+                    "tring, ColumnInfo> columns = _TableRow.GetPrimaryColumns();\n                fore" +
+                    "ach (var col in columns)\n                {\n                    string paramName " +
+                    "= $\"@p{command.Parameters.Count}\";\n                    string colName = col.Key;" +
+                    "\n\n                    object? dbValue = NormalizeDbValue(col.Value.Type, col.Val" +
+                    "ue.Value);\n                    bool pkValueIsEnum = col.Value.Value != null && c" +
+                    "ol.Value.Value != DBNull.Value && col.Value.Value.GetType().IsEnum;\n\n           " +
+                    "         var param = new NpgsqlParameter(paramName, dbValue ?? DBNull.Value);\n\n " +
+                    "                   if (dbValue == null || dbValue == DBNull.Value || pkValueIsEn" +
+                    "um)\n                        param.NpgsqlDbType = GetDbType(col.Value.Type);\n\n   " +
+                    "                 command.Parameters.Add(param);\n                    predicates.A" +
+                    "dd($\"\\\"{colName}\\\" = {paramName}\");\n                }\n\n                where = \"" +
+                    "WHERE \" + string.Join(\" AND \", predicates);\n            }\n\n            command.C" +
+                    "ommandText = $@\"\n        UPDATE \"\"{_TableRow.GetTableName()}\"\"\n        SET {Buil" +
+                    "dSetClause(command)}\n        {where}\";\n\n            int rowsAffected = await glo" +
+                    "bal::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(co" +
+                    "mmand, \"UPDATE\", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Dia" +
+                    "gnostics);\n            return rowsAffected;\n        }\n\n        public NpgsqlDbTy" +
+                    "pe GetDbType(Type type)\n        {\n            type = Nullable.GetUnderlyingType(" +
+                    "type) ?? type;\n\n            if (type.IsEnum)\n                type = Enum.GetUnde" +
+                    "rlyingType(type);\n\n            return type switch\n            {\n                " +
+                    "Type t when t == typeof(short) => NpgsqlDbType.Smallint,\n                Type t " +
+                    "when t == typeof(byte) => NpgsqlDbType.Smallint,\n                Type t when t =" +
+                    "= typeof(sbyte) => NpgsqlDbType.Smallint,\n\n                Type t when t == type" +
+                    "of(int) => NpgsqlDbType.Integer,\n                Type t when t == typeof(ushort)" +
+                    " => NpgsqlDbType.Integer,\n\n                Type t when t == typeof(long) => Npgs" +
+                    "qlDbType.Bigint,\n                Type t when t == typeof(uint) => NpgsqlDbType.B" +
+                    "igint,\n\n                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,\n" +
+                    "\n                Type t when t == typeof(string) => NpgsqlDbType.Text,\n         " +
+                    "       Type t when t == typeof(bool) => NpgsqlDbType.Boolean,\n                Ty" +
+                    "pe t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,\n                Type " +
+                    "t when t == typeof(DateTimeOffset) => NpgsqlDbType.TimestampTz,\n                " +
+                    "Type t when t == typeof(TimeSpan) => NpgsqlDbType.Interval,\n#if NET6_0_OR_GREATE" +
+                    "R\n                Type t when t == typeof(DateOnly) => NpgsqlDbType.Date,\n      " +
+                    "          Type t when t == typeof(TimeOnly) => NpgsqlDbType.Time,\n#endif\n       " +
+                    "         Type t when t == typeof(float) => NpgsqlDbType.Real,\n                Ty" +
+                    "pe t when t == typeof(double) => NpgsqlDbType.Double,\n                Type t whe" +
+                    "n t == typeof(decimal) => NpgsqlDbType.Numeric,\n                Type t when t ==" +
+                    " typeof(Guid) => NpgsqlDbType.Uuid,\n                Type t when t == typeof(byte" +
+                    "[]) => NpgsqlDbType.Bytea,\n                Type t when t == typeof(char) => Npgs" +
+                    "qlDbType.Char,\n                _ => NpgsqlDbType.Text\n            };\n        }\n\n" +
+                    "        private static bool IsEnumType(Type type)\n        {\n            type = N" +
+                    "ullable.GetUnderlyingType(type) ?? type;\n            return type.IsEnum;\n       " +
+                    " }\n\n        private static object? NormalizeDbValue(Type type, object? value)\n  " +
+                    "      {\n            if (value == null || value == DBNull.Value)\n                " +
+                    "return value;\n\n            // Store a Kind=Utc DateTime as a naive \'timestamp\' (" +
+                    "relabel Unspecified) so PostgreSQL does not\n            // shift it by the sessi" +
+                    "on TimeZone, matching the column type and the insert/COPY paths.\n            if " +
+                    "(value is DateTime dt && dt.Kind == DateTimeKind.Utc)\n                return Dat" +
+                    "eTime.SpecifyKind(dt, DateTimeKind.Unspecified);\n            // \'timestamptz\' on" +
+                    "ly accepts a DateTimeOffset at offset 0; normalize to the same UTC instant.\n    " +
+                    "        if (value is DateTimeOffset dto && dto.Offset != TimeSpan.Zero)\n        " +
+                    "        return dto.ToUniversalTime();\n            // No Npgsql wire mapping for " +
+                    "unsigned CLR types; widen to the signed/decimal type GetDbType targets.\n        " +
+                    "    if (value is ushort us) return (int)us;\n            if (value is uint ui) re" +
+                    "turn (long)ui;\n            if (value is ulong ul) return (decimal)ul;\n\n         " +
+                    "   // Coerce only when the value is *actually* an enum at runtime. A value conve" +
+                    "rtor may have already\n            // turned an enum property into its DB represe" +
+                    "ntation (e.g. a string), in which case the declared type\n            // is still" +
+                    " the enum but the value is not, and coercing it to the underlying integer would " +
+                    "throw.\n            // Matches AddInsertParameter in the insert builder.\n        " +
+                    "    if (!value.GetType().IsEnum)\n                return value;\n\n            var " +
+                    "enumUnderlyingType = Enum.GetUnderlyingType(value.GetType());\n            return" +
+                    " Convert.ChangeType(value, enumUnderlyingType);\n        }\n    }\n    ");
             
             #line default
             #line hidden
             
-            #line 378 "PostgresqlUpdateCommandBuilder.tt"
+            #line 418 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 378 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write("\r\n}\r\n\r\n#nullable disable\r\n\r\n");
+            #line 418 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write("\n}\n\n#nullable disable\n\n");
             
             #line default
             #line hidden

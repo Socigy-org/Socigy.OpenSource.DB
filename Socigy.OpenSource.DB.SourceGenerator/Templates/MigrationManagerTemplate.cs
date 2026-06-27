@@ -17,10 +17,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
     public partial class MigrationManagerTemplate : MigrationManagerTemplateBase {
         
         
-        #line 227 "MigrationManagerTemplate.tt"
+        #line 322 "MigrationManagerTemplate.tt"
 
     public string DatabaseName { get; set; }
-    // Raw databaseName: the DI keyed-service key the MigrationManager resolves its connection factory under.
+    // Raw databaseName: the DI keyed-service key the MigrationManager resolves its connection factory under
+    // (kept separate from DatabaseName, the C# type-name base).
     public string ServiceKey { get; set; }
     public string BaseNamespace { get; set; }
     public IList<string> MigrationClassNames { get; set; } = [];
@@ -33,16 +34,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates {
             this.GenerationEnvironment = null;
             
             #line 6 "MigrationManagerTemplate.tt"
-            this.Write(@"#pragma warning disable
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Socigy.OpenSource.DB.Core.Migrations;
-using Socigy.OpenSource.DB.Core;
-using Socigy.OpenSource.DB.Migrations;
-
-#nullable enable
-
-namespace ");
+            this.Write("#pragma warning disable\nusing Microsoft.Extensions.DependencyInjection;\nusing Mic" +
+                    "rosoft.Extensions.Logging;\nusing Socigy.OpenSource.DB.Core.Migrations;\nusing Soc" +
+                    "igy.OpenSource.DB.Core;\nusing Socigy.OpenSource.DB.Migrations;\n\n#nullable enable" +
+                    "\n\nnamespace ");
             
             #line default
             #line hidden
@@ -54,7 +49,7 @@ namespace ");
             #line hidden
             
             #line 15 "MigrationManagerTemplate.tt"
-            this.Write("\r\n{\r\n    public static partial class ");
+            this.Write("\n{\n    public static partial class ");
             
             #line default
             #line hidden
@@ -105,7 +100,7 @@ namespace ");
             #line hidden
             
             #line 33 "MigrationManagerTemplate.tt"
-            this.Write("(),\r\n    ");
+            this.Write("(),\n    ");
             
             #line default
             #line hidden
@@ -119,203 +114,252 @@ namespace ");
             #line hidden
             
             #line 37 "MigrationManagerTemplate.tt"
-            this.Write("            ];\r\n\r\n            // Newest-first after chain resolution, with the ma" +
-                    "tching id list and id->index map.\r\n            private static readonly Func<ILoc" +
-                    "alMigration>[] _factoriesOrderedDesc;\r\n            private static readonly strin" +
-                    "g[] _idsOrderedDesc;\r\n            private static readonly Dictionary<string, int" +
-                    "> _idToIndex;\r\n\r\n            static MigrationManager()\r\n            {\r\n         " +
-                    "       var byId = new Dictionary<string, Func<ILocalMigration>>(_allFactories.Le" +
-                    "ngth);\r\n                var chain = new List<(string, string?)>(_allFactories.Le" +
-                    "ngth);\r\n                foreach (var factory in _allFactories)\r\n                " +
-                    "{\r\n                    var migration = factory();\r\n                    byId[migr" +
-                    "ation.Id] = factory;\r\n                    chain.Add((migration.Id, migration.Pre" +
-                    "viousId));\r\n                }\r\n\r\n                // Oldest -> newest by Previous" +
-                    "Id chain; throws loudly on a broken/forked chain.\r\n                var ascending" +
-                    " = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.OrderByChain(ch" +
-                    "ain);\r\n                int count = ascending.Count;\r\n                _factoriesO" +
-                    "rderedDesc = new Func<ILocalMigration>[count];\r\n                _idsOrderedDesc " +
-                    "= new string[count];\r\n                _idToIndex = new Dictionary<string, int>(c" +
-                    "ount);\r\n                for (int i = 0; i < count; i++)\r\n                {\r\n    " +
-                    "                var id = ascending[count - 1 - i]; // newest first\r\n            " +
-                    "        _factoriesOrderedDesc[i] = byId[id];\r\n                    _idsOrderedDes" +
-                    "c[i] = id;\r\n                    _idToIndex[id] = i;\r\n                }\r\n        " +
-                    "    }\r\n\r\n            // IMigrationManager.LocalMigrations — materialises on dema" +
-                    "nd (rarely called).\r\n            public Dictionary<string, ILocalMigration> Loca" +
-                    "lMigrations =>\r\n                _idToIndex.ToDictionary(kvp => kvp.Key, kvp => _" +
-                    "factoriesOrderedDesc[kvp.Value]());\r\n\r\n            private readonly ILogger _Log" +
-                    "ger;\r\n            private readonly IDbConnectionFactory _ConnectionFactory;\r\n   " +
-                    "         public MigrationManager(ILogger<MigrationManager> logger, [FromKeyedSer" +
-                    "vices(\"");
+            this.Write("            ];\n\n            // Newest-first after chain resolution, with the matc" +
+                    "hing id list and id->index map.\n            private static readonly Func<ILocalM" +
+                    "igration>[] _factoriesOrderedDesc;\n            private static readonly string[] " +
+                    "_idsOrderedDesc;\n            private static readonly Dictionary<string, int> _id" +
+                    "ToIndex;\n\n            static MigrationManager()\n            {\n                va" +
+                    "r byId = new Dictionary<string, Func<ILocalMigration>>(_allFactories.Length);\n  " +
+                    "              var chain = new List<(string, string?)>(_allFactories.Length);\n   " +
+                    "             foreach (var factory in _allFactories)\n                {\n          " +
+                    "          var migration = factory();\n                    byId[migration.Id] = fa" +
+                    "ctory;\n                    chain.Add((migration.Id, migration.PreviousId));\n    " +
+                    "            }\n\n                // Oldest -> newest by PreviousId chain; throws l" +
+                    "oudly on a broken/forked chain.\n                var ascending = global::Socigy.O" +
+                    "penSource.DB.Core.Migrations.MigrationHistory.OrderByChain(chain);\n             " +
+                    "   int count = ascending.Count;\n                _factoriesOrderedDesc = new Func" +
+                    "<ILocalMigration>[count];\n                _idsOrderedDesc = new string[count];\n " +
+                    "               _idToIndex = new Dictionary<string, int>(count);\n                " +
+                    "for (int i = 0; i < count; i++)\n                {\n                    var id = a" +
+                    "scending[count - 1 - i]; // newest first\n                    _factoriesOrderedDe" +
+                    "sc[i] = byId[id];\n                    _idsOrderedDesc[i] = id;\n                 " +
+                    "   _idToIndex[id] = i;\n                }\n            }\n\n            // IMigratio" +
+                    "nManager.LocalMigrations — materialises on demand (rarely called).\n            p" +
+                    "ublic Dictionary<string, ILocalMigration> LocalMigrations =>\n                _id" +
+                    "ToIndex.ToDictionary(kvp => kvp.Key, kvp => _factoriesOrderedDesc[kvp.Value]());" +
+                    "\n\n            private readonly ILogger _Logger;\n            private readonly IDb" +
+                    "ConnectionFactory _ConnectionFactory;\n            public MigrationManager(ILogge" +
+                    "r<MigrationManager> logger, [FromKeyedServices(\"");
             
             #line default
             #line hidden
             
             #line 76 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ServiceKey ));
-
+            
             #line default
             #line hidden
-
+            
             #line 76 "MigrationManagerTemplate.tt"
-            this.Write("\")] IDbConnectionFactory connectionFactory)\r\n            {\r\n                _Logg" +
-                    "er = logger;\r\n                _ConnectionFactory = connectionFactory;\r\n         " +
-                    "   }\r\n\r\n            public Task EnsureLatestVersion()\r\n            {\r\n          " +
-                    "      if (_idsOrderedDesc.Length == 0) return Task.CompletedTask;\r\n             " +
-                    "   if (!_idToIndex.TryGetValue(_idsOrderedDesc[0], out int idx))\r\n              " +
-                    "      throw new InvalidOperationException(\"Latest migration not found in index.\"" +
-                    ");\r\n                return EnsureMigration(_factoriesOrderedDesc[idx]());\r\n     " +
-                    "       }\r\n\r\n            public Task EnsureMigration(string migrationId)\r\n       " +
-                    "     {\r\n                if (!_idToIndex.TryGetValue(migrationId, out int idx))\r\n" +
-                    "                    throw new MissingMemberException($\"Missing local migration w" +
-                    "ith ID {migrationId}\");\r\n                return EnsureMigration(_factoriesOrdere" +
-                    "dDesc[idx]());\r\n            }\r\n\r\n            public async Task EnsureMigration(I" +
-                    "LocalMigration migration)\r\n            {\r\n                await _ConnectionFacto" +
-                    "ry.EnsureDbExists();\r\n\r\n                var dbVersion = await GetCurrentMigratio" +
-                    "nVersion();\r\n                int sourceMigrationIndex;\r\n                int targ" +
-                    "etMigrationIndex;\r\n\r\n                if (dbVersion == null)\r\n                   " +
-                    " sourceMigrationIndex = _idsOrderedDesc.Length;\r\n                else\r\n         " +
-                    "       {\r\n                    if (!_idToIndex.TryGetValue(dbVersion.HumanId, out" +
-                    " sourceMigrationIndex))\r\n                        throw new InvalidDataException(" +
-                    "$\"Unable to find local migration with ID {dbVersion.HumanId} that is in the Data" +
-                    "base. Aborting!\");\r\n                }\r\n\r\n                if (!_idToIndex.TryGetV" +
-                    "alue(migration.Id, out targetMigrationIndex))\r\n                    throw new Inv" +
-                    "alidDataException($\"Target migration {migration.Id} not found locally.\");\r\n\r\n   " +
-                    "             if (sourceMigrationIndex == targetMigrationIndex)\r\n                " +
-                    "{\r\n                    _Logger.LogInformation($\"");
+            this.Write("\")] IDbConnectionFactory connectionFactory)\n            {\n                _Logger" +
+                    " = logger;\n                _ConnectionFactory = connectionFactory;\n            }" +
+                    "\n\n            public Task EnsureLatestVersion()\n            {\n                if" +
+                    " (_idsOrderedDesc.Length == 0) return Task.CompletedTask;\n                if (!_" +
+                    "idToIndex.TryGetValue(_idsOrderedDesc[0], out int idx))\n                    thro" +
+                    "w new InvalidOperationException(\"Latest migration not found in index.\");\n       " +
+                    "         return EnsureMigration(_factoriesOrderedDesc[idx]());\n            }\n\n  " +
+                    "          public Task EnsureMigration(string migrationId)\n            {\n        " +
+                    "        if (!_idToIndex.TryGetValue(migrationId, out int idx))\n                 " +
+                    "   throw new MissingMemberException($\"Missing local migration with ID {migration" +
+                    "Id}\");\n                return EnsureMigration(_factoriesOrderedDesc[idx]());\n   " +
+                    "         }\n\n            public async Task EnsureMigration(ILocalMigration migrat" +
+                    "ion)\n            {\n                await _ConnectionFactory.EnsureDbExists();\n\n " +
+                    "               if (!_idToIndex.TryGetValue(migration.Id, out int targetMigration" +
+                    "Index))\n                    throw new InvalidDataException($\"Target migration {m" +
+                    "igration.Id} not found locally.\");\n\n                using var connection = _Conn" +
+                    "ectionFactory.Create();\n                await connection.OpenAsync();\n\n         " +
+                    "       // Serialize migration apply across every process/replica. Each replica c" +
+                    "alls\n                // EnsureLatest{Db}Migration() on startup; without this loc" +
+                    "k they race the same CREATE TABLE /\n                // DDL and crash with 42P07 " +
+                    "/ 42701 / 23505, or half-apply schema. pg_advisory_lock is\n                // se" +
+                    "ssion-scoped on this connection and auto-releases if the process dies, so a cras" +
+                    "hed\n                // migrator can\'t deadlock the fleet. ReadAppliedSet (below," +
+                    " under the lock) makes a waiter\n                // that acquires the lock after " +
+                    "the winner skip everything the winner already applied.\n                static lo" +
+                    "ng __AdvisoryKey(string s)\n                {\n                    unchecked\n     " +
+                    "               {\n                        // Deterministic FNV-1a 64-bit. string." +
+                    "GetHashCode is randomized per-process, so it\n                        // would gi" +
+                    "ve each replica a different key and defeat the lock.\n                        ulo" +
+                    "ng h = 1469598103934665603UL;\n                        foreach (char c in s) { h " +
+                    "^= c; h *= 1099511628211UL; }\n                        return (long)h;\n          " +
+                    "          }\n                }\n                long __migrationLockKey = __Adviso" +
+                    "ryKey(\"socigy.migrations:\" + \"");
             
             #line default
             #line hidden
             
-            #line 118 "MigrationManagerTemplate.tt"
-            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            #line 124 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ServiceKey ));
             
             #line default
             #line hidden
             
-            #line 118 "MigrationManagerTemplate.tt"
-            this.Write(@" is already at version: {migration.Id}"");
-                    return;
-                }
-
-                using var connection = _ConnectionFactory.Create();
-                await connection.OpenAsync();
-
-                if (sourceMigrationIndex > targetMigrationIndex)
+            #line 124 "MigrationManagerTemplate.tt"
+            this.Write(@""");
+                using (var __lockCmd = connection.CreateCommand())
                 {
-                    for (int i = sourceMigrationIndex - 1; i >= targetMigrationIndex; i--)
-                    {
-                        // Instantiate only for the duration of this loop body
-                        var migToApply = _factoriesOrderedDesc[i]();
-                        _Logger.LogInformation($""Applying UP migration: {migToApply.Id} - {migToApply.GetType().Name}"");
+                    __lockCmd.CommandText = ""SELECT pg_advisory_lock("" + __migrationLockKey.ToString(System.Globalization.CultureInfo.InvariantCulture) + "")"";
+                    await __lockCmd.ExecuteNonQueryAsync();
+                }
+                try
+                {
+                // Read the current version UNDER the advisory lock. Doing it before the lock let the
+                // source==target short-circuit (and the apply/rollback direction) race a concurrent apply/rollback
+                // on another replica: this process could read ""already at target"" and return while another replica
+                // was mid-rollback, leaving the schema behind with no self-correction. The cost is that an
+                // already-current startup now briefly takes the lock too — negligible, and correct.
+                var dbVersion = await GetCurrentMigrationVersion();
+                int sourceMigrationIndex;
+                if (dbVersion == null)
+                    sourceMigrationIndex = _idsOrderedDesc.Length;
+                else if (!_idToIndex.TryGetValue(dbVersion.HumanId, out sourceMigrationIndex))
+                    throw new InvalidDataException($""Unable to find local migration with ID {dbVersion.HumanId} that is in the Database. Aborting!"");
 
-                        // The schema change and its version row commit together or roll back together.
-                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
-                            connection,
-                            migToApply.UpSql,
-                            tx => ");
+                if (sourceMigrationIndex == targetMigrationIndex)
+                {
+                    _Logger.LogInformation($""");
             
             #line default
             #line hidden
             
-            #line 137 "MigrationManagerTemplate.tt"
+            #line 146 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 137 "MigrationManagerTemplate.tt"
+            #line 146 "MigrationManagerTemplate.tt"
+            this.Write(" is already at version: {migration.Id}\");\n                    return;\n           " +
+                    "     }\n\n                if (sourceMigrationIndex > targetMigrationIndex)\n       " +
+                    "         {\n                    // Defensive: never re-run UP DDL for a migration" +
+                    " that is currently applied,\n                    // even if version resolution ab" +
+                    "ove returned null for some reason. The set is\n                    // rollback-aw" +
+                    "are (a DOWN nets the migration back out), so an UP -> DOWN -> UP\n               " +
+                    "     // is correctly re-applied rather than skipped.\n                    var app" +
+                    "lied = await ReadAppliedSet();\n                    for (int i = sourceMigrationI" +
+                    "ndex - 1; i >= targetMigrationIndex; i--)\n                    {\n                " +
+                    "        // Instantiate only for the duration of this loop body\n                 " +
+                    "       var migToApply = _factoriesOrderedDesc[i]();\n                        if (" +
+                    "applied.Contains(migToApply.Id))\n                        {\n                     " +
+                    "       _Logger.LogInformation($\"Skipping already-applied UP migration: {migToApp" +
+                    "ly.Id}\");\n                            continue;\n                        }\n      " +
+                    "                  _Logger.LogInformation($\"Applying UP migration: {migToApply.Id" +
+                    "} - {migToApply.GetType().Name}\");\n\n                        // The schema change" +
+                    " and its version row commit together or roll back together.\n                    " +
+                    "    await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAt" +
+                    "omicAsync(\n                            connection,\n                            m" +
+                    "igToApply.UpSql,\n                            tx => ");
+            
+            #line default
+            #line hidden
+            
+            #line 172 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 172 "MigrationManagerTemplate.tt"
             this.Write(".Migration.InsertAsync(new ");
             
             #line default
             #line hidden
             
-            #line 137 "MigrationManagerTemplate.tt"
+            #line 172 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 137 "MigrationManagerTemplate.tt"
-            this.Write(@".Migration
-                            {
-                                HumanId = migToApply.Id,
-                                AppliedAt = DateTime.UtcNow,
-                                ExecutedBy = $""{Environment.UserName} - {Environment.MachineName}"",
-                                IsRollback = false
-                            }, connection, tx));
-                        // migToApply goes out of scope here — SQL strings are GC-eligible
-                    }
-                }
-                else
-                {
-                    for (int i = sourceMigrationIndex; i < targetMigrationIndex; i++)
-                    {
-                        var migToApply = _factoriesOrderedDesc[i]();
-                        _Logger.LogInformation($""Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}"");
-
-                        // The schema change and its version row commit together or roll back together.
-                        await global::Socigy.OpenSource.DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(
-                            connection,
-                            migToApply.DownSql,
-                            tx => ");
+            #line 172 "MigrationManagerTemplate.tt"
+            this.Write(".Migration\n                            {\n                                HumanId " +
+                    "= migToApply.Id,\n                                AppliedAt = DateTime.UtcNow,\n  " +
+                    "                              ExecutedBy = $\"{Environment.UserName} - {Environme" +
+                    "nt.MachineName}\",\n                                IsRollback = false\n           " +
+                    "                 }, connection, tx));\n                        // migToApply goes" +
+                    " out of scope here — SQL strings are GC-eligible\n                    }\n         " +
+                    "       }\n                else\n                {\n                    // Mirror th" +
+                    "e UP guard: only roll back migrations that are CURRENTLY applied. sourceMigratio" +
+                    "nIndex\n                    // was computed before the advisory lock, so a concur" +
+                    "rent (or already-completed) rollback could\n                    // otherwise re-r" +
+                    "un DownSql for a migration that is no longer applied, failing on the missing\n   " +
+                    "                 // object or recording a duplicate rollback row. The set is rol" +
+                    "lback-aware.\n                    var applied = await ReadAppliedSet();\n         " +
+                    "           for (int i = sourceMigrationIndex; i < targetMigrationIndex; i++)\n   " +
+                    "                 {\n                        var migToApply = _factoriesOrderedDes" +
+                    "c[i]();\n                        if (!applied.Contains(migToApply.Id))\n          " +
+                    "              {\n                            _Logger.LogInformation($\"Skipping al" +
+                    "ready-rolled-back DOWN migration: {migToApply.Id}\");\n                           " +
+                    " continue;\n                        }\n                        _Logger.LogInformat" +
+                    "ion($\"Applying DOWN migration: {migToApply.Id} - {migToApply.GetType().Name}\");\n" +
+                    "\n                        // The schema change and its version row commit togethe" +
+                    "r or roll back together.\n                        await global::Socigy.OpenSource" +
+                    ".DB.Core.Migrations.MigrationExecutor.ApplyAtomicAsync(\n                        " +
+                    "    connection,\n                            migToApply.DownSql,\n                " +
+                    "            tx => ");
             
             #line default
             #line hidden
             
-            #line 158 "MigrationManagerTemplate.tt"
+            #line 203 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 158 "MigrationManagerTemplate.tt"
+            #line 203 "MigrationManagerTemplate.tt"
             this.Write(".Migration.InsertAsync(new ");
             
             #line default
             #line hidden
             
-            #line 158 "MigrationManagerTemplate.tt"
+            #line 203 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 158 "MigrationManagerTemplate.tt"
-            this.Write(".Migration\r\n                            {\r\n                                HumanI" +
-                    "d = migToApply.Id,\r\n                                AppliedAt = DateTime.UtcNow," +
-                    "\r\n                                ExecutedBy = $\"{Environment.UserName} - {Envir" +
-                    "onment.MachineName}\",\r\n                                IsRollback = true\r\n      " +
-                    "                      }, connection, tx));\r\n                    }\r\n             " +
-                    "   }\r\n            }\r\n\r\n            public async Task<ILocalMigration?> GetCurren" +
-                    "tLocalMigrationVersion()\r\n            {\r\n                var latestVersion = awa" +
-                    "it GetCurrentMigrationVersion();\r\n                if (latestVersion == null || !" +
-                    "_idToIndex.TryGetValue(latestVersion.HumanId, out int idx))\r\n                   " +
-                    " return null;\r\n                return _factoriesOrderedDesc[idx]();\r\n           " +
-                    " }\r\n\r\n            public async Task<IMigration?> GetCurrentMigrationVersion()\r\n " +
-                    "           {\r\n                try\r\n                {\r\n                    using " +
-                    "var connection = _ConnectionFactory.Create();\r\n                    if (connectio" +
-                    "n.State != System.Data.ConnectionState.Open)\r\n                        await conn" +
-                    "ection.OpenAsync();\r\n\r\n                    // On first run the migrations table " +
-                    "doesn\'t exist yet. Probe with to_regclass\r\n                    // (returns NULL," +
-                    " never throws) instead of letting the query raise 42P01 — which the\r\n           " +
-                    "         // debugger otherwise breaks on as a first-chance exception during norm" +
-                    "al startup.\r\n                    using (var probe = connection.CreateCommand())\r" +
-                    "\n                    {\r\n                        probe.CommandText = \"SELECT to_r" +
-                    "egclass(\'\\\"\" + ");
+            #line 203 "MigrationManagerTemplate.tt"
+            this.Write(".Migration\n                            {\n                                HumanId " +
+                    "= migToApply.Id,\n                                AppliedAt = DateTime.UtcNow,\n  " +
+                    "                              ExecutedBy = $\"{Environment.UserName} - {Environme" +
+                    "nt.MachineName}\",\n                                IsRollback = true\n            " +
+                    "                }, connection, tx));\n                    }\n                }\n   " +
+                    "             }\n                finally\n                {\n                    usi" +
+                    "ng var __unlockCmd = connection.CreateCommand();\n                    __unlockCmd" +
+                    ".CommandText = \"SELECT pg_advisory_unlock(\" + __migrationLockKey.ToString(System" +
+                    ".Globalization.CultureInfo.InvariantCulture) + \")\";\n                    await __" +
+                    "unlockCmd.ExecuteNonQueryAsync();\n                }\n            }\n\n            p" +
+                    "ublic async Task<ILocalMigration?> GetCurrentLocalMigrationVersion()\n           " +
+                    " {\n                var latestVersion = await GetCurrentMigrationVersion();\n     " +
+                    "           if (latestVersion == null || !_idToIndex.TryGetValue(latestVersion.Hu" +
+                    "manId, out int idx))\n                    return null;\n                return _fa" +
+                    "ctoriesOrderedDesc[idx]();\n            }\n\n            public async Task<IMigrati" +
+                    "on?> GetCurrentMigrationVersion()\n            {\n                try\n            " +
+                    "    {\n                    using var connection = _ConnectionFactory.Create();\n  " +
+                    "                  if (connection.State != System.Data.ConnectionState.Open)\n    " +
+                    "                    await connection.OpenAsync();\n\n                    // On fir" +
+                    "st run the migrations table doesn\'t exist yet. Probe with to_regclass,\n         " +
+                    "           // wrapped in \"IS NOT NULL\" so Npgsql materialises a boolean: reading" +
+                    " the raw\n                    // regclass value as object throws InvalidCastExcep" +
+                    "tion once the table exists,\n                    // which previously got swallowe" +
+                    "d below and re-ran every UP migration on restart.\n                    using (var" +
+                    " probe = connection.CreateCommand())\n                    {\n                     " +
+                    "   probe.CommandText = \"SELECT to_regclass(\'\\\"\" + ");
             
             #line default
             #line hidden
             
-            #line 190 "MigrationManagerTemplate.tt"
+            #line 243 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 190 "MigrationManagerTemplate.tt"
-            this.Write(@".Migration.TableName + ""\""')"";
+            #line 243 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.TableName + ""\""') IS NOT NULL"";
                         var exists = await probe.ExecuteScalarAsync();
-                        if (exists is null || exists is DBNull)
+                        if (!(exists is bool b && b))
                             return null;
                     }
 
@@ -327,58 +371,180 @@ namespace ");
             #line default
             #line hidden
             
-            #line 199 "MigrationManagerTemplate.tt"
+            #line 252 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 199 "MigrationManagerTemplate.tt"
-            this.Write(".Migration>();\r\n                    await foreach (var row in ");
+            #line 252 "MigrationManagerTemplate.tt"
+            this.Write(".Migration>();\n                    await foreach (var row in ");
             
             #line default
             #line hidden
             
-            #line 200 "MigrationManagerTemplate.tt"
+            #line 253 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 200 "MigrationManagerTemplate.tt"
+            #line 253 "MigrationManagerTemplate.tt"
             this.Write(@".Migration.Query().WithConnection(connection).ExecuteAsync())
                         rows.Add(row);
 
-                    var records = new System.Collections.Generic.List<(string, System.DateTime, bool)>(rows.Count);
+                    var records = new System.Collections.Generic.List<(long, string, System.DateTime, bool)>(rows.Count);
                     foreach (var row in rows)
-                        records.Add((row.HumanId, row.AppliedAt, row.IsRollback));
+                        records.Add((row.Id, row.HumanId, row.AppliedAt, row.IsRollback));
 
                     var currentId = global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveCurrentVersion(records);
                     if (currentId == null)
                         return null;
 
+                    // Pick the most recently applied row for that id by the monotonic Id (true apply order), not AppliedAt.
                     ");
             
             #line default
             #line hidden
             
-            #line 211 "MigrationManagerTemplate.tt"
+            #line 265 "MigrationManagerTemplate.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
             
             #line default
             #line hidden
             
-            #line 211 "MigrationManagerTemplate.tt"
+            #line 265 "MigrationManagerTemplate.tt"
             this.Write(@".Migration? current = null;
                     foreach (var row in rows)
-                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.AppliedAt >= current.AppliedAt))
+                        if (row.HumanId == currentId && !row.IsRollback && (current == null || row.Id >= current.Id))
                             current = row;
                     return current;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return null;
+                    // Never swallow a read failure into null: that path is read as ""nothing applied""
+                    // by EnsureMigration and triggers a destructive re-apply of already-applied DDL.
+                    _Logger.LogError(ex,
+                        ""Failed to read current migration version from {Table}. Refusing to treat this as an empty database."",
+                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 277 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 277 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.TableName);
+                    throw;
                 }
+            }
+
+            // Reads the rollback-aware set of currently-applied migration ids using a plain command
+            // over only the columns we need, deliberately bypassing the row-materialisation query path
+            // so this guard stays usable even if that path regresses. Empty set means table absent.
+            private async Task<System.Collections.Generic.HashSet<string>> ReadAppliedSet()
+            {
+                using var connection = _ConnectionFactory.Create();
+                if (connection.State != System.Data.ConnectionState.Open)
+                    await connection.OpenAsync();
+
+                using (var probe = connection.CreateCommand())
+                {
+                    probe.CommandText = ""SELECT to_regclass('\"""" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 293 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 293 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.TableName + ""\""') IS NOT NULL"";
+                    var exists = await probe.ExecuteScalarAsync();
+                    if (!(exists is bool b && b))
+                        return new System.Collections.Generic.HashSet<string>();
+                }
+
+                var records = new System.Collections.Generic.List<(long, string, System.DateTime, bool)>();
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText =
+                        ""SELECT \"""" + ");
+            
+            #line default
+            #line hidden
+            
+            #line 303 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 303 "MigrationManagerTemplate.tt"
+            this.Write(".Migration.IdColumnName + \"\\\", \\\"\" +\n                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 304 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 304 "MigrationManagerTemplate.tt"
+            this.Write(".Migration.HumanIdColumnName + \"\\\", \\\"\" +\n                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 305 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 305 "MigrationManagerTemplate.tt"
+            this.Write(".Migration.AppliedAtColumnName + \"\\\", \\\"\" +\n                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 306 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 306 "MigrationManagerTemplate.tt"
+            this.Write(".Migration.IsRollbackColumnName + \"\\\" FROM \\\"\" +\n                        ");
+            
+            #line default
+            #line hidden
+            
+            #line 307 "MigrationManagerTemplate.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( DatabaseName ));
+            
+            #line default
+            #line hidden
+            
+            #line 307 "MigrationManagerTemplate.tt"
+            this.Write(@".Migration.TableName + ""\"""";
+
+                    await using var instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(
+                        cmd, ""SELECT"", ct => cmd.ExecuteReaderAsync(ct));
+                    while (await instr.ReadAsync())
+                        records.Add((instr.Reader.GetInt64(0), instr.Reader.GetString(1), instr.Reader.GetDateTime(2), instr.Reader.GetBoolean(3)));
+                }
+
+                return global::Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.ResolveAppliedSet(records);
             }
         }
     }

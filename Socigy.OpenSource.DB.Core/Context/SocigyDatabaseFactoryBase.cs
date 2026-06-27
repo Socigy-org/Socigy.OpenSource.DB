@@ -50,9 +50,21 @@ namespace Socigy.OpenSource.DB.Core.Context
         {
             // Reentrancy: join an ambient scope rather than opening a nested connection/transaction.
             // A nested transactional call therefore shares the outer transaction; only the outermost commits.
+            // Only join a scope that targets the SAME database — the ambient pointer is process-wide, so a nested
+            // call to a *different* database (a modular monolith with several contexts) would otherwise run its
+            // queries on the outer database's connection/transaction. A different database opens its own scope.
             SocigyDbScope? ambient = SocigyDbScope.Current;
-            if (ambient != null)
+            if (ambient != null && ambient.BelongsTo(_connections, _options.ConnectionKey))
+            {
+                // A transactional call nested in a non-transactional scope for the same database would run with no
+                // transaction at all (there is none to join). Fail loud instead of silently dropping atomicity.
+                if (transactional && !ambient.HasAmbientTransaction)
+                    throw new InvalidOperationException(
+                        "ExecuteTransactionAsync was called inside an ExecuteAsync (non-transactional) unit of " +
+                        "work for the same database, so the nested work would not be covered by any transaction. " +
+                        "Make the outer call ExecuteTransactionAsync, or run this work outside the outer scope.");
                 return await work(CreateContext(ambient)).ConfigureAwait(false);
+            }
 
             bool pin = transactional || _options.ConnectionLifetime == ConnectionLifetime.PerScope;
             var scope = new SocigyDbScope(_connections, _options, pin, _diagnostics);

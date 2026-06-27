@@ -63,6 +63,11 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
                 return (T)Enum.ToObject(targetType, Convert.ChangeType(dbValue, underlying));
             }
 
+            // Npgsql returns a 'timestamp with time zone' as a UTC DateTime; map it onto a DateTimeOffset
+            // target, which Convert.ChangeType cannot do (DateTimeOffset is not IConvertible).
+            if (targetType == typeof(DateTimeOffset) && dbValue is DateTime dtv)
+                return (T)(object)new DateTimeOffset(dtv.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dtv, DateTimeKind.Utc) : dtv);
+
             return (T)Convert.ChangeType(dbValue, targetType);
         }
     }

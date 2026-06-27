@@ -165,10 +165,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        Task<TResult?> MaxAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null) where TResult : struct;");
             sb.AppendLine($"        /// <summary>A single column's value from the first matching row (<c>default</c> if none).</summary>");
             sb.AppendLine($"        Task<TResult?> ScalarAsync<TResult>(Expression<Func<{e}, object?>> selector, {pred}? predicate = null);");
-            sb.AppendLine($"        /// <summary>Inserts one entity. Pass <c>includeAutoFields: true</c> to also write auto-increment columns; <c>excludeDbDefaults: true</c> to omit <c>[Default]</c> columns so the server default applies.</summary>");
-            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, bool includeAutoFields = false, bool excludeDbDefaults = false);");
-            sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Pass <c>includeAutoFields: true</c> to also write auto-increment columns; <c>excludeDbDefaults: true</c> to omit <c>[Default]</c> columns. Returns the total rows inserted.</summary>");
-            sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, bool includeAutoFields = false, bool excludeDbDefaults = false, CancellationToken cancellationToken = default);");
+            sb.AppendLine($"        /// <summary>Inserts one entity. Pass <c>InsertFields.IncludeAutoIncrement</c> to also write auto-increment columns, or <c>InsertFields.ServerDefaults</c> to omit <c>[Default]</c> columns so the server default applies. Use <paramref name=\"keep\"/> to write some <c>[Default]</c> columns yourself (e.g. a manual id) while the server fills the rest.</summary>");
+            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null);");
+            sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Use <c>InsertFields</c> to control which columns the database fills, and <paramref name=\"keep\"/> to write some <c>[Default]</c> columns yourself. Returns the total rows inserted.</summary>");
+            sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null, CancellationToken cancellationToken = default);");
             sb.AppendLine($"        Task<int> UpdateAsync({e} entity);");
             sb.AppendLine($"        Task<int> DeleteAsync({pred} predicate);");
             sb.AppendLine($"        Task ForEachAsync({pred}? predicate, Func<{e}, Task> onRow, CancellationToken cancellationToken = default);");
@@ -255,14 +255,15 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 sb.AppendLine();
             }
 
-            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, bool includeAutoFields = false, bool excludeDbDefaults = false)");
+            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                var __b = entity.Insert();");
-            sb.AppendLine("                if (includeAutoFields) __b.WithAllFields();");
-            sb.AppendLine("                else if (excludeDbDefaults) __b.ExcludeAutoFields();");
+            sb.AppendLine("                if (keep != null) __b.ExcludeAutoFields(keep);");
+            sb.AppendLine("                else if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.IncludeAutoIncrement) __b.WithAllFields();");
+            sb.AppendLine("                else if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults) __b.ExcludeAutoFields();");
             EmitEnlist(sb, "__b");
             sb.AppendLine("                return await __b.ExecuteAsync();");
             sb.AppendLine("            }");
@@ -270,13 +271,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            sb.AppendLine($"        public async Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, bool includeAutoFields = false, bool excludeDbDefaults = false, CancellationToken cancellationToken = default)");
+            sb.AppendLine($"        public async Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null, CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                var __tx = _scope.HasAmbientTransaction ? _scope.AmbientTransaction : null;");
-            sb.AppendLine($"                return await {e}.InsertMultipleAsync(entities, __acq.Connection, __tx, includeAutoFields, excludeDbDefaults, cancellationToken);");
+            sb.AppendLine($"                return await {e}.InsertMultipleAsync(entities, __acq.Connection, __tx, fields, keep, cancellationToken);");
             sb.AppendLine("            }");
             sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
             sb.AppendLine("        }");
@@ -316,7 +317,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"                var __q = predicate == null ? {e}.Query() : {e}.Query(predicate);");
             sb.AppendLine("                if (_scope.HasAmbientTransaction) __q.WithTransaction(_scope.AmbientTransaction!); else __q.WithConnection(__conn);");
             sb.AppendLine("                __q.WithDiagnostics(_scope.Diagnostics);");
-            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync())");
+            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync(cancellationToken))");
             sb.AppendLine("                {");
             sb.AppendLine("                    cancellationToken.ThrowIfCancellationRequested();");
             sb.AppendLine("                    await onRow(__row);");
@@ -337,7 +338,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("                if (_scope.HasAmbientTransaction) __q.WithTransaction(_scope.AmbientTransaction!); else __q.WithConnection(__conn);");
             sb.AppendLine("                __q.WithDiagnostics(_scope.Diagnostics);");
             sb.AppendLine("                var __results = new List<TResult>();");
-            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync())");
+            sb.AppendLine("                await foreach (var __row in __q.ExecuteAsync(cancellationToken))");
             sb.AppendLine("                {");
             sb.AppendLine("                    cancellationToken.ThrowIfCancellationRequested();");
             sb.AppendLine("                    __results.Add(await onRow(__row));");
@@ -385,13 +386,16 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        /// <summary>Registers <c>ISocigyDatabaseFactory&lt;I{db}&gt;</c>. Call after <c>Add{db}()</c> which registers the connection factory.</summary>");
             sb.AppendLine($"        public static IServiceCollection Add{db}Context(this IServiceCollection services, Action<SocigyDbContextOptions> configure = null)");
             sb.AppendLine("        {");
+            sb.AppendLine("            // Capture this database's own options in the factory closure. Do NOT register them as a");
+            sb.AppendLine("            // shared (non-keyed) singleton: in a modular monolith with several Add{Db}Context calls,");
+            sb.AppendLine("            // TryAddSingleton would keep only the first database's options and every later factory would");
+            sb.AppendLine("            // resolve that one instance, silently losing each later database's ConnectionKey/lifetime.");
             sb.AppendLine("            var __options = new SocigyDbContextOptions();");
             sb.AppendLine("            configure?.Invoke(__options);");
-            sb.AppendLine("            services.TryAddSingleton(__options);");
             sb.AppendLine($"            services.AddSingleton<ISocigyDatabaseFactory<I{db}>>(sp =>");
             sb.AppendLine($"                new {contextNs}.{db}Factory(");
             sb.AppendLine($"                    sp.GetRequiredKeyedService<IDbConnectionFactory>(\"{serviceKey}\"),");
-            sb.AppendLine("                    sp.GetService<SocigyDbContextOptions>() ?? new SocigyDbContextOptions(),");
+            sb.AppendLine("                    __options,");
             sb.AppendLine("                    new DbDiagnosticsContext(sp.GetService<ILoggerFactory>(), sp.GetService<SocigyDbDiagnosticsOptions>())));");
             sb.AppendLine("            return services;");
             sb.AppendLine("        }");

@@ -17,10 +17,21 @@ public class VaultRenewalTests
             Is.EqualTo(TimeSpan.FromSeconds(2400)));
     }
 
+    // A lease long enough that the 30s floor still fits before it expires (2/3*40 = 26.7 < 30 < 40) floors to 30.
     [Test]
-    public void Short_lifetime_is_floored()
+    public void Short_lifetime_is_floored_when_floor_still_fits()
     {
-        Assert.That(VaultRenewal.NextDelay(10, TimeSpan.FromMinutes(30)), Is.EqualTo(VaultRenewal.Floor));
+        Assert.That(VaultRenewal.NextDelay(40, TimeSpan.FromMinutes(30)), Is.EqualTo(VaultRenewal.Floor));
+    }
+
+    // Regression: a very short lease must NOT be floored past its own expiry. For a 30s lease, the 30s floor
+    // would renew at/after expiry, so it renews at 2/3 (20s) instead — before the credential dies.
+    [Test]
+    public void Very_short_lifetime_renews_before_expiry_not_floored_past_it()
+    {
+        var delay = VaultRenewal.NextDelay(30, TimeSpan.FromMinutes(30));
+        Assert.That(delay, Is.EqualTo(TimeSpan.FromSeconds(20)));
+        Assert.That(delay, Is.LessThan(TimeSpan.FromSeconds(30)), "must renew before the 30s lease expires");
     }
 
     [Test]

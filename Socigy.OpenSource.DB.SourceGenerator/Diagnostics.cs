@@ -9,7 +9,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     /// suppressed from a project's <c>.editorconfig</c> via
     /// <c>dotnet_diagnostic.SCGDB###.severity = error|warning|none</c>.
     ///
-    /// next free id = SCGDB025
+    /// next free id = SCGDB026
     /// </summary>
     internal static class Diagnostics
     {
@@ -203,6 +203,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             id: "SCGDB024",
             title: "Duplicate column name",
             messageFormat: "Table class '{0}' maps more than one property to the column name '{1}'; column names must be unique after snake_case normalization",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor UnsupportedTableShape = new(
+            id: "SCGDB025",
+            title: "[Table] type must be a top-level, non-generic class",
+            messageFormat: "Table type '{0}' is {1}; a [Table]/[TableType] type must be a top-level, non-generic partial class. The generator would otherwise emit an uncompilable partial declaration.",
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);

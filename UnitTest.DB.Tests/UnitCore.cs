@@ -84,11 +84,16 @@ public static class UnitCore
         -- test_counters  (AutoIncrement column)
         -- ---------------------------------------------------------------
         CREATE TABLE IF NOT EXISTS ""test_counters"" (
-            ""id""    UUID     NOT NULL,
-            ""seq""   INTEGER  NOT NULL DEFAULT nextval('""test_counters_seq_seq""'),
-            ""label"" TEXT     NOT NULL DEFAULT '',
+            ""id""         UUID        NOT NULL,
+            ""seq""        INTEGER     NOT NULL DEFAULT nextval('""test_counters_seq_seq""'),
+            ""label""      TEXT        NOT NULL DEFAULT '',
+            ""created_tz"" TIMESTAMPTZ NOT NULL DEFAULT now(),
+            ""long_join_column_name_used_to_exceed_sixty_three_alias_boundary"" TEXT,
             PRIMARY KEY (""id"")
         );
+        -- The table may pre-exist from an earlier run without these columns (CREATE IF NOT EXISTS won't add them).
+        ALTER TABLE ""test_counters"" ADD COLUMN IF NOT EXISTS ""created_tz"" TIMESTAMPTZ NOT NULL DEFAULT now();
+        ALTER TABLE ""test_counters"" ADD COLUMN IF NOT EXISTS ""long_join_column_name_used_to_exceed_sixty_three_alias_boundary"" TEXT;
 
         -- ---------------------------------------------------------------
         -- test_json_items  (raw JSON + typed JSON columns)
@@ -156,6 +161,23 @@ public static class UnitCore
             ""amount""         NUMERIC   NOT NULL DEFAULT 0,
             ""when""           TIMESTAMP NOT NULL DEFAULT NOW(),
             ""note""           TEXT,
+            ""small_byte""     SMALLINT  NOT NULL DEFAULT 0,
+            ""signed_byte""    SMALLINT  NOT NULL DEFAULT 0,
+            ""big""            NUMERIC   NOT NULL DEFAULT 0,
+            PRIMARY KEY (""id"")
+        );
+        -- The table may pre-exist from an earlier run without these columns (CREATE IF NOT EXISTS won't add them).
+        ALTER TABLE ""test_types"" ADD COLUMN IF NOT EXISTS ""small_byte""  SMALLINT NOT NULL DEFAULT 0;
+        ALTER TABLE ""test_types"" ADD COLUMN IF NOT EXISTS ""signed_byte"" SMALLINT NOT NULL DEFAULT 0;
+        ALTER TABLE ""test_types"" ADD COLUMN IF NOT EXISTS ""big""         NUMERIC  NOT NULL DEFAULT 0;
+
+        -- ---------------------------------------------------------------
+        -- char_items  (char column stored as character(1))
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""char_items"" (
+            ""id""      UUID         NOT NULL DEFAULT gen_random_uuid(),
+            ""grade""   CHARACTER(1) NOT NULL DEFAULT ' ',
+            ""initial"" CHARACTER(1),
             PRIMARY KEY (""id"")
         );
 
@@ -180,6 +202,44 @@ public static class UnitCore
         CREATE TABLE IF NOT EXISTS ""test_required"" (
             ""id""     UUID NOT NULL DEFAULT gen_random_uuid(),
             ""label""  TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (""id"")
+        );
+
+        -- ---------------------------------------------------------------
+        -- test_convertor_pk_items  ([ValueConvertor] on the PRIMARY KEY)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_convertor_pk_items"" (
+            ""code"" TEXT NOT NULL,
+            ""note"" TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (""code"")
+        );
+
+        -- ---------------------------------------------------------------
+        -- test_enum_convertor_items  (enum stored as text via a custom convertor)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_enum_convertor_items"" (
+            ""id""     UUID NOT NULL DEFAULT gen_random_uuid(),
+            ""status"" TEXT NOT NULL DEFAULT 'Pending',
+            PRIMARY KEY (""id"")
+        );
+
+        -- ---------------------------------------------------------------
+        -- test_enum_pk_convertor_items  (enum PRIMARY KEY via a type-changing convertor → text)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_enum_pk_convertor_items"" (
+            ""status"" TEXT NOT NULL,
+            ""note""   TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (""status"")
+        );
+
+        -- ---------------------------------------------------------------
+        -- test_inherited  (column inherited from a base class + a column in a second partial)
+        -- ---------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS ""test_inherited"" (
+            ""id""         UUID NOT NULL DEFAULT gen_random_uuid(),
+            ""name""       TEXT NOT NULL DEFAULT '',
+            ""score""      INTEGER NOT NULL DEFAULT 0,
+            ""created_by"" TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (""id"")
         );
     ";

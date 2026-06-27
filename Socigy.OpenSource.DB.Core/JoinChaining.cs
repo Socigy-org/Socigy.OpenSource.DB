@@ -18,8 +18,10 @@ namespace Socigy.OpenSource.DB.Core
         {
             var result = await plan.AggregateAsync(func, column, connection, transaction, diagnostics, cancellationToken).ConfigureAwait(false);
             if (result == null || result is DBNull) return null;
-            var t = typeof(TResult);
-            return (TResult)Convert.ChangeType(result, Nullable.GetUnderlyingType(t) ?? t);
+            // Route through ApplyDbValue (not raw Convert.ChangeType) so a DateTimeOffset result (Npgsql returns
+            // timestamptz as a UTC DateTime) and widened unsigned types convert correctly, matching the
+            // single-table aggregate path. Convert.ChangeType is still used internally for numerics.
+            return global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<TResult>(result);
         }
     }
 #nullable disable

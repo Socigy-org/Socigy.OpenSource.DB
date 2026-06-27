@@ -36,6 +36,30 @@ public class DbCheckTests
         Assert.That(expr.Sql, Is.EqualTo("\"tag\""));
     }
 
+    // Regression: DbCheck.Value must snake-case identically to the source generator's column naming
+    // (System.Text.Json JsonNamingPolicy.SnakeCaseLower), including acronyms — otherwise the CHECK references
+    // a column that does not exist (e.g. "i_p_address" vs the real "ip_address") and fails at apply time.
+    [TestCase("IPAddress", "ip_address")]
+    [TestCase("HTTPServer", "http_server")]
+    [TestCase("UserID", "user_id")]
+    [TestCase("ID", "id")]
+    [TestCase("HTML5Parser", "html5_parser")]
+    [TestCase("CreatedAt", "created_at")]
+    [TestCase("Level10Boss", "level10_boss")]
+    // Underscores in the name are preserved verbatim (leading/trailing/repeated), like the policy — the previous
+    // hand-rolled converter stripped a leading underscore and collapsed "a__b" to "a_b", referencing a missing column.
+    [TestCase("_leading", "_leading")]
+    [TestCase("a__b", "a__b")]
+    [TestCase("Leading_", "leading_")]
+    [TestCase("__Foo", "__foo")]
+    public void Value_matches_column_naming_policy_including_acronyms(string prop, string expectedColumn)
+    {
+        Assert.That(DbCheck.Value(prop).Sql, Is.EqualTo($"\"{expectedColumn}\""));
+        // And it must agree with the exact policy the generator uses for column names.
+        Assert.That(DbCheck.Value(prop).Sql,
+            Is.EqualTo($"\"{System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(prop)}\""));
+    }
+
     [Test]
     public void Column_AlreadySnakeCase_QuotesDirectly()
     {

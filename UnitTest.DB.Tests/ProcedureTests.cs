@@ -107,6 +107,22 @@ public class ProcedureTests
         Assert.That(max, Is.EqualTo(12));
     }
 
+    // Regression: a scalar procedure returning DateTimeOffset cast the boxed value directly. A timestamptz result
+    // is boxed by Npgsql as a DateTime, so `(DateTimeOffset)__scalar` threw InvalidCastException; it must route
+    // through the shared ApplyDbValue (DateTime → DateTimeOffset) like the row/aggregate read paths.
+    [Test]
+    public async Task ScalarProcedure_DateTimeOffsetReturn_DoesNotThrow()
+    {
+        await using var conn = UnitCore.CreateConnection();
+        await conn.OpenAsync();
+
+        await new TestCounter { Id = Guid.NewGuid(), Label = "tz" }.Insert().WithConnection(conn).ExcludeAutoFields().ExecuteAsync();
+
+        DateTimeOffset? max = await Procedures.MaxCreatedTz(conn);
+
+        Assert.That(max, Is.Not.Null, "a timestamptz scalar must materialize as DateTimeOffset, not throw");
+    }
+
     // ── Affected-count procedure (-- @returns affected) ───────────────────
 
     [Test]
@@ -147,6 +163,27 @@ public class ProcedureTests
     }
 
     [Test]
+    public async Task DtoProcedure_MultiConstructor_BindsWidestConstructor()
+    {
+        // Regression: a DTO with a narrow convenience constructor declared first must map through the WIDEST
+        // constructor. Binding InstanceConstructors[0] (the 1-arg ctor) would silently drop Priority → 0.
+        await using var conn = UnitCore.CreateConnection();
+        await conn.OpenAsync();
+
+        var name = $"proc-multi-{Guid.NewGuid():N}";
+        await Procedures.InsertTestItem(conn, Guid.NewGuid(), name, 99);
+
+        var rows = new List<ItemSummaryMulti>();
+        await foreach (var s in Procedures.Items.GetSummariesMulti(conn, name))
+            rows.Add(s);
+
+        Assert.That(rows, Has.Count.EqualTo(1));
+        Assert.That(rows[0].Name, Is.EqualTo(name));
+        Assert.That(rows[0].Priority, Is.EqualTo(99),
+            "Priority must bind through the 2-arg ctor; the 1-arg convenience ctor would drop it to 0");
+    }
+
+    [Test]
     public async Task DtoProcedure_PropertyBag_UnboundMemberDefaultsToNull()
     {
         await using var conn = UnitCore.CreateConnection();
@@ -163,5 +200,14 @@ public class ProcedureTests
         Assert.That(rows[0].Name, Is.EqualTo(name));
         Assert.That(rows[0].Priority, Is.EqualTo(7));
         Assert.That(rows[0].Missing, Is.Null, "a member with no matching result column maps to default");
+        // byte / byte-backed-enum DTO properties read from a smallint column must narrow (short->byte) instead of
+        // GetFieldValue<byte>, which throws over smallint.
+        Assert.That(rows[0].Rank, Is.EqualTo((byte)200));
+        Assert.That(rows[0].Level, Is.EqualTo(ReportSeverity.High));
+        // Wide-unsigned-backed enums from the widened integer/bigint/numeric storage must narrow the same way the
+        // non-enum unsigned cases do; the enum branch previously read GetFieldValue<ushort/uint/ulong> and threw.
+        Assert.That(rows[0].WideShort, Is.EqualTo(WideShortStatus.High));
+        Assert.That(rows[0].WideInt, Is.EqualTo(WideIntStatus.High));
+        Assert.That(rows[0].WideLong, Is.EqualTo(BigStatus.High));
     }
 }

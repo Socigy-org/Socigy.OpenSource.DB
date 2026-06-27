@@ -95,9 +95,14 @@ namespace Socigy.OpenSource.DB.HashiCorp
         public bool NeedsUpgrade(byte[] ciphertext)
         {
             if (ciphertext == null) return false;
+            // _latestVersion is 0 until RefreshAsync has primed it. Returning false here would make a re-encryption
+            // pass that runs before priming silently report "0 cells upgraded" while doing nothing. Fail loud so the
+            // misconfiguration (NeedsUpgrade called before RefreshAsync) is visible instead of a silent no-op.
+            if (_latestVersion <= 0)
+                throw new InvalidOperationException(
+                    "Transit EaaS encryptor is not primed (call RefreshAsync at startup) — cannot determine whether a value needs re-encryption.");
             int version = ParseVersion(Encoding.UTF8.GetString(ciphertext));
-            int latest = _latestVersion;
-            return version > 0 && latest > 0 && version < latest;
+            return version > 0 && version < _latestVersion;
         }
 
         /// <inheritdoc/>
@@ -140,21 +145,30 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 _order = new Queue<string>();
             }
 
+            // The cache owns private copies of every plaintext: a decrypted byte[] is handed straight back
+            // to the caller (a byte[] column returns it verbatim), so storing or returning the same reference
+            // would let a caller that mutates the array corrupt the cached value for every later read.
             public bool TryGet(string key, out byte[] value)
             {
                 if (_capacity == 0) { value = null!; return false; }
-                lock (_lock) return _map.TryGetValue(key, out value!);
+                lock (_lock)
+                {
+                    if (_map.TryGetValue(key, out var stored)) { value = (byte[])stored.Clone(); return true; }
+                    value = null!;
+                    return false;
+                }
             }
 
             public void Set(string key, byte[] value)
             {
                 if (_capacity == 0) return;
+                var copy = (byte[])value.Clone();
                 lock (_lock)
                 {
-                    if (_map.ContainsKey(key)) { _map[key] = value; return; }
+                    if (_map.ContainsKey(key)) { _map[key] = copy; return; }
                     while (_order.Count >= _capacity)
                         _map.Remove(_order.Dequeue());
-                    _map[key] = value;
+                    _map[key] = copy;
                     _order.Enqueue(key);
                 }
             }

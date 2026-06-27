@@ -249,11 +249,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             string returnType = proc.ReturnType!;
             string underlying = returnType.Trim().TrimEnd('?');
 
-            // Convertible scalars tolerate provider widening (e.g. COUNT(*) → long for an int return);
-            // others (Guid, DateTimeOffset, …) are unboxed directly.
+            // Convertible scalars tolerate provider widening (e.g. COUNT(*) → long for an int return). Others
+            // (Guid, DateTimeOffset, byte[], …) route through the shared width-tolerant ApplyDbValue, matching the
+            // row/aggregate read paths — a direct cast threw InvalidCastException for a DateTimeOffset scalar
+            // (a timestamptz result is boxed as a DateTime, and (DateTimeOffset)DateTime is invalid).
             string valueExpr = ConvertibleScalarTypes.Contains(underlying)
                 ? $"({underlying})System.Convert.ChangeType(__scalar, typeof({underlying}), System.Globalization.CultureInfo.InvariantCulture)"
-                : $"({underlying})__scalar";
+                : $"({underlying})global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<{underlying}>(__scalar)";
 
             sb.Append($"{indent}public static async System.Threading.Tasks.Task<{returnType}> {proc.Name}(");
             sb.Append("DbConnection conn");
@@ -279,12 +281,13 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.Append("DbConnection conn");
             foreach (var p in proc.Params)
                 sb.Append($", {p.Type} {p.Name}");
-            sb.AppendLine(")");
+            sb.AppendLine(",");
+            sb.AppendLine($"{indent}    System.Threading.CancellationToken cancellationToken = default)");
             sb.AppendLine($"{indent}{{");
             sb.AppendLine($"{indent}    await using var cmd = conn.CreateCommand();");
             sb.AppendLine($"{indent}    cmd.CommandText = @\"{EscapeVerbatim(proc.SqlBody)}\";");
             EmitParameters(sb, proc.Params, indent);
-            sb.AppendLine($"{indent}    int affected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, \"PROC\", ct => cmd.ExecuteNonQueryAsync(ct));");
+            sb.AppendLine($"{indent}    int affected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(cmd, \"PROC\", ct => cmd.ExecuteNonQueryAsync(ct), cancellationToken);");
             sb.AppendLine($"{indent}    {returnStmt}");
             sb.AppendLine($"{indent}}}");
         }
@@ -296,7 +299,20 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 var p = parameters[i];
                 sb.AppendLine($"{indent}    var __p{i} = cmd.CreateParameter();");
                 sb.AppendLine($"{indent}    __p{i}.ParameterName = \"@{p.Name}\";");
-                sb.AppendLine($"{indent}    __p{i}.Value = (object?){p.Name} ?? System.DBNull.Value;");
+                // Normalize the boxed value the same way the insert/update/COPY paths do — the procedure path sets
+                // no NpgsqlDbType, so an enum, unsigned int, Kind=Utc DateTime, or offset DateTimeOffset would
+                // otherwise throw or silently corrupt when Npgsql infers the wire type.
+                sb.AppendLine($"{indent}    object? __v{i} = (object?){p.Name};");
+                sb.AppendLine($"{indent}    if (__v{i} != null && __v{i}.GetType().IsEnum)");
+                sb.AppendLine($"{indent}        __v{i} = global::System.Convert.ChangeType(__v{i}, global::System.Enum.GetUnderlyingType(__v{i}.GetType()));");
+                sb.AppendLine($"{indent}    else if (__v{i} is global::System.DateTime __dt{i} && __dt{i}.Kind == global::System.DateTimeKind.Utc)");
+                sb.AppendLine($"{indent}        __v{i} = global::System.DateTime.SpecifyKind(__dt{i}, global::System.DateTimeKind.Unspecified);");
+                sb.AppendLine($"{indent}    else if (__v{i} is global::System.DateTimeOffset __dto{i} && __dto{i}.Offset != global::System.TimeSpan.Zero)");
+                sb.AppendLine($"{indent}        __v{i} = __dto{i}.ToUniversalTime();");
+                sb.AppendLine($"{indent}    else if (__v{i} is ushort __us{i}) __v{i} = (int)__us{i};");
+                sb.AppendLine($"{indent}    else if (__v{i} is uint __ui{i}) __v{i} = (long)__ui{i};");
+                sb.AppendLine($"{indent}    else if (__v{i} is ulong __ul{i}) __v{i} = (decimal)__ul{i};");
+                sb.AppendLine($"{indent}    __p{i}.Value = __v{i} ?? System.DBNull.Value;");
                 sb.AppendLine($"{indent}    cmd.Parameters.Add(__p{i});");
             }
         }
@@ -362,7 +378,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                         string full = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                         info.ReturnKind = ProcedureReturnKind.Dto;
                         info.DtoFullName = full;
-                        info.DtoMapperId = DtoMapperGenerator.Sanitize(full);
+                        info.DtoMapperId = DtoMapperGenerator.MapperId(full);
                         if (!dtoMap.ContainsKey(full))
                             dtoMap[full] = (symbol, location);
                     }

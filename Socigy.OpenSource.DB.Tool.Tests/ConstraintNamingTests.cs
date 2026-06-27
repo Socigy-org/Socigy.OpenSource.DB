@@ -64,6 +64,43 @@ public class ConstraintNamingTests
             "a CHECK constraint with no column list must get a stable, reproducible name across runs");
     }
 
+    // Two CHECKs on the SAME column (e.g. [Min(5)] + [Max(100)]) must get DISTINCT names; naming a check from its
+    // columns alone collapsed them to one name, so the CREATE TABLE emitted two same-named constraints (apply fails
+    // with "constraint already exists").
+    [Test]
+    public void Multiple_checks_on_same_column_get_distinct_names()
+    {
+        var t = Table("users", Col("id", "uuid", pk: true), Col("age", "integer"));
+        t.Constraints!.Add(new DbConstraint { Type = DbConstraint.Types.Check, TableName = "users", Columns = new[] { "age" }, Value = "\"age\" >= 5" });
+        t.Constraints!.Add(new DbConstraint { Type = DbConstraint.Types.Check, TableName = "users", Columns = new[] { "age" }, Value = "\"age\" <= 100" });
+        UseSchema(t);
+
+        var (up, _) = Generate(new SchemaDiff { AddedTables = { t } });
+        string sql = string.Join("\n", up);
+
+        var checkNames = Regex.Matches(sql, @"CONSTRAINT ""([^""]+)"" CHECK").Select(m => m.Groups[1].Value).ToList();
+        Assert.That(checkNames, Has.Count.EqualTo(2), "both checks must be emitted");
+        Assert.That(checkNames.Distinct().Count(), Is.EqualTo(2),
+            $"two checks on the same column must have distinct names, got: {string.Join(", ", checkNames)}");
+    }
+
+    // The distinct names must also be STABLE across regenerations (folded from the check expression, not random).
+    [Test]
+    public void Multiple_checks_on_same_column_names_are_reproducible()
+    {
+        DbTable Make()
+        {
+            var t = Table("users", Col("id", "uuid", pk: true), Col("age", "integer"));
+            t.Constraints!.Add(new DbConstraint { Type = DbConstraint.Types.Check, TableName = "users", Columns = new[] { "age" }, Value = "\"age\" >= 5" });
+            t.Constraints!.Add(new DbConstraint { Type = DbConstraint.Types.Check, TableName = "users", Columns = new[] { "age" }, Value = "\"age\" <= 100" });
+            return t;
+        }
+
+        var first = Generate(new SchemaDiff { AddedTables = { Make() } });
+        var second = Generate(new SchemaDiff { AddedTables = { Make() } });
+        Assert.That(second.Up, Is.EqualTo(first.Up), "per-check names must be stable across runs");
+    }
+
     [Test]
     public void Generation_is_reproducible_across_runs()
     {

@@ -90,10 +90,17 @@ namespace Socigy.OpenSource.DB.Core
             {
                 var step = Steps[i];
                 var map = new Dictionary<string, string>();
+                int colIndex = 0;
                 foreach (var kv in step.Prototype.GetColumns())
                 {
-                    string outAlias = step.Alias + "_" + kv.Key;
-                    select.Add(step.Alias + ".\"" + kv.Key + "\" AS " + outAlias);
+                    // Use a SHORT, positional output alias (a0_c0, a0_c1, ...) instead of embedding the column name.
+                    // Embedding the name and emitting it UNQUOTED meant a mixed-case [Column("Name")] folded to lower
+                    // case (and only survived via Npgsql's case-insensitive GetOrdinal fallback), and a column name
+                    // long enough to push "aN_<name>" past Postgres's 63-byte identifier limit was truncated in the
+                    // result label but not in the lookup string, so the column silently read as NULL. A quoted
+                    // positional alias is always unique, short, and round-trips to the reader's lookup exactly.
+                    string outAlias = step.Alias + "_c" + colIndex++;
+                    select.Add(step.Alias + ".\"" + kv.Key + "\" AS \"" + outAlias + "\"");
                     map[kv.Key] = outAlias;
                 }
                 overrides[i] = map;
@@ -106,11 +113,10 @@ namespace Socigy.OpenSource.DB.Core
             if (OrderBy != null)
             {
                 var visitor = new PostgresqlMultiJoinVisitor(MapFor(OrderBy), command);
-                sb.Append(" ORDER BY ").Append(visitor.ResolveColumnList(OrderBy));
-                if (OrderDesc) sb.Append(" DESC");
+                sb.Append(" ORDER BY ").Append(visitor.ResolveColumnList(OrderBy, OrderDesc));
             }
-            if (Limit > 0) sb.Append(" LIMIT ").Append(Limit);
-            if (Offset > 0) sb.Append(" OFFSET ").Append(Offset);
+            if (Limit >= 0) sb.Append(" LIMIT ").Append(Limit);
+            if (Offset >= 0) sb.Append(" OFFSET ").Append(Offset);
             return sb.ToString();
         }
 
@@ -184,7 +190,9 @@ namespace Socigy.OpenSource.DB.Core
             for (int i = 0; i < n; i++)
             {
                 fast[i] = Steps[i].Prototype as IOrdinalReadable;
-                if (fast[i] != null) ords[i] = fast[i]!.GetReaderOrdinals(reader, overrides[i]);
+                // Always populate ords[i] (empty for a non-IOrdinalReadable prototype) so the outer-join no-match
+                // check below can't dereference a null ordinals array when a step also has no primary key.
+                ords[i] = fast[i] != null ? fast[i]!.GetReaderOrdinals(reader, overrides[i]) : System.Array.Empty<int>();
                 pkOrds[i] = ResolvePkOrdinals(Steps[i].Prototype, reader, overrides[i]);
             }
 
@@ -193,7 +201,10 @@ namespace Socigy.OpenSource.DB.Core
                 var entities = new IDbTable?[n];
                 for (int i = 0; i < n; i++)
                 {
-                    if (AllDbNull(reader, pkOrds[i])) { entities[i] = null; continue; } // outer-join miss
+                    // Outer-join miss = all PK columns NULL. A table with no PK can't use that signal, so fall
+                    // back to "all selected columns NULL" (the best available; an all-null matched row is then
+                    // indistinguishable from a miss, an inherent limitation without a key).
+                    if (AllDbNull(reader, pkOrds[i].Length > 0 ? pkOrds[i] : ords[i])) { entities[i] = null; continue; }
                     entities[i] = fast[i] != null
                         ? fast[i]!.ReadByOrdinals(reader, ords[i])
                         : MaterializeRowSlow(Steps[i], reader, overrides[i]);

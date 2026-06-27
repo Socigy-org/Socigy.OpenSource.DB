@@ -73,7 +73,11 @@ namespace <#= Namespace #>
             if (index < 0 || reader.IsDBNull(index))
                 return default;
 
-            return (T)reader.GetValue(index);
+            // Route through ApplyDbValue so this public materializer tolerates the widening the write side does:
+            // enums read via their underlying integer, unsigned types narrowed from their signed/decimal storage,
+            // byte/sbyte from smallint, and timestamptz onto a DateTimeOffset. A raw (T)GetValue cast throws
+            // whenever the boxed storage type differs from T.
+            return global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<T>(reader.GetValue(index));
         }
 
         public T? ReadValueConvertor<T, TConvertor>(DbDataReader reader, int index)
@@ -157,6 +161,35 @@ namespace <#= Namespace #>
             try { return reader.GetOrdinal(columnName); } catch { return -1; }
         }
 
+        // Npgsql has no handler for arbitrary CLR enums, so GetFieldValue<TEnum> over an integer column throws.
+        // Route enums through their underlying integer instead. The typeof(T) comparisons are JIT-time constants,
+        // so a plain T (int/string/Guid/...) keeps the fast, allocation-free GetFieldValue<T> path with no branch.
+        private static T ReadScalar<T>(DbDataReader reader, int ordinal)
+        {
+            if (typeof(T).IsEnum)
+            {
+                // Enums are stored as their underlying integer. A ulong-backed enum is stored as numeric, which
+                // Npgsql boxes as decimal; Enum.ToObject rejects a decimal, so coerce that one storage shape to
+                // ulong first. Every other underlying comes back as a type ToObject already accepts (int/long/...).
+                object __ev = reader.GetValue(ordinal);
+                if (__ev is decimal __dec) __ev = (ulong)__dec;
+                return (T)Enum.ToObject(typeof(T), __ev);
+            }
+            // Unsigned columns are stored widened (ushort->int, uint->bigint, ulong->numeric) by the write side;
+            // Npgsql has no reader handler to read them back directly, so narrow from the signed/decimal storage.
+            // checked() so an out-of-range stored value throws (matching the slow ApplyDbValue path) instead of
+            // silently wrapping (e.g. an int 70000 read into a ushort must not become 4464).
+            if (typeof(T) == typeof(ushort)) return (T)(object)checked((ushort)reader.GetFieldValue<int>(ordinal));
+            if (typeof(T) == typeof(uint)) return (T)(object)checked((uint)reader.GetFieldValue<long>(ordinal));
+            if (typeof(T) == typeof(ulong)) return (T)(object)checked((ulong)reader.GetFieldValue<decimal>(ordinal));
+            // byte/sbyte are stored as smallint (int2); Npgsql has no int2->byte/sbyte reader handler, so
+            // GetFieldValue<byte> over int2 throws. Narrow from short like the slow ApplyDbValue and DTO paths do
+            // (without this, a non-enum byte/sbyte table column was unreadable on the default fast read path).
+            if (typeof(T) == typeof(byte)) return (T)(object)checked((byte)reader.GetFieldValue<short>(ordinal));
+            if (typeof(T) == typeof(sbyte)) return (T)(object)checked((sbyte)reader.GetFieldValue<short>(ordinal));
+            return reader.GetFieldValue<T>(ordinal);
+        }
+
         /// <summary>Resolves the column ordinals for the current result set once, for reuse across all rows.</summary>
         public static int[] GetColumnOrdinals(DbDataReader reader, Dictionary<string, string>? columnOverrides = null)
         {
@@ -197,7 +230,7 @@ namespace <#= Namespace #>
                 }
                 else if (string.IsNullOrEmpty(column.Converter))
                 {
-#>          { int __o = ordinals[<#= __ci #>]; __row.<#= column.SourceName #> = (__o < 0 || reader.IsDBNull(__o)) ? default(<#= column.TypeName #>) : (<#= column.TypeName #>)reader.GetFieldValue<<#= column.TypeName.TrimEnd('?') #>>(__o); }
+#>          { int __o = ordinals[<#= __ci #>]; __row.<#= column.SourceName #> = (__o < 0 || reader.IsDBNull(__o)) ? default(<#= column.TypeName #>) : (<#= column.TypeName #>)ReadScalar<<#= column.TypeName.TrimEnd('?') #>>(reader, __o); }
 <#
                 }
                 else
@@ -225,32 +258,32 @@ namespace <#= Namespace #>
         }
 
         /// <summary>Inserts the given instance into the database using the provided connection.</summary>
-        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection)
+        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return await new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(instance)
                 .WithConnection(connection)
-                .ExecuteAsync();
+                .ExecuteAsync(cancellationToken);
         }
 
         /// <summary>Inserts the given instance, enlisting in the provided transaction (same unit of work).</summary>
-        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection, global::System.Data.Common.DbTransaction transaction)
+        public static async Task<bool> InsertAsync(<#= ClassName #> instance, DbConnection connection, global::System.Data.Common.DbTransaction transaction, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return await new <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>(instance)
                 .WithConnection(connection)
                 .WithTransaction(transaction)
-                .ExecuteAsync();
+                .ExecuteAsync(cancellationToken);
         }
 
         /// <summary>
         /// Inserts many instances efficiently as batched multi-row INSERT commands (one command per chunk,
         /// not one per row). Returns the total number of rows inserted.
         /// </summary>
-        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.CancellationToken cancellationToken = default)
-            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellationToken);
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Linq.Expressions.Expression<global::System.Func<<#= ClassName #>, object?[]>>? keep = null, global::System.Threading.CancellationToken cancellationToken = default)
+            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, fields, keep, cancellationToken);
 
-        /// <summary>Inserts many instances via PostgreSQL binary COPY (much faster than the multi-row INSERT for large batches, and not bound by the 65535-parameter limit). COPY cannot use RETURNING, so database-generated values are not propagated back. Pass <c>excludeDbDefaults: true</c> to omit <c>[Default]</c> columns so the server default applies. Returns the number of rows written.</summary>
-        public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, bool includeAutoFields = false, bool excludeDbDefaults = false, global::System.Threading.CancellationToken cancellationToken = default)
-            => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync<<#= ClassName #>>(rows, connection, transaction, includeAutoFields, excludeDbDefaults, cancellationToken);
+        /// <summary>Inserts many instances via PostgreSQL binary COPY (much faster than the multi-row INSERT for large batches, and not bound by the 65535-parameter limit). COPY cannot use RETURNING, so database-generated values are not propagated back. Pass <c>InsertFields.ServerDefaults</c> to omit <c>[Default]</c> columns so the server default applies, or <c>keep</c> to write some of them yourself. Returns the number of rows written.</summary>
+        public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Linq.Expressions.Expression<global::System.Func<<#= ClassName #>, object?[]>>? keep = null, global::System.Threading.CancellationToken cancellationToken = default)
+            => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync<<#= ClassName #>>(rows, connection, transaction, fields, keep, cancellationToken);
 
         /// <summary>Returns a new update command builder for this instance.</summary>
         public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()
@@ -259,12 +292,12 @@ namespace <#= Namespace #>
         }
 
         /// <summary>Updates all fields of the given instance in the database.</summary>
-        public static async Task<int> UpdateAsync(<#= ClassName #> instance, DbConnection connection)
+        public static async Task<int> UpdateAsync(<#= ClassName #> instance, DbConnection connection, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return await new <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>>(instance)
                 .WithConnection(connection)
                 .WithAllFields()
-                .ExecuteAsync();
+                .ExecuteAsync(cancellationToken);
         }
 
         /// <summary>Returns a new delete command builder (no instance — use Where to filter).</summary>
@@ -296,7 +329,7 @@ namespace <#= Namespace #>
                 try
                 {
                     await using var cmd = connection.CreateCommand();
-                    cmd.CommandText = $"SELECT nextval('{_Name}')";
+                    cmd.CommandText = $"SELECT nextval('\"{_Name}\"')"; // quoted identifier, case-exact like PeekCurrentValueAsync
                     var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(cmd, "SEQUENCE", ct => cmd.ExecuteScalarAsync(ct));
                     return Convert.ToInt64(result);
                 }
@@ -350,15 +383,30 @@ namespace <#= Namespace #>
         // ---------------------------------------------------------------
 <# foreach (var fe in FlaggedEnumProperties) { #>
 
+        // The junction stores one row per flag bit, and the read side (HasFlag) rejects composite values. Reject
+        // them on the write side too, so a composite like (A | B) cannot be stored as a single unqueryable row.
+        private static void EnsureSingle<#= fe.SourceName #>Flag(<#= fe.EnumTypeFullName #> flag)
+        {
+            var __u = Convert.ToInt64(Convert.ChangeType(flag, Enum.GetUnderlyingType(typeof(<#= fe.EnumTypeFullName #>))));
+            if (__u == 0 || (__u & (__u - 1)) != 0)
+                throw new NotSupportedException(
+                    $"'{flag}' is not a single <#= fe.EnumTypeFullName #> flag. The <#= fe.JunctionTable #> junction stores one row per flag; "
+                    + "grant/revoke flags individually (or pass them as separate items to Sync<#= fe.SourceName #>sAsync). "
+                    + "Combine flags with '&&' only inside a HasFlag WHERE predicate.");
+        }
+
         /// <summary>Inserts a single <paramref name="flag"/> value into the <c><#= fe.JunctionTable #></c> junction table.</summary>
         public static async Task Insert<#= fe.SourceName #>Async(<#= ClassName #> instance, <#= fe.EnumTypeFullName #> flag, DbConnection connection)
         {
+            EnsureSingle<#= fe.SourceName #>Flag(flag);
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
             if (shouldClose) await connection.OpenAsync();
             try
             {
                 await using var cmd = connection.CreateCommand();
-                cmd.CommandText = @"INSERT INTO ""<#= fe.JunctionTable #>"" (<# Write(string.Join(", ", fe.PkMappings.Select(m => $"\"\"{m.JunctionFkCol}\"\"").Append($"\"\"{fe.EnumFkColumn}\"\""))); #>) VALUES (<# Write(string.Join(", ", Enumerable.Range(0, fe.PkMappings.Count + 1).Select(i => $"@p{i}"))); #>)";
+                // ON CONFLICT DO NOTHING makes granting an already-present flag idempotent (no 23505), so
+                // EditRole/Sync batches can't half-apply on a duplicate.
+                cmd.CommandText = @"INSERT INTO ""<#= fe.JunctionTable #>"" (<# Write(string.Join(", ", fe.PkMappings.Select(m => $"\"\"{m.JunctionFkCol}\"\"").Append($"\"\"{fe.EnumFkColumn}\"\""))); #>) VALUES (<# Write(string.Join(", ", Enumerable.Range(0, fe.PkMappings.Count + 1).Select(i => $"@p{i}"))); #>) ON CONFLICT DO NOTHING";
 <# for (int __i = 0; __i < fe.PkMappings.Count; __i++) { var __m = fe.PkMappings[__i]; #>
                 { var p = cmd.CreateParameter(); p.ParameterName = "@p<#= __i #>"; p.Value = (object?)instance.<#= __m.PropName #> ?? DBNull.Value; cmd.Parameters.Add(p); }
 <# } #>
@@ -371,6 +419,7 @@ namespace <#= Namespace #>
         /// <summary>Removes a single <paramref name="flag"/> value from the <c><#= fe.JunctionTable #></c> junction table.</summary>
         public static async Task Delete<#= fe.SourceName #>Async(<#= ClassName #> instance, <#= fe.EnumTypeFullName #> flag, DbConnection connection)
         {
+            EnsureSingle<#= fe.SourceName #>Flag(flag);
             bool shouldClose = connection.State != System.Data.ConnectionState.Open;
             if (shouldClose) await connection.OpenAsync();
             try
@@ -645,7 +694,7 @@ namespace <#= Namespace #>
             }
 
             /// <summary>Executes the query and returns results as an async stream.</summary>
-            public async IAsyncEnumerable<<#= ClassName #>> ExecuteAsync()
+            public async IAsyncEnumerable<<#= ClassName #>> ExecuteAsync([global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)
             {
                 if (_Batch != null)
                     throw new InvalidOperationException("Cannot execute command, when DbBatch was provided. Please call AddToBatchAsync()");
@@ -653,19 +702,19 @@ namespace <#= Namespace #>
                     throw new InvalidOperationException("Cannot execute command, when no DbConnection was provided. Please call WithConnection()/WithTransaction() first");
 
                 if (_Connection.State != System.Data.ConnectionState.Open)
-                    await _Connection.OpenAsync();
+                    await _Connection.OpenAsync(cancellationToken);
 
-                var command = _Connection.CreateCommand();
+                await using var command = _Connection.CreateCommand();
                 if (_Transaction != null)
                     command.Transaction = _Transaction;
 
-                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
+                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor<#= ConvertorArg() #>);
                 command.CommandText = parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
 
-                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), default, _Diagnostics);
+                await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
                 var reader = __instr.Reader;
                 int[]? __ordinals = null;
-                while (await __instr.ReadAsync())
+                while (await __instr.ReadAsync(cancellationToken))
                 {
                     __ordinals ??= <#= ClassName #>.GetColumnOrdinals(reader);
                     yield return <#= ClassName #>.ConvertFrom(reader, __ordinals);
@@ -675,25 +724,25 @@ namespace <#= Namespace #>
             /// <summary>Builds this query's SQL and appends its parameters to <paramref name="command"/> without executing.</summary>
             public string Compile(DbCommand command)
             {
-                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
+                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor<#= ConvertorArg() #>);
                 return parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
             }
 
             // ── Scalar / aggregate queries ─────────────────────────────────────────────
             // Builds "SELECT <expr> FROM \"table\" [WHERE ...]" reusing the WHERE visitor, then ExecuteScalar.
-            private async Task<object?> RunScalarAsync(string selectExpr)
+            private async Task<object?> RunScalarAsync(string selectExpr, global::System.Threading.CancellationToken cancellationToken = default)
             {
                 if (_Connection == null)
                     throw new InvalidOperationException("Cannot execute, no DbConnection was provided. Call WithConnection()/WithTransaction() first.");
                 if (_Connection.State != System.Data.ConnectionState.Open)
-                    await _Connection.OpenAsync();
+                    await _Connection.OpenAsync(cancellationToken);
                 await using var command = _Connection.CreateCommand();
                 if (_Transaction != null)
                     command.Transaction = _Transaction;
-                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor);
+                var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor<#= ConvertorArg() #>);
                 string whereSql = _WhereClause == null ? "" : parser.ProcessWhere(_WhereClause);
                 command.CommandText = "SELECT " + selectExpr + " FROM \"" + <#= ClassName #>.TableName + "\"" + whereSql;
-                return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "SELECT", ct => command.ExecuteScalarAsync(ct), default, _Diagnostics);
+                return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteScalarAsync(command, "SELECT", ct => command.ExecuteScalarAsync(ct), cancellationToken, _Diagnostics);
             }
 
             // Resolves a single-column selector (x => x.Amount, possibly boxed to object) to its DB column name.
@@ -710,41 +759,64 @@ namespace <#= Namespace #>
                 throw new NotSupportedException("Aggregate/scalar selector must be a single mapped column, e.g. x => x.Amount.");
             }
 
-            private async Task<TResult?> AggregateAsync<TResult>(string func, Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
+            private async Task<TResult?> AggregateAsync<TResult>(string func, Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default) where TResult : struct
             {
-                var __r = await RunScalarAsync(func + "(\"" + ScalarColumn(selector) + "\")");
+                var __r = await RunScalarAsync(func + "(\"" + ScalarColumn(selector) + "\")", cancellationToken);
                 if (__r == null || __r is DBNull) return null;
-                var __t = typeof(TResult);
-                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+                var __t = Nullable.GetUnderlyingType(typeof(TResult)) ?? typeof(TResult);
+                try
+                {
+                    // Route through ApplyDbValue (not raw Convert.ChangeType) so a DateTimeOffset result
+                    // (Npgsql returns timestamptz as a UTC DateTime) and the widened unsigned types convert
+                    // correctly, matching the row-materialization path. It still uses Convert.ChangeType for
+                    // numerics internally, so an over-wide SUM still surfaces OverflowException below.
+                    return global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<TResult>(__r);
+                }
+                catch (OverflowException __ex)
+                {
+                    // PostgreSQL widens aggregates: SUM of a bigint column returns numeric, AVG returns numeric,
+                    // so the result can exceed the requested TResult. Surface a clear, actionable error.
+                    throw new OverflowException(
+                        func + " returned a value that does not fit in " + __t.Name + ". PostgreSQL widens "
+                        + func + " (e.g. SUM of a bigint column returns numeric); request the aggregate as a wider "
+                        + "type such as decimal.", __ex);
+                }
             }
 
             /// <summary>Returns <c>COUNT(*)</c> over the current filter (a real SQL count, not a client-side drain).</summary>
-            public async Task<long> CountAsync()
+            public async Task<long> CountAsync(global::System.Threading.CancellationToken cancellationToken = default)
             {
-                var __r = await RunScalarAsync("COUNT(*)");
+                var __r = await RunScalarAsync("COUNT(*)", cancellationToken);
                 return __r == null || __r is DBNull ? 0L : Convert.ToInt64(__r);
             }
 
             /// <summary>Returns <c>SUM(column)</c>, or <see langword="null"/> when no rows match.</summary>
-            public Task<TResult?> SumAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
-                => AggregateAsync<TResult>("SUM", selector);
+            /// <remarks>PostgreSQL widens the result: <c>SUM</c> of an <c>int</c>/<c>bigint</c> column returns
+            /// <c>numeric</c>. Request <typeparamref name="TResult"/> as <c>decimal</c> for a <c>bigint</c> column;
+            /// a sum that exceeds the requested type throws <see cref="OverflowException"/>.</remarks>
+            public Task<TResult?> SumAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default) where TResult : struct
+                => AggregateAsync<TResult>("SUM", selector, cancellationToken);
             /// <summary>Returns <c>AVG(column)</c>, or <see langword="null"/> when no rows match.</summary>
-            public Task<TResult?> AvgAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
-                => AggregateAsync<TResult>("AVG", selector);
+            /// <remarks><c>AVG</c> returns <c>numeric</c> (or <c>double</c> for floating columns). Reading it into
+            /// a floating <typeparamref name="TResult"/> (<c>double</c>/<c>float</c>) may lose precision; use
+            /// <c>decimal</c> to preserve it.</remarks>
+            public Task<TResult?> AvgAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default) where TResult : struct
+                => AggregateAsync<TResult>("AVG", selector, cancellationToken);
             /// <summary>Returns <c>MIN(column)</c>, or <see langword="null"/> when no rows match.</summary>
-            public Task<TResult?> MinAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
-                => AggregateAsync<TResult>("MIN", selector);
+            public Task<TResult?> MinAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default) where TResult : struct
+                => AggregateAsync<TResult>("MIN", selector, cancellationToken);
             /// <summary>Returns <c>MAX(column)</c>, or <see langword="null"/> when no rows match.</summary>
-            public Task<TResult?> MaxAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector) where TResult : struct
-                => AggregateAsync<TResult>("MAX", selector);
+            public Task<TResult?> MaxAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default) where TResult : struct
+                => AggregateAsync<TResult>("MAX", selector, cancellationToken);
 
             /// <summary>Returns a single column's value from the first matching row (or <c>default</c> if none).</summary>
-            public async Task<TResult?> ScalarAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector)
+            public async Task<TResult?> ScalarAsync<TResult>(Expression<Func<<#= ClassName #>, object?>> selector, global::System.Threading.CancellationToken cancellationToken = default)
             {
-                var __r = await RunScalarAsync("\"" + ScalarColumn(selector) + "\"");
+                var __r = await RunScalarAsync("\"" + ScalarColumn(selector) + "\"", cancellationToken);
                 if (__r == null || __r is DBNull) return default;
-                var __t = typeof(TResult);
-                return (TResult)Convert.ChangeType(__r, Nullable.GetUnderlyingType(__t) ?? __t);
+                // ApplyDbValue handles the DateTimeOffset (timestamptz -> UTC DateTime) and widened-unsigned
+                // cases that raw Convert.ChangeType throws on, consistent with the row-materialization path.
+                return global::Socigy.OpenSource.DB.Core.CommandBuilders.ColumnInfo.ApplyDbValue<TResult>(__r);
             }
 
             // ── Set-operation factory methods ─────────────────────────────────────────
@@ -810,6 +882,16 @@ namespace <#= Namespace #>
     // for the common (default-profile) case so the generated call is unchanged.
     string ProfileArgLiteral(string? profile)
         => string.IsNullOrEmpty(profile) ? "" : ", \"" + profile.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    // True when at least one column carries a [ValueConvertor] (and is not JSON). Used to decide whether the
+    // parser needs the per-column convertor lookup at all — tables without one pass null and pay zero overhead.
+    bool HasConvertorColumns()
+        => Columns.Any(c => !c.IsJsonColumn && !string.IsNullOrEmpty(c.Converter));
+
+    // The optional 6th argument to the SqlQueryBuilderExpressionParser constructor: the per-column convertor
+    // lookup, but only for tables that actually have a convertor column (else empty -> the ctor default null).
+    string ConvertorArg()
+        => HasConvertorColumns() ? ", " + ClassName + ".GetColumnConvertor" : "";
 
     public IList<FlaggedEnumPropertyInfo> FlaggedEnumProperties { get; set; } = new List<FlaggedEnumPropertyInfo>();
 

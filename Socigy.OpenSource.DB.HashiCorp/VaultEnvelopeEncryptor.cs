@@ -51,7 +51,13 @@ namespace Socigy.OpenSource.DB.HashiCorp
 
                 var previous = _keyring;
                 _keyring = new KeyringFieldEncryptor(deks, keyring.Current);
-                previous?.Dispose();
+                // Do NOT dispose the previous keyring synchronously: a concurrent Encrypt/Decrypt may have already
+                // captured it (via the volatile field) and be mid-operation, and disposal zeroes its key/MAC
+                // arrays — which would make that in-flight call fail the MAC check (a CryptographicException on
+                // perfectly valid data) or decrypt garbage. Defer disposal past a grace window so in-flight
+                // operations (which finish in milliseconds) drain first, while still zeroing the old keys.
+                if (previous != null)
+                    _ = DisposeAfterGraceAsync(previous);
 
                 _logger?.LogInformation(
                     "Loaded envelope keyring from Vault KV '{Mount}/{Path}' ({Count} key version(s), current={Current}).",
@@ -63,6 +69,16 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 _logger?.LogError(ex, "Failed to load envelope keyring from Vault KV '{Mount}/{Path}'", _options.KvMountPoint, _options.KeyringSecretPath);
                 throw;
             }
+        }
+
+        // Disposes a rotated-out keyring after a grace window, so any Encrypt/Decrypt that captured it before the
+        // swap has completed (such calls take milliseconds). Disposal only zeroes managed key/MAC byte arrays, so
+        // deferring it never leaks an unmanaged resource; the keyring is otherwise GC-eligible.
+        private static async Task DisposeAfterGraceAsync(IDisposable keyring)
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(30)).ConfigureAwait(false); }
+            catch { /* ignore */ }
+            try { keyring.Dispose(); } catch { /* idempotent; best-effort key zeroing */ }
         }
 
         /// <summary>
@@ -98,8 +114,26 @@ namespace Socigy.OpenSource.DB.HashiCorp
         private async Task<VaultKeyring> LoadOrBootstrapKeyringAsync(CancellationToken cancellationToken)
         {
             var secret = await TryReadKeyringSecretAsync(cancellationToken).ConfigureAwait(false);
-            if (secret != null && secret.TryGetValue(_options.KeyringField, out var raw) && raw != null && !string.IsNullOrEmpty(raw.ToString()))
-                return VaultKeyring.Parse(raw.ToString()!);
+            switch (ClassifyKeyringRead(secret, _options.KeyringField, out var raw))
+            {
+                case KeyringReadState.Present:
+                    return VaultKeyring.Parse(raw!);
+
+                case KeyringReadState.ExistsButFieldEmpty:
+                    // The secret exists but the configured keyring field is missing/empty. This is NOT a first run
+                    // (a 404 is the only first-run signal, handled in TryReadKeyringSecretAsync) — overwriting it
+                    // would discard whatever is there and, if a keyring was previously stored under another field
+                    // name or partially written, make every already-encrypted row permanently undecryptable. Fail
+                    // loud instead of bootstrapping over it.
+                    throw new InvalidOperationException(
+                        $"Vault secret at '{_options.KeyringSecretPath}' exists but its keyring field " +
+                        $"'{_options.KeyringField}' is empty or missing. Refusing to overwrite it with a fresh " +
+                        "keyring (that would discard any existing wrapped DEK versions and make encrypted rows " +
+                        "undecryptable). Verify the KeyringField configuration matches how the keyring was written.");
+
+                default: // KeyringReadState.FirstRun
+                    break;
+            }
 
             // First run: mint the initial DEK and persist a one-entry keyring.
             _logger?.LogInformation("No envelope keyring at '{Path}'; bootstrapping a new one.", _options.KeyringSecretPath);
@@ -108,6 +142,26 @@ namespace Socigy.OpenSource.DB.HashiCorp
             keyring.Keys[1] = wrapped;
             await WriteKeyringAsync(keyring, cancellationToken).ConfigureAwait(false);
             return keyring;
+        }
+
+        internal enum KeyringReadState { FirstRun, Present, ExistsButFieldEmpty }
+
+        /// <summary>
+        /// Classifies a keyring secret read. <see cref="KeyringReadState.FirstRun"/> (null secret, i.e. a genuine
+        /// 404) is the ONLY state that may bootstrap-and-overwrite. A secret that exists but whose keyring field is
+        /// missing/empty must NOT be overwritten (it would discard existing wrapped DEKs).
+        /// </summary>
+        internal static KeyringReadState ClassifyKeyringRead(IDictionary<string, object>? secret, string field, out string? raw)
+        {
+            raw = null;
+            if (secret == null)
+                return KeyringReadState.FirstRun;
+            if (secret.TryGetValue(field, out var value) && value != null && !string.IsNullOrEmpty(value.ToString()))
+            {
+                raw = value.ToString();
+                return KeyringReadState.Present;
+            }
+            return KeyringReadState.ExistsButFieldEmpty;
         }
 
         private async Task<IDictionary<string, object>?> TryReadKeyringSecretAsync(CancellationToken cancellationToken)
@@ -119,12 +173,25 @@ namespace Socigy.OpenSource.DB.HashiCorp
                     .ConfigureAwait(false);
                 return secret?.Data?.Data;
             }
-            catch (VaultSharp.Core.VaultApiException)
+            catch (VaultSharp.Core.VaultApiException ex) when (IsSecretNotFound(ex))
             {
-                // Most commonly a 404 because the keyring secret doesn't exist yet -> bootstrap a new one.
-                // A genuine auth/permission problem will resurface on the subsequent bootstrap write.
+                // ONLY a real 404 (the secret genuinely doesn't exist yet) is treated as "first run" -> bootstrap.
+                // Any other error (a transient 503 while Vault is sealed/standby, a 429, a network timeout, or a
+                // KV policy that grants write but not read) must propagate: swallowing it returned null, and the
+                // bootstrap path then OVERWROTE the existing keyring with a fresh current=1 DEK — discarding every
+                // previously-wrapped DEK version and making all already-encrypted rows permanently undecryptable.
                 return null;
             }
+        }
+
+        /// <summary>
+        /// A keyring read may be treated as "first run" (-> bootstrap a new keyring) ONLY when Vault reports the
+        /// secret genuinely does not exist (404). Any other failure must propagate so a transient/permission error
+        /// never causes the existing keyring to be overwritten and the data to become undecryptable.
+        /// </summary>
+        internal static bool IsSecretNotFound(VaultSharp.Core.VaultApiException ex)
+        {
+            return ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound;
         }
 
         private Task WriteKeyringAsync(VaultKeyring keyring, CancellationToken cancellationToken)

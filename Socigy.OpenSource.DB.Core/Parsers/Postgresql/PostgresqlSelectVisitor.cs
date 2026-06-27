@@ -44,7 +44,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (node.Expression == _rowParam)
             {
-                _Sql.Append(_GetColumnName(node.Member.Name));
+                _Sql.Append('"').Append(_GetColumnName(node.Member.Name)).Append('"');
                 return node;
             }
 
@@ -130,6 +130,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                         Visit(node.Arguments[0]);
                         _Sql.Append(" END"); // Close the CASE block here usually
                         break;
+                    case "End":
+                        // Explicit terminator for an ELSE-less CASE (valid SQL: yields NULL when no WHEN matches).
+                        // Without this case the CASE block was never closed, producing malformed SQL. If the inner
+                        // call was Else(), it already appended END, so don't double-close.
+                        if (!(node.Object is MethodCallExpression __innerEnd && __innerEnd.Method.Name == "Else"))
+                            _Sql.Append(" END");
+                        break;
                     case "As":
                         // "As" is likely called on the result of Else, or checking a fluent terminator
                         if (TryEvaluate(node.Arguments[0], out var alias))
@@ -139,11 +146,40 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 return node;
             }
 
-            return base.VisitMethodCall(node);
+            // A param-independent method call (a captured helper) folds to a single value.
+            if (TryEvaluate(node, out var evaluated))
+            {
+                AddParameter(evaluated);
+                return node;
+            }
+
+            // A column-dependent, unsupported method call (e.g. `x.Created.AddDays(1)`) would otherwise fall to
+            // base.VisitMethodCall, which emits only the bare column and silently drops the call — a wrong
+            // projection. Fail fast like VisitBinary and the WHERE/ORDER BY visitors do.
+            throw new NotSupportedException(
+                $"Unsupported method call '{node.Method.Name}' in SQL SELECT translation: {node}");
         }
 
         protected override Expression VisitBinary(BinaryExpression node)
         {
+            // char comparison (e.g. a projected `Case().When(x.Initial == 'A')`): C# promotes char==char to
+            // int==int, so without this the int code point (65) binds against the character(1) column
+            // ("character = integer"). Bind the value back as a 1-char string. Mirrors the WHERE visitor.
+            if (IsCharComparisonOperator(node.NodeType))
+            {
+                bool leftChar = IsCharPromotion(node.Left);
+                bool rightChar = IsCharPromotion(node.Right);
+                if (leftChar ^ rightChar)
+                {
+                    _Sql.Append("(");
+                    EmitCharComparisonOperand(node.Left, leftChar);
+                    _Sql.Append(CharComparisonOperatorSql(node.NodeType));
+                    EmitCharComparisonOperand(node.Right, rightChar);
+                    _Sql.Append(")");
+                    return node;
+                }
+            }
+
             _Sql.Append("(");
             Visit(node.Left);
             switch (node.NodeType)
@@ -165,37 +201,87 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return node;
         }
 
+        private static bool IsCharPromotion(Expression e) =>
+            e is UnaryExpression u && (u.NodeType == ExpressionType.Convert || u.NodeType == ExpressionType.ConvertChecked)
+                && u.Operand.Type == typeof(char);
+
+        private static bool IsCharComparisonOperator(ExpressionType t) =>
+            t is ExpressionType.Equal or ExpressionType.NotEqual or ExpressionType.GreaterThan
+              or ExpressionType.GreaterThanOrEqual or ExpressionType.LessThan or ExpressionType.LessThanOrEqual;
+
+        private static string CharComparisonOperatorSql(ExpressionType t) => t switch
+        {
+            ExpressionType.Equal => " = ",
+            ExpressionType.NotEqual => " != ",
+            ExpressionType.GreaterThan => " > ",
+            ExpressionType.GreaterThanOrEqual => " >= ",
+            ExpressionType.LessThan => " < ",
+            ExpressionType.LessThanOrEqual => " <= ",
+            _ => " = "
+        };
+
+        private void EmitCharComparisonOperand(Expression side, bool isCharColumn)
+        {
+            if (isCharColumn) { Visit(((UnaryExpression)side).Operand); return; }
+            if (TryEvaluate(side, out var v) && v != null)
+                AddParameter(((char)System.Convert.ToInt32(v)).ToString());
+            else
+                Visit(side);
+        }
+
         protected override Expression VisitConstant(ConstantExpression node)
         {
             AddParameter(node.Value);
             return node;
         }
 
+        // An inline constructor in a projection (e.g. `new object[] { x.Id, new DateOnly(2020,1,1) }`, or a
+        // `new Guid("...")` in a CASE Then/Else) must fold to a SINGLE parameter. Without this, the base visitor
+        // recurses into the constructor arguments, emitting one @p per arg with no separator ("@p0@p1@p2",
+        // invalid SQL) or binding a single-arg ctor's string instead of the Guid. Mirrors the WHERE visitor.
+        protected override Expression VisitNew(NewExpression node)
+        {
+            if (TryEvaluate(node, out var value)) { AddParameter(value); return node; }
+            throw new NotSupportedException(
+                $"Unsupported constructor '{node.Type.Name}' in SQL SELECT translation: {node}");
+        }
+
         private Expression HandleStringMethods(MethodCallExpression node)
         {
-            Visit(node.Object);
+            string name = node.Method.Name;
 
-            var rawValue = Evaluate(node.Arguments[0])?.ToString() ?? "";
-
-            // Pre-format the string for LIKE and Parameterize it
-            // This is cleaner than concatenating SQL string with ||
-            if (node.Method.Name == "Contains")
+            // Bare ToLower()/ToUpper(): wrap the column, matching the WHERE visitor. Previously these (and any
+            // other unrecognized string method) fell through and emitted just the bare column, silently dropping
+            // the transform (e.g. a case-insensitive compare became case-sensitive).
+            if (name == "ToLower" || name == "ToUpper")
             {
-                _Sql.Append(" LIKE ");
-                AddParameter($"%{rawValue}%");
-            }
-            else if (node.Method.Name == "StartsWith")
-            {
-                _Sql.Append(" LIKE ");
-                AddParameter($"{rawValue}%");
-            }
-            else if (node.Method.Name == "EndsWith")
-            {
-                _Sql.Append(" LIKE ");
-                AddParameter($"%{rawValue}");
+                _Sql.Append(name == "ToLower" ? "LOWER(" : "UPPER(");
+                Visit(node.Object);
+                _Sql.Append(")");
+                return node;
             }
 
-            return node;
+            if (name == "Contains" || name == "StartsWith" || name == "EndsWith")
+            {
+                // A null pattern would become LIKE '%%' and match every row — fail fast, matching the WHERE visitor.
+                var arg = Evaluate(node.Arguments[0]);
+                if (arg == null)
+                    throw new ArgumentNullException("value",
+                        $"A null argument to string.{name} cannot be translated to SQL — it would match every row. " +
+                        "Pass a non-null value or use an explicit IS NULL predicate.");
+
+                Visit(node.Object);
+
+                // Escape LIKE wildcards in the literal so a value containing % or _ matches literally, matching
+                // the WHERE visitor (otherwise e.g. Contains("50%") would match anything).
+                var rawValue = global::Socigy.OpenSource.DB.Core.Parsers.WhereParameter.EscapeLike(arg.ToString() ?? "");
+                _Sql.Append(" LIKE ");
+                AddParameter(name == "Contains" ? $"%{rawValue}%" : name == "StartsWith" ? $"{rawValue}%" : $"%{rawValue}");
+                _Sql.Append(" ESCAPE '\\'");
+                return node;
+            }
+
+            throw new NotSupportedException($"Unsupported string method '{name}' in SQL SELECT translation: {node}");
         }
 
         private static object? NormalizeParameterValue(object? value)

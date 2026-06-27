@@ -20,317 +20,348 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
             this.GenerationEnvironment = null;
             
             #line 6 "PostgresqlInsertCommandBuilder.tt"
-            this.Write("#pragma warning disable\r\nusing System;\r\nusing System.Text;\r\nusing System.Data.Com" +
-                    "mon;\r\nusing System.Threading.Tasks;\r\nusing System.Collections.Generic;\r\nusing Sy" +
-                    "stem.Linq.Expressions;\r\nusing Socigy.OpenSource.DB.Core;\r\nusing Socigy.OpenSourc" +
-                    "e.DB.Core.CommandBuilders;\r\nusing Socigy.OpenSource.DB.Core.Interfaces;\r\nusing S" +
-                    "ocigy.OpenSource.DB.Core.Delegates;\r\nusing Socigy.OpenSource.DB.Core.Parsers.Pos" +
-                    "tgresql;\r\nusing Npgsql;\r\nusing NpgsqlTypes;\r\n\r\n#nullable enable\r\n\r\nnamespace Soc" +
-                    "igy.OpenSource.DB.CommandBuilders.Postgresql\r\n{\r\n    public class PostgresqlInse" +
-                    "rtCommandBuilder<T> : SqlCommandBuilder<PostgresqlInsertCommandBuilder<T>>\r\n    " +
-                    "    where T : IDbTable\r\n    {\r\n#if NET6_0_OR_GREATER\r\n        protected System.D" +
-                    "ata.Common.DbBatch? _Batch;\r\n\r\n        /// <summary>\r\n        /// Specifies the " +
-                    "batch to use for subsequent database operations.\r\n        /// </summary>\r\n      " +
-                    "  /// <remarks>If <paramref name=\"batch\"/> is <see langword=\"null\"/>, the method" +
-                    " attempts to create a new\r\n        /// batch from the current connection or tran" +
-                    "saction. The batch is used to group multiple database commands for\r\n        /// " +
-                    "execution as a single unit.</remarks>\r\n        /// <param name=\"batch\">The <see " +
-                    "cref=\"DbBatch\"/> instance to associate with the operation, or <see langword=\"nul" +
-                    "l\"/> to create a new\r\n        /// batch from the current connection or transacti" +
-                    "on.</param>\r\n        /// <returns>The current instance with the specified batch " +
-                    "applied.</returns>\r\n        /// <exception cref=\"ArgumentNullException\">Thrown i" +
-                    "f <paramref name=\"batch\"/> is <see langword=\"null\"/> and neither a connection no" +
-                    "r a transaction is\r\n        /// specified.</exception>\r\n        /// <exception c" +
-                    "ref=\"InvalidOperationException\">Thrown if <paramref name=\"batch\"/> is <see langw" +
-                    "ord=\"null\"/> and the provided transaction does not have an\r\n        /// associat" +
-                    "ed <see cref=\"DbConnection\"/>.</exception>\r\n        public PostgresqlInsertComma" +
-                    "ndBuilder<T> WithBatch(DbBatch? batch)\r\n        {\r\n            if (batch == null" +
-                    ")\r\n            {\r\n                if (_Connection == null && _Transaction == nul" +
-                    "l)\r\n                    throw new ArgumentNullException(nameof(batch), \"If batch" +
-                    " is null, either connection or transaction must be specified!\");\r\n\r\n            " +
-                    "    _Batch = _Connection?.CreateBatch() ?? _Transaction!.Connection?.CreateBatch" +
-                    "() ?? throw new InvalidOperationException(\"The provided transaction has no DbCon" +
-                    "nection from which a DbBatch could be created\");\r\n                _Batch.Transac" +
-                    "tion = _Transaction;\r\n            }\r\n            else\r\n                _Batch = " +
-                    "batch;\r\n\r\n            return this;\r\n        }\r\n\r\n        /// <summary>\r\n        " +
-                    "/// Adds a new command to the current batch operation.\r\n        /// </summary>\r\n" +
-                    "        /// <remarks>This method should be called only after a batch has been in" +
-                    "itialized using\r\n        /// WithBatch(). Attempting to add to a batch without i" +
-                    "nitialization will result in an exception.</remarks>\r\n        /// <exception cre" +
-                    "f=\"InvalidOperationException\">Thrown if no batch has been provided. Call WithBat" +
-                    "ch() before invoking this method.</exception>\r\n        public void AddToBatch()\r" +
-                    "\n        {\r\n            if (_Batch == null)\r\n                throw new InvalidOp" +
-                    "erationException(\"Cannot add to batch when no DbBatch was provided. Please call " +
-                    "WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.CreateBatchComman" +
-                    "d();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n        }\r\n\r\n        " +
-                    "/// <summary>\r\n        /// Adds a new command to the current database batch asyn" +
-                    "chronously.\r\n        /// </summary>\r\n        /// <remarks>This method should be " +
-                    "called only after a batch has been initialized using\r\n        /// WithBatch(). I" +
-                    "t is typically used to accumulate multiple commands for execution as a single ba" +
-                    "tch\r\n        /// operation.</remarks>\r\n        /// <returns>A task that represen" +
-                    "ts the asynchronous operation.</returns>\r\n        /// <exception cref=\"InvalidOp" +
-                    "erationException\">Thrown if no database batch has been provided. Call WithBatch(" +
-                    ") before invoking this method.</exception>\r\n        public async Task AddToBatch" +
-                    "Async()\r\n        {\r\n            if (_Batch == null)\r\n                throw new I" +
+            this.Write("#pragma warning disable\nusing System;\nusing System.Text;\nusing System.Data.Common" +
+                    ";\nusing System.Threading.Tasks;\nusing System.Collections.Generic;\nusing System.L" +
+                    "inq.Expressions;\nusing Socigy.OpenSource.DB.Core;\nusing Socigy.OpenSource.DB.Cor" +
+                    "e.CommandBuilders;\nusing Socigy.OpenSource.DB.Core.Interfaces;\nusing Socigy.Open" +
+                    "Source.DB.Core.Delegates;\nusing Socigy.OpenSource.DB.Core.Parsers.Postgresql;\nus" +
+                    "ing Npgsql;\nusing NpgsqlTypes;\n\n#nullable enable\n\nnamespace Socigy.OpenSource.DB" +
+                    ".CommandBuilders.Postgresql\n{\n    public class PostgresqlInsertCommandBuilder<T>" +
+                    " : SqlCommandBuilder<PostgresqlInsertCommandBuilder<T>>\n        where T : IDbTab" +
+                    "le\n    {\n#if NET6_0_OR_GREATER\n        protected System.Data.Common.DbBatch? _Ba" +
+                    "tch;\n\n        /// <summary>\n        /// Specifies the batch to use for subsequen" +
+                    "t database operations.\n        /// </summary>\n        /// <remarks>If <paramref " +
+                    "name=\"batch\"/> is <see langword=\"null\"/>, the method attempts to create a new\n  " +
+                    "      /// batch from the current connection or transaction. The batch is used to" +
+                    " group multiple database commands for\n        /// execution as a single unit.</r" +
+                    "emarks>\n        /// <param name=\"batch\">The <see cref=\"DbBatch\"/> instance to as" +
+                    "sociate with the operation, or <see langword=\"null\"/> to create a new\n        //" +
+                    "/ batch from the current connection or transaction.</param>\n        /// <returns" +
+                    ">The current instance with the specified batch applied.</returns>\n        /// <e" +
+                    "xception cref=\"ArgumentNullException\">Thrown if <paramref name=\"batch\"/> is <see" +
+                    " langword=\"null\"/> and neither a connection nor a transaction is\n        /// spe" +
+                    "cified.</exception>\n        /// <exception cref=\"InvalidOperationException\">Thro" +
+                    "wn if <paramref name=\"batch\"/> is <see langword=\"null\"/> and the provided transa" +
+                    "ction does not have an\n        /// associated <see cref=\"DbConnection\"/>.</excep" +
+                    "tion>\n        public PostgresqlInsertCommandBuilder<T> WithBatch(DbBatch? batch)" +
+                    "\n        {\n            if (batch == null)\n            {\n                if (_Con" +
+                    "nection == null && _Transaction == null)\n                    throw new ArgumentN" +
+                    "ullException(nameof(batch), \"If batch is null, either connection or transaction " +
+                    "must be specified!\");\n\n                _Batch = _Connection?.CreateBatch() ?? _T" +
+                    "ransaction!.Connection?.CreateBatch() ?? throw new InvalidOperationException(\"Th" +
+                    "e provided transaction has no DbConnection from which a DbBatch could be created" +
+                    "\");\n                _Batch.Transaction = _Transaction;\n            }\n           " +
+                    " else\n                _Batch = batch;\n\n            return this;\n        }\n\n     " +
+                    "   /// <summary>\n        /// Adds a new command to the current batch operation.\n" +
+                    "        /// </summary>\n        /// <remarks>This method should be called only af" +
+                    "ter a batch has been initialized using\n        /// WithBatch(). Attempting to ad" +
+                    "d to a batch without initialization will result in an exception.</remarks>\n     " +
+                    "   /// <exception cref=\"InvalidOperationException\">Thrown if no batch has been p" +
+                    "rovided. Call WithBatch() before invoking this method.</exception>\n        publi" +
+                    "c void AddToBatch()\n        {\n            if (_Batch == null)\n                th" +
+                    "row new InvalidOperationException(\"Cannot add to batch when no DbBatch was provi" +
+                    "ded. Please call WithBatch() first.\");\n\n            var batchCommand = _Batch.Cr" +
+                    "eateBatchCommand();\n            _Batch.BatchCommands.Add(batchCommand);\n        " +
+                    "}\n\n        /// <summary>\n        /// Adds a new command to the current database " +
+                    "batch asynchronously.\n        /// </summary>\n        /// <remarks>This method sh" +
+                    "ould be called only after a batch has been initialized using\n        /// WithBat" +
+                    "ch(). It is typically used to accumulate multiple commands for execution as a si" +
+                    "ngle batch\n        /// operation.</remarks>\n        /// <returns>A task that rep" +
+                    "resents the asynchronous operation.</returns>\n        /// <exception cref=\"Inval" +
+                    "idOperationException\">Thrown if no database batch has been provided. Call WithBa" +
+                    "tch() before invoking this method.</exception>\n        public async Task AddToBa" +
+                    "tchAsync()\n        {\n            if (_Batch == null)\n                throw new I" +
                     "nvalidOperationException(\"Cannot add to batch when no DbBatch was provided. Plea" +
-                    "se call WithBatch() first.\");\r\n\r\n            var batchCommand = _Batch.CreateBat" +
-                    "chCommand();\r\n            _Batch.BatchCommands.Add(batchCommand);\r\n        }\r\n#e" +
-                    "ndif\r\n\r\n        private readonly T _TableRow;\r\n        private Dictionary<string" +
-                    ", ColumnInfo>? _ColumnInfo;\r\n\r\n        private HashSet<string>? _SelectedDbColum" +
-                    "ns;\r\n        private HashSet<string>? _ExcludedDbColumns;\r\n        private HashS" +
-                    "et<string>? _IncludedAutoFields;\r\n        private bool _ForceAllFields;\r\n       " +
-                    " private bool _PropagateValues;\r\n        private bool _ExcludeAutoFields;\r\n\r\n   " +
-                    "     public PostgresqlInsertCommandBuilder(T rowInstance, Dictionary<string, Col" +
-                    "umnInfo>? columnInfo = null)\r\n        {\r\n            _TableRow = rowInstance;\r\n " +
-                    "           _ColumnInfo = columnInfo;\r\n        }\r\n\r\n        /// <summary>\r\n      " +
-                    "  /// Sets the column metadata to be used for building the PostgreSQL insert com" +
-                    "mand.\r\n        /// </summary>\r\n        /// <param name=\"columnInfo\">A dictionary" +
-                    " mapping column names to their associated metadata. Cannot be null.</param>\r\n   " +
-                    "     /// <returns>The current instance of <see cref=\"PostgresqlInsertCommandBuil" +
-                    "der{T}\"/> with updated column information.</returns>\r\n        public PostgresqlI" +
-                    "nsertCommandBuilder<T> WithColumnInfo(Dictionary<string, ColumnInfo> columnInfo)" +
-                    "\r\n        {\r\n            _ColumnInfo = columnInfo;\r\n            return this;\r\n  " +
-                    "      }\r\n\r\n        /// <summary>\r\n        /// Forces ALL columns (including auto" +
-                    "-increment ones) to be included in the INSERT statement.\r\n        /// </summary>" +
-                    "\r\n        public PostgresqlInsertCommandBuilder<T> WithAllFields()\r\n        {\r\n " +
-                    "           if (_SelectedDbColumns != null)\r\n                throw new InvalidOpe" +
-                    "rationException(\"Cannot combine WithAllFields() with WithFields().\");\r\n         " +
-                    "   if (_ExcludeAutoFields)\r\n                throw new InvalidOperationException(" +
-                    "\"Cannot combine WithAllFields() with ExcludeAutoFields().\");\r\n\r\n            _For" +
-                    "ceAllFields = true;\r\n            return this;\r\n        }\r\n\r\n        /// <summary" +
-                    ">\r\n        /// Specifies which fields to include in the INSERT statement.\r\n     " +
-                    "   /// Auto-increment columns not listed here are excluded.\r\n        /// </summa" +
-                    "ry>\r\n        public PostgresqlInsertCommandBuilder<T> WithFields(Expression<Func" +
-                    "<T, object?[]>> select)\r\n        {\r\n            if (_ForceAllFields)\r\n          " +
-                    "      throw new InvalidOperationException(\"Cannot combine WithFields() with With" +
-                    "AllFields().\");\r\n            if (_ExcludedDbColumns != null)\r\n                th" +
-                    "row new InvalidOperationException(\"Cannot combine WithFields() with ExcludeField" +
-                    "s().\");\r\n\r\n            _SelectedDbColumns = ExtractDbColumnNames(select);\r\n     " +
-                    "       return this;\r\n        }\r\n\r\n        /// <summary>\r\n        /// Excludes th" +
-                    "e specified fields from the INSERT statement.\r\n        /// Auto-increment column" +
-                    "s are also excluded unless <see cref=\"WithAllFields\"/> is called.\r\n        /// <" +
-                    "/summary>\r\n        public PostgresqlInsertCommandBuilder<T> ExcludeFields(Expres" +
-                    "sion<Func<T, object?[]>> except)\r\n        {\r\n            if (_SelectedDbColumns " +
-                    "!= null)\r\n                throw new InvalidOperationException(\"Cannot combine Ex" +
-                    "cludeFields() with WithFields().\");\r\n\r\n            _ExcludedDbColumns = ExtractD" +
-                    "bColumnNames(except);\r\n            return this;\r\n        }\r\n\r\n        /// <summa" +
-                    "ry>\r\n        /// After INSERT, reads back all DB-generated values (auto-incremen" +
-                    "t, defaults) and writes them\r\n        /// back to the instance\'s properties via " +
-                    "<c>RETURNING *</c>.\r\n        /// Combine with <see cref=\"ExcludeAutoFields\"/> to" +
-                    " let the DB generate those values.\r\n        /// </summary>\r\n        public Postg" +
-                    "resqlInsertCommandBuilder<T> WithValuePropagation()\r\n        {\r\n            _Pro" +
-                    "pagateValues = true;\r\n            return this;\r\n        }\r\n\r\n        /// <summar" +
-                    "y>\r\n        /// Excludes auto-increment columns and DB-default columns from the " +
-                    "INSERT statement so the\r\n        /// database can generate or apply their values" +
-                    ".\r\n        /// Combine with <see cref=\"WithValuePropagation\"/> to read those val" +
-                    "ues back after insert.\r\n        /// </summary>\r\n        public PostgresqlInsertC" +
-                    "ommandBuilder<T> ExcludeAutoFields()\r\n        {\r\n            if (_ForceAllFields" +
-                    ")\r\n                throw new InvalidOperationException(\"Cannot combine ExcludeAu" +
-                    "toFields() with WithAllFields().\");\r\n            if (_IncludedAutoFields != null" +
-                    ")\r\n                throw new InvalidOperationException(\"ExcludeAutoFields(includ" +
-                    "e) has already been called. Use one form or the other.\");\r\n            _ExcludeA" +
-                    "utoFields = true;\r\n            return this;\r\n        }\r\n\r\n        /// <summary>\r" +
-                    "\n        /// Excludes auto-increment and DB-default columns from the INSERT stat" +
-                    "ement, but keeps the\r\n        /// explicitly listed columns so you can supply yo" +
-                    "ur own values for them.\r\n        /// Combine with <see cref=\"WithValuePropagatio" +
-                    "n\"/> to read remaining DB-generated values back after insert.\r\n        /// </sum" +
-                    "mary>\r\n        /// <param name=\"include\">Selector returning the auto/default col" +
-                    "umns to still include in the INSERT.</param>\r\n        public PostgresqlInsertCom" +
-                    "mandBuilder<T> ExcludeAutoFields(Expression<Func<T, object?[]>> include)\r\n      " +
-                    "  {\r\n            if (_ForceAllFields)\r\n                throw new InvalidOperatio" +
-                    "nException(\"Cannot combine ExcludeAutoFields() with WithAllFields().\");\r\n       " +
-                    "     if (_ExcludeAutoFields && _IncludedAutoFields == null)\r\n                thr" +
-                    "ow new InvalidOperationException(\"ExcludeAutoFields() has already been called. U" +
-                    "se one form or the other.\");\r\n            _ExcludeAutoFields = true;\r\n          " +
-                    "  _IncludedAutoFields = ExtractDbColumnNames(include);\r\n            return this;" +
-                    "\r\n        }\r\n\r\n        private HashSet<string> ExtractDbColumnNames(Expression<F" +
-                    "unc<T, object?[]>> expr)\r\n        {\r\n            var visitor = new PostgresqlUpd" +
-                    "ateVisitor(\r\n                expr.Parameters[0],\r\n                _TableRow.GetD" +
-                    "bColumnName!,\r\n                null!);\r\n\r\n            var memberNames = visitor." +
-                    "ExtractColumnNames(expr);\r\n            var result = new HashSet<string>(StringCo" +
-                    "mparer.Ordinal);\r\n            foreach (var name in memberNames)\r\n            {\r\n" +
-                    "                var dbName = _TableRow.GetDbColumnName(name);\r\n                i" +
-                    "f (!string.IsNullOrEmpty(dbName))\r\n                    result.Add(dbName!);\r\n   " +
-                    "         }\r\n            return result;\r\n        }\r\n\r\n        private bool Should" +
-                    "IncludeColumn(string dbColName, ColumnInfo info)\r\n        {\r\n            if (_Se" +
-                    "lectedDbColumns != null)\r\n                return _SelectedDbColumns.Contains(dbC" +
-                    "olName);\r\n\r\n            if (_ExcludedDbColumns != null && _ExcludedDbColumns.Con" +
-                    "tains(dbColName))\r\n                return false;\r\n\r\n            if (info.IsAutoI" +
-                    "ncrement && !_ForceAllFields)\r\n            {\r\n                if (_IncludedAutoF" +
-                    "ields == null || !_IncludedAutoFields.Contains(dbColName))\r\n                    " +
-                    "return false;\r\n            }\r\n\r\n            if (_ExcludeAutoFields && info.HasDb" +
-                    "Default)\r\n            {\r\n                if (_IncludedAutoFields == null || !_In" +
-                    "cludedAutoFields.Contains(dbColName))\r\n                    return false;\r\n      " +
-                    "      }\r\n\r\n            return true;\r\n        }\r\n\r\n        public async Task<TRet" +
-                    "urning?> ExecuteReturningAsync<TReturning>(string returningColumn)\r\n        {\r\n " +
-                    "           if (_Connection == null)\r\n                throw new InvalidOperationE" +
-                    "xception(\"No DbConnection provided.\");\r\n\r\n            if (_Connection.State != S" +
-                    "ystem.Data.ConnectionState.Open)\r\n                await _Connection.OpenAsync();" +
-                    "\r\n\r\n            await using var command = _Connection.CreateCommand() as NpgsqlC" +
-                    "ommand;\r\n            if (command == null) return default;\r\n\r\n            if (_Tr" +
-                    "ansaction != null)\r\n                command.Transaction = _Transaction as Npgsql" +
-                    "Transaction;\r\n\r\n            _ColumnInfo ??= _TableRow.GetColumns();\r\n\r\n         " +
-                    "   var columnNames = new List<string>();\r\n            var paramNames = new List<" +
-                    "string>();\r\n            BuildParameters(command, columnNames, paramNames);\r\n\r\n  " +
-                    "          command.CommandText = $@\"\r\n        INSERT INTO \"\"{_TableRow.GetTableNa" +
-                    "me()}\"\"\r\n        ({string.Join(\", \", columnNames)})\r\n        VALUES\r\n        ({s" +
-                    "tring.Join(\", \", paramNames)})\r\n        RETURNING \"\"{returningColumn}\"\"\";\r\n\r\n   " +
-                    "         var result = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiag" +
-                    "nostics.ExecuteScalarAsync(command, \"INSERT\", ct => command.ExecuteScalarAsync(c" +
-                    "t), default, _Diagnostics);\r\n            if (result == null || result == DBNull." +
-                    "Value) return default;\r\n            return (TReturning)Convert.ChangeType(result" +
-                    ", typeof(TReturning));\r\n        }\r\n\r\n        /// <summary>\r\n        /// Executes" +
-                    " the configured INSERT command asynchronously against the database connection.\r\n" +
-                    "        /// Auto-increment columns are skipped unless <see cref=\"WithAllFields\"/" +
-                    "> or <see cref=\"WithFields\"/> is used.\r\n        /// </summary>\r\n        /// <ret" +
-                    "urns>A task whose result is <see langword=\"true\"/> if one or more rows were inse" +
-                    "rted.</returns>\r\n        /// <exception cref=\"InvalidOperationException\">Thrown " +
-                    "if a batch operation is configured or if no database connection has been provide" +
-                    "d.</exception>\r\n        public async Task<bool> ExecuteAsync()\r\n        {\r\n#if N" +
-                    "ET6_0_OR_GREATER\r\n            if (_Batch != null)\r\n                throw new Inv" +
-                    "alidOperationException(\"Cannot execute command when DbBatch was provided.\");\r\n#e" +
-                    "ndif\r\n\r\n            if (_Connection == null)\r\n                throw new InvalidO" +
-                    "perationException(\"No DbConnection provided.\");\r\n\r\n            if (_Connection.S" +
-                    "tate != System.Data.ConnectionState.Open)\r\n                await _Connection.Ope" +
-                    "nAsync();\r\n\r\n            await using var command = _Connection.CreateCommand() a" +
-                    "s NpgsqlCommand;\r\n            if (command == null) return false;\r\n\r\n            " +
-                    "if (_Transaction != null)\r\n                command.Transaction = _Transaction as" +
-                    " NpgsqlTransaction;\r\n\r\n            // Fast path: a plain default insert reuses t" +
-                    "he entity\'s cached static plan — no GetColumns()\r\n            // dictionary/clos" +
-                    "ures, no SQL rebuild, just bind the values.\r\n            if (_SelectedDbColumns " +
-                    "== null && _ExcludedDbColumns == null && _IncludedAutoFields == null\r\n          " +
-                    "      && !_ForceAllFields && !_ExcludeAutoFields && !_PropagateValues && _Column" +
-                    "Info == null\r\n                && _TableRow is IInsertPlanProvider __planProvider" +
-                    ")\r\n            {\r\n                var __plan = __planProvider.GetInsertPlan();\r\n" +
-                    "                if (__plan.Columns.Length == 0) return false;\r\n                f" +
-                    "oreach (var __col in __plan.Columns)\r\n                    AddInsertParameter(com" +
-                    "mand, __col.ParameterName, __col.GetValue(_TableRow!), __col.Type, __col.IsJson," +
-                    " __col.IsEncrypted);\r\n                command.CommandText = __plan.CommandText;\r" +
-                    "\n                int __fastRows = await global::Socigy.OpenSource.DB.Core.Diagno" +
-                    "stics.DbDiagnostics.ExecuteNonQueryAsync(command, \"INSERT\", ct => command.Execut" +
-                    "eNonQueryAsync(ct), default, _Diagnostics);\r\n                return __fastRows >" +
-                    " 0;\r\n            }\r\n\r\n            _ColumnInfo ??= _TableRow.GetColumns();\r\n\r\n   " +
-                    "         var columnNames = new List<string>();\r\n            var paramNames = new" +
-                    " List<string>();\r\n            BuildParameters(command, columnNames, paramNames);" +
-                    "\r\n\r\n            if (columnNames.Count == 0) return false;\r\n\r\n            if (_Pr" +
-                    "opagateValues)\r\n            {\r\n                command.CommandText = $@\"\r\n      " +
-                    "  INSERT INTO \"\"{_TableRow.GetTableName()}\"\"\r\n        ({string.Join(\", \", column" +
-                    "Names)})\r\n        VALUES\r\n        ({string.Join(\", \", paramNames)})\r\n        RET" +
-                    "URNING *\";\r\n\r\n                await using var __instr = await global::Socigy.Ope" +
-                    "nSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, \"INSERT\", " +
-                    "ct => ((System.Data.Common.DbCommand)command).ExecuteReaderAsync(ct), default, _" +
-                    "Diagnostics);\r\n                var reader = __instr.Reader;\r\n                if " +
-                    "(await __instr.ReadAsync())\r\n                {\r\n                    foreach (var" +
-                    " kvp in _ColumnInfo!)\r\n                    {\r\n                        if (kvp.Va" +
-                    "lue.SetValue == null) continue;\r\n                        int ordinal;\r\n         " +
-                    "               try { ordinal = reader.GetOrdinal(kvp.Key); } catch { continue; }" +
-                    "\r\n                        var dbVal = reader.IsDBNull(ordinal) ? null : reader.G" +
-                    "etValue(ordinal);\r\n                        kvp.Value.SetValue(dbVal);\r\n         " +
-                    "           }\r\n                }\r\n                return true;\r\n            }\r\n\r\n" +
-                    "            command.CommandText = $@\"\r\n        INSERT INTO \"\"{_TableRow.GetTable" +
-                    "Name()}\"\"\r\n        ({string.Join(\", \", columnNames)})\r\n        VALUES\r\n        (" +
-                    "{string.Join(\", \", paramNames)})\";\r\n\r\n            int rowsAffected = await globa" +
-                    "l::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(comm" +
-                    "and, \"INSERT\", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);\r\n" +
-                    "            return rowsAffected > 0;\r\n        }\r\n\r\n        private void BuildPar" +
-                    "ameters(NpgsqlCommand command, List<string> columnNames, List<string> paramNames" +
-                    ")\r\n        {\r\n            foreach (var row in _ColumnInfo!)\r\n            {\r\n    " +
-                    "            string colName = row.Key;\r\n                ColumnInfo info = row.Val" +
-                    "ue;\r\n\r\n                if (!ShouldIncludeColumn(colName, info))\r\n               " +
-                    "     continue;\r\n\r\n                columnNames.Add($\"\\\"{colName}\\\"\");\r\n\r\n        " +
-                    "        string paramName = $\"@{colName}\";\r\n                paramNames.Add(paramN" +
-                    "ame);\r\n\r\n                AddInsertParameter(command, paramName, info.Value, info" +
-                    ".Type, info.IsJson, info.IsEncrypted);\r\n            }\r\n        }\r\n\r\n        // S" +
-                    "ingle place that turns a (value, type, isJson, isEncrypted) into an NpgsqlParame" +
-                    "ter — shared by the\r\n        // dictionary path (BuildParameters) and the cached" +
-                    "-plan fast path, so they behave identically.\r\n        private static void AddIns" +
-                    "ertParameter(NpgsqlCommand command, string paramName, object? value, Type type, " +
-                    "bool isJson, bool isEncrypted = false)\r\n        {\r\n            var actualType = " +
-                    "Nullable.GetUnderlyingType(type) ?? type;\r\n            if (actualType.IsEnum && " +
-                    "value != null && value != DBNull.Value)\r\n                value = Convert.ChangeT" +
-                    "ype(value, Enum.GetUnderlyingType(actualType));\r\n\r\n            var param = new N" +
-                    "pgsqlParameter(paramName, value ?? DBNull.Value);\r\n\r\n            if (value == nu" +
-                    "ll || value == DBNull.Value || actualType.IsEnum)\r\n                param.NpgsqlD" +
-                    "bType = GetDbType(type);\r\n\r\n            if (isJson)\r\n                param.Npgsq" +
-                    "lDbType = NpgsqlDbType.Jsonb;\r\n\r\n            if (isEncrypted)\r\n                p" +
-                    "aram.NpgsqlDbType = NpgsqlDbType.Bytea;\r\n\r\n            command.Parameters.Add(pa" +
-                    "ram);\r\n        }\r\n\r\n        public static NpgsqlDbType GetDbType(Type type)\r\n   " +
-                    "     {\r\n            type = Nullable.GetUnderlyingType(type) ?? type;\r\n\r\n        " +
-                    "    if (type.IsEnum)\r\n                type = Enum.GetUnderlyingType(type);\r\n\r\n  " +
-                    "          return type switch\r\n            {\r\n                Type t when t == ty" +
-                    "peof(short) => NpgsqlDbType.Smallint,\r\n                Type t when t == typeof(b" +
-                    "yte) => NpgsqlDbType.Smallint,\r\n                Type t when t == typeof(sbyte) =" +
-                    "> NpgsqlDbType.Smallint,\r\n\r\n                Type t when t == typeof(int) => Npgs" +
-                    "qlDbType.Integer,\r\n                Type t when t == typeof(ushort) => NpgsqlDbTy" +
-                    "pe.Integer,\r\n\r\n                Type t when t == typeof(long) => NpgsqlDbType.Big" +
-                    "int,\r\n                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,\r\n\r\n " +
-                    "               Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,\r\n\r\n      " +
-                    "          Type t when t == typeof(string) => NpgsqlDbType.Text,\r\n               " +
-                    " Type t when t == typeof(bool) => NpgsqlDbType.Boolean,\r\n                Type t " +
-                    "when t == typeof(DateTime) => NpgsqlDbType.Timestamp,\r\n                Type t wh" +
-                    "en t == typeof(float) => NpgsqlDbType.Real,\r\n                Type t when t == ty" +
-                    "peof(double) => NpgsqlDbType.Double,\r\n                Type t when t == typeof(de" +
-                    "cimal) => NpgsqlDbType.Numeric,\r\n                Type t when t == typeof(Guid) =" +
-                    "> NpgsqlDbType.Uuid,\r\n                Type t when t == typeof(byte[]) => NpgsqlD" +
-                    "bType.Bytea,\r\n                Type t when t == typeof(char) => NpgsqlDbType.Char" +
-                    ",\r\n                _ => NpgsqlDbType.Text\r\n            };\r\n        }\r\n\r\n        " +
-                    "/// <summary>\r\n        /// Inserts many rows efficiently as batched multi-row IN" +
-                    "SERTs — one command per chunk of up to\r\n        /// ~65535/columns rows (Postgre" +
-                    "SQL\'s per-command parameter limit) instead of a command per row.\r\n        /// Au" +
-                    "to-increment columns are skipped by default (the database generates them); pass\r" +
-                    "\n        /// <paramref name=\"includeAutoFields\"/> = <see langword=\"true\"/> to in" +
-                    "sert them too (supply your own\r\n        /// values). Returns the total rows inse" +
-                    "rted.\r\n        /// </summary>\r\n        public static async Task<int> InsertMulti" +
-                    "pleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transactio" +
-                    "n = null, bool includeAutoFields = false, bool excludeDbDefaults = false, System" +
-                    ".Threading.CancellationToken can" +
-                    "cellationToken = default)\r\n        {\r\n            if (rows == null) throw new Ar" +
-                    "gumentNullException(nameof(rows));\r\n            if (connection == null) throw ne" +
-                    "w ArgumentNullException(nameof(connection));\r\n\r\n            var list = rows as I" +
-                    "List<T> ?? new List<T>(rows);\r\n            if (list.Count == 0) return 0;\r\n\r\n   " +
-                    "         if (list[0] is not IInsertPlanProvider __planProvider)\r\n               " +
-                    " throw new InvalidOperationException($\"{typeof(T).Name} does not provide an inse" +
-                    "rt plan (IInsertPlanProvider).\");\r\n\r\n            var plan = __planProvider.GetIn" +
-                    "sertPlan(includeAutoFields);\r\n            var cols = plan.Columns;\r\n            " +
-                    "if (excludeDbDefaults)\r\n            {\r\n                var __kept = new List<Inse" +
-                    "rtColumnDescriptor>(cols.Length);\r\n                foreach (var __d in cols) if (" +
-                    "!__d.HasDbDefault) __kept.Add(__d);\r\n                cols = __kept.ToArray();\r\n " +
-                    "           }\r\n            " +
-                    "int colCount = cols.Length;\r\n            if (colCount == 0) return 0;\r\n\r\n       " +
-                    "     string tableName = ((IDbTable)list[0]!).GetTableName();\r\n\r\n            // C" +
-                    "olumn name = parameter name without the leading \'@\'.\r\n            var colNames =" +
-                    " new string[colCount];\r\n            for (int i = 0; i < colCount; i++)\r\n        " +
-                    "        colNames[i] = \"\\\"\" + cols[i].ParameterName.Substring(1) + \"\\\"\";\r\n       " +
-                    "     string columnList = string.Join(\", \", colNames);\r\n\r\n            bool should" +
-                    "Close = connection.State != System.Data.ConnectionState.Open;\r\n            if (s" +
-                    "houldClose) await connection.OpenAsync(cancellationToken);\r\n            try\r\n   " +
-                    "         {\r\n                // PostgreSQL caps a command at 65535 parameters; ch" +
-                    "unk rows so each command stays under it.\r\n                int maxRowsPerBatch = " +
-                    "Math.Max(1, 65535 / colCount);\r\n                int total = 0;\r\n\r\n              " +
-                    "  for (int start = 0; start < list.Count; start += maxRowsPerBatch)\r\n           " +
-                    "     {\r\n                    int end = Math.Min(start + maxRowsPerBatch, list.Cou" +
-                    "nt);\r\n                    await using var command = connection.CreateCommand() a" +
-                    "s NpgsqlCommand;\r\n                    if (command == null)\r\n                    " +
-                    "    throw new InvalidOperationException(\"Expected an NpgsqlConnection.\");\r\n     " +
-                    "               if (transaction != null)\r\n                        command.Transac" +
-                    "tion = transaction as NpgsqlTransaction;\r\n\r\n                    var sb = new Str" +
-                    "ingBuilder();\r\n                    sb.Append(\"INSERT INTO \\\"\").Append(tableName)" +
-                    ".Append(\"\\\" (\").Append(columnList).Append(\") VALUES \");\r\n                    for" +
-                    " (int r = start; r < end; r++)\r\n                    {\r\n                        i" +
-                    "f (r > start) sb.Append(\", \");\r\n                        sb.Append(\'(\');\r\n       " +
-                    "                 for (int c = 0; c < colCount; c++)\r\n                        {\r\n" +
-                    "                            if (c > 0) sb.Append(\", \");\r\n                       " +
-                    "     string paramName = \"@p\" + r + \"_\" + c;\r\n                            sb.Appe" +
-                    "nd(paramName);\r\n                            AddInsertParameter(command, paramNam" +
-                    "e, cols[c].GetValue(list[r]!), cols[c].Type, cols[c].IsJson, cols[c].IsEncrypted" +
-                    ");\r\n                        }\r\n                        sb.Append(\')\');\r\n        " +
-                    "            }\r\n\r\n                    command.CommandText = sb.ToString();\r\n     " +
-                    "               total += await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDi" +
-                    "agnostics.ExecuteNonQueryAsync(\r\n                        command, \"INSERT\", ct =" +
-                    "> command.ExecuteNonQueryAsync(ct), cancellationToken);\r\n                }\r\n    " +
-                    "            return total;\r\n            }\r\n            finally\r\n            {\r\n  " +
-                    "              if (shouldClose) await connection.CloseAsync();\r\n            }\r\n  " +
-                    "      }\r\n    }\r\n}\r\n\r\n#nullable disable\r\n");
+                    "se call WithBatch() first.\");\n\n            var batchCommand = _Batch.CreateBatch" +
+                    "Command();\n            _Batch.BatchCommands.Add(batchCommand);\n        }\n#endif\n" +
+                    "\n        private readonly T _TableRow;\n        private Dictionary<string, Column" +
+                    "Info>? _ColumnInfo;\n\n        private HashSet<string>? _SelectedDbColumns;\n      " +
+                    "  private HashSet<string>? _ExcludedDbColumns;\n        private HashSet<string>? " +
+                    "_IncludedAutoFields;\n        private bool _ForceAllFields;\n        private bool " +
+                    "_PropagateValues;\n        private bool _ExcludeAutoFields;\n\n        public Postg" +
+                    "resqlInsertCommandBuilder(T rowInstance, Dictionary<string, ColumnInfo>? columnI" +
+                    "nfo = null)\n        {\n            _TableRow = rowInstance;\n            _ColumnIn" +
+                    "fo = columnInfo;\n        }\n\n        /// <summary>\n        /// Sets the column me" +
+                    "tadata to be used for building the PostgreSQL insert command.\n        /// </summ" +
+                    "ary>\n        /// <param name=\"columnInfo\">A dictionary mapping column names to t" +
+                    "heir associated metadata. Cannot be null.</param>\n        /// <returns>The curre" +
+                    "nt instance of <see cref=\"PostgresqlInsertCommandBuilder{T}\"/> with updated colu" +
+                    "mn information.</returns>\n        public PostgresqlInsertCommandBuilder<T> WithC" +
+                    "olumnInfo(Dictionary<string, ColumnInfo> columnInfo)\n        {\n            _Colu" +
+                    "mnInfo = columnInfo;\n            return this;\n        }\n\n        /// <summary>\n " +
+                    "       /// Forces ALL columns (including auto-increment ones) to be included in " +
+                    "the INSERT statement.\n        /// </summary>\n        public PostgresqlInsertComm" +
+                    "andBuilder<T> WithAllFields()\n        {\n            if (_SelectedDbColumns != nu" +
+                    "ll)\n                throw new InvalidOperationException(\"Cannot combine WithAllF" +
+                    "ields() with WithFields().\");\n            if (_ExcludeAutoFields)\n              " +
+                    "  throw new InvalidOperationException(\"Cannot combine WithAllFields() with Exclu" +
+                    "deAutoFields().\");\n\n            _ForceAllFields = true;\n            return this;" +
+                    "\n        }\n\n        /// <summary>\n        /// Specifies which fields to include " +
+                    "in the INSERT statement.\n        /// Auto-increment columns not listed here are " +
+                    "excluded.\n        /// </summary>\n        public PostgresqlInsertCommandBuilder<T" +
+                    "> WithFields(Expression<Func<T, object?[]>> select)\n        {\n            if (_F" +
+                    "orceAllFields)\n                throw new InvalidOperationException(\"Cannot combi" +
+                    "ne WithFields() with WithAllFields().\");\n            if (_ExcludedDbColumns != n" +
+                    "ull)\n                throw new InvalidOperationException(\"Cannot combine WithFie" +
+                    "lds() with ExcludeFields().\");\n\n            _SelectedDbColumns = ExtractDbColumn" +
+                    "Names(select);\n            return this;\n        }\n\n        /// <summary>\n       " +
+                    " /// Excludes the specified fields from the INSERT statement.\n        /// Auto-i" +
+                    "ncrement columns are also excluded unless <see cref=\"WithAllFields\"/> is called." +
+                    "\n        /// </summary>\n        public PostgresqlInsertCommandBuilder<T> Exclude" +
+                    "Fields(Expression<Func<T, object?[]>> except)\n        {\n            if (_Selecte" +
+                    "dDbColumns != null)\n                throw new InvalidOperationException(\"Cannot " +
+                    "combine ExcludeFields() with WithFields().\");\n\n            _ExcludedDbColumns = " +
+                    "ExtractDbColumnNames(except);\n            return this;\n        }\n\n        /// <s" +
+                    "ummary>\n        /// After INSERT, reads back all DB-generated values (auto-incre" +
+                    "ment, defaults) and writes them\n        /// back to the instance\'s properties vi" +
+                    "a <c>RETURNING *</c>.\n        /// Combine with <see cref=\"ExcludeAutoFields\"/> t" +
+                    "o let the DB generate those values.\n        /// </summary>\n        public Postgr" +
+                    "esqlInsertCommandBuilder<T> WithValuePropagation()\n        {\n            _Propag" +
+                    "ateValues = true;\n            return this;\n        }\n\n        /// <summary>\n    " +
+                    "    /// Excludes auto-increment columns and DB-default columns from the INSERT s" +
+                    "tatement so the\n        /// database can generate or apply their values.\n       " +
+                    " /// Combine with <see cref=\"WithValuePropagation\"/> to read those values back a" +
+                    "fter insert.\n        /// </summary>\n        public PostgresqlInsertCommandBuilde" +
+                    "r<T> ExcludeAutoFields()\n        {\n            if (_ForceAllFields)\n            " +
+                    "    throw new InvalidOperationException(\"Cannot combine ExcludeAutoFields() with" +
+                    " WithAllFields().\");\n            if (_IncludedAutoFields != null)\n              " +
+                    "  throw new InvalidOperationException(\"ExcludeAutoFields(include) has already be" +
+                    "en called. Use one form or the other.\");\n            _ExcludeAutoFields = true;\n" +
+                    "            return this;\n        }\n\n        /// <summary>\n        /// Excludes a" +
+                    "uto-increment and DB-default columns from the INSERT statement, but keeps the\n  " +
+                    "      /// explicitly listed columns so you can supply your own values for them.\n" +
+                    "        /// Combine with <see cref=\"WithValuePropagation\"/> to read remaining DB" +
+                    "-generated values back after insert.\n        /// </summary>\n        /// <param n" +
+                    "ame=\"include\">Selector returning the auto/default columns to still include in th" +
+                    "e INSERT.</param>\n        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFi" +
+                    "elds(Expression<Func<T, object?[]>> include)\n        {\n            if (_ForceAll" +
+                    "Fields)\n                throw new InvalidOperationException(\"Cannot combine Excl" +
+                    "udeAutoFields() with WithAllFields().\");\n            if (_ExcludeAutoFields && _" +
+                    "IncludedAutoFields == null)\n                throw new InvalidOperationException(" +
+                    "\"ExcludeAutoFields() has already been called. Use one form or the other.\");\n    " +
+                    "        _ExcludeAutoFields = true;\n            _IncludedAutoFields = ExtractDbCo" +
+                    "lumnNames(include);\n            return this;\n        }\n\n        private HashSet<" +
+                    "string> ExtractDbColumnNames(Expression<Func<T, object?[]>> expr)\n        {\n    " +
+                    "        var visitor = new PostgresqlUpdateVisitor(\n                expr.Paramete" +
+                    "rs[0],\n                _TableRow.GetDbColumnName!,\n                null!);\n\n    " +
+                    "        var memberNames = visitor.ExtractColumnNames(expr);\n            var resu" +
+                    "lt = new HashSet<string>(StringComparer.Ordinal);\n            foreach (var name " +
+                    "in memberNames)\n            {\n                var dbName = _TableRow.GetDbColumn" +
+                    "Name(name);\n                if (!string.IsNullOrEmpty(dbName))\n                 " +
+                    "   result.Add(dbName!);\n            }\n            return result;\n        }\n\n    " +
+                    "    private bool ShouldIncludeColumn(string dbColName, ColumnInfo info)\n        " +
+                    "{\n            if (_SelectedDbColumns != null)\n                return _SelectedDb" +
+                    "Columns.Contains(dbColName);\n\n            if (_ExcludedDbColumns != null && _Exc" +
+                    "ludedDbColumns.Contains(dbColName))\n                return false;\n\n            i" +
+                    "f (info.IsAutoIncrement && !_ForceAllFields)\n            {\n                if (_" +
+                    "IncludedAutoFields == null || !_IncludedAutoFields.Contains(dbColName))\n        " +
+                    "            return false;\n            }\n\n            if (_ExcludeAutoFields && i" +
+                    "nfo.HasDbDefault)\n            {\n                if (_IncludedAutoFields == null " +
+                    "|| !_IncludedAutoFields.Contains(dbColName))\n                    return false;\n " +
+                    "           }\n\n            return true;\n        }\n\n        public async Task<TRet" +
+                    "urning?> ExecuteReturningAsync<TReturning>(string returningColumn, global::Syste" +
+                    "m.Threading.CancellationToken cancellationToken = default)\n        {\n           " +
+                    " if (_Connection == null)\n                throw new InvalidOperationException(\"N" +
+                    "o DbConnection provided.\");\n\n            if (_Connection.State != System.Data.Co" +
+                    "nnectionState.Open)\n                await _Connection.OpenAsync(cancellationToke" +
+                    "n);\n\n            await using var command = _Connection.CreateCommand() as Npgsql" +
+                    "Command;\n            if (command == null) return default;\n\n            if (_Tran" +
+                    "saction != null)\n                command.Transaction = _Transaction as NpgsqlTra" +
+                    "nsaction;\n\n            _ColumnInfo ??= _TableRow.GetColumns();\n\n            var " +
+                    "columnNames = new List<string>();\n            var paramNames = new List<string>(" +
+                    ");\n            BuildParameters(command, columnNames, paramNames);\n\n            c" +
+                    "ommand.CommandText = $@\"\n        INSERT INTO \"\"{_TableRow.GetTableName()}\"\"\n    " +
+                    "    ({string.Join(\", \", columnNames)})\n        VALUES\n        ({string.Join(\", \"" +
+                    ", paramNames)})\n        RETURNING \"\"{returningColumn}\"\"\";\n\n            var resul" +
+                    "t = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteSca" +
+                    "larAsync(command, \"INSERT\", ct => command.ExecuteScalarAsync(ct), cancellationTo" +
+                    "ken, _Diagnostics);\n            // Route through ApplyDbValue so the RETURNING v" +
+                    "alue converts the same way the row-materialization path\n            // does: it " +
+                    "returns Guid/byte[] directly (the is-T fast path), maps a timestamptz (returned " +
+                    "as a UTC\n            // DateTime) onto a DateTimeOffset target, narrows the wide" +
+                    "ned unsigned types, handles enums, and only\n            // uses Convert.ChangeTy" +
+                    "pe for genuine IConvertible widening. A raw Convert.ChangeType here threw for a\n" +
+                    "            // DateTimeOffset RETURNING column (DateTimeOffset is not IConvertib" +
+                    "le).\n            return global::Socigy.OpenSource.DB.Core.CommandBuilders.Column" +
+                    "Info.ApplyDbValue<TReturning>(result);\n        }\n\n        /// <summary>\n        " +
+                    "/// Executes the configured INSERT command asynchronously against the database c" +
+                    "onnection.\n        /// Auto-increment columns are skipped unless <see cref=\"With" +
+                    "AllFields\"/> or <see cref=\"WithFields\"/> is used.\n        /// </summary>\n       " +
+                    " /// <returns>A task whose result is <see langword=\"true\"/> if one or more rows " +
+                    "were inserted.</returns>\n        /// <exception cref=\"InvalidOperationException\"" +
+                    ">Thrown if a batch operation is configured or if no database connection has been" +
+                    " provided.</exception>\n        public async Task<bool> ExecuteAsync(global::Syst" +
+                    "em.Threading.CancellationToken cancellationToken = default)\n        {\n#if NET6_0" +
+                    "_OR_GREATER\n            if (_Batch != null)\n                throw new InvalidOpe" +
+                    "rationException(\"Cannot execute command when DbBatch was provided.\");\n#endif\n\n  " +
+                    "          if (_Connection == null)\n                throw new InvalidOperationExc" +
+                    "eption(\"No DbConnection provided.\");\n\n            if (_Connection.State != Syste" +
+                    "m.Data.ConnectionState.Open)\n                await _Connection.OpenAsync(cancell" +
+                    "ationToken);\n\n            await using var command = _Connection.CreateCommand() " +
+                    "as NpgsqlCommand;\n            if (command == null) return false;\n\n            if" +
+                    " (_Transaction != null)\n                command.Transaction = _Transaction as Np" +
+                    "gsqlTransaction;\n\n            // Fast path: a plain default insert reuses the en" +
+                    "tity\'s cached static plan — no GetColumns()\n            // dictionary/closures, " +
+                    "no SQL rebuild, just bind the values.\n            if (_SelectedDbColumns == null" +
+                    " && _ExcludedDbColumns == null && _IncludedAutoFields == null\n                &&" +
+                    " !_ForceAllFields && !_ExcludeAutoFields && !_PropagateValues && _ColumnInfo == " +
+                    "null\n                && _TableRow is IInsertPlanProvider __planProvider)\n       " +
+                    "     {\n                var __plan = __planProvider.GetInsertPlan();\n            " +
+                    "    if (__plan.Columns.Length == 0) return false;\n                foreach (var _" +
+                    "_col in __plan.Columns)\n                    AddInsertParameter(command, __col.Pa" +
+                    "rameterName, __col.GetValue(_TableRow!), __col.Type, __col.IsJson, __col.IsEncry" +
+                    "pted);\n                command.CommandText = __plan.CommandText;\n               " +
+                    " int __fastRows = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnost" +
+                    "ics.ExecuteNonQueryAsync(command, \"INSERT\", ct => command.ExecuteNonQueryAsync(c" +
+                    "t), cancellationToken, _Diagnostics);\n                return __fastRows > 0;\n   " +
+                    "         }\n\n            _ColumnInfo ??= _TableRow.GetColumns();\n\n            var" +
+                    " columnNames = new List<string>();\n            var paramNames = new List<string>" +
+                    "();\n            BuildParameters(command, columnNames, paramNames);\n\n            " +
+                    "if (columnNames.Count == 0) return false;\n\n            if (_PropagateValues)\n   " +
+                    "         {\n                command.CommandText = $@\"\n        INSERT INTO \"\"{_Tab" +
+                    "leRow.GetTableName()}\"\"\n        ({string.Join(\", \", columnNames)})\n        VALUE" +
+                    "S\n        ({string.Join(\", \", paramNames)})\n        RETURNING *\";\n\n             " +
+                    "   await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics" +
+                    ".DbDiagnostics.ExecuteReaderAsync(command, \"INSERT\", ct => ((System.Data.Common." +
+                    "DbCommand)command).ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);\n   " +
+                    "             var reader = __instr.Reader;\n                if (await __instr.Read" +
+                    "Async(cancellationToken))\n                {\n                    foreach (var kvp" +
+                    " in _ColumnInfo!)\n                    {\n                        if (kvp.Value.Se" +
+                    "tValue == null) continue;\n                        int ordinal;\n                 " +
+                    "       // GetOrdinal throws only when the column is genuinely absent from RETURN" +
+                    "ING *\n                        // (catch that narrowly); a real reader fault must" +
+                    " propagate, not be swallowed,\n                        // or a server-generated k" +
+                    "ey would silently stay unset on the returned row.\n                        try { " +
+                    "ordinal = reader.GetOrdinal(kvp.Key); } catch (IndexOutOfRangeException) { conti" +
+                    "nue; }\n                        var dbVal = reader.IsDBNull(ordinal) ? null : rea" +
+                    "der.GetValue(ordinal);\n                        kvp.Value.SetValue(dbVal);\n      " +
+                    "              }\n                }\n                return true;\n            }\n\n  " +
+                    "          command.CommandText = $@\"\n        INSERT INTO \"\"{_TableRow.GetTableNam" +
+                    "e()}\"\"\n        ({string.Join(\", \", columnNames)})\n        VALUES\n        ({strin" +
+                    "g.Join(\", \", paramNames)})\";\n\n            int rowsAffected = await global::Socig" +
+                    "y.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, \"IN" +
+                    "SERT\", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);" +
+                    "\n            return rowsAffected > 0;\n        }\n\n        private void BuildParam" +
+                    "eters(NpgsqlCommand command, List<string> columnNames, List<string> paramNames)\n" +
+                    "        {\n            foreach (var row in _ColumnInfo!)\n            {\n          " +
+                    "      string colName = row.Key;\n                ColumnInfo info = row.Value;\n\n  " +
+                    "              if (!ShouldIncludeColumn(colName, info))\n                    conti" +
+                    "nue;\n\n                columnNames.Add($\"\\\"{colName}\\\"\");\n\n                string" +
+                    " paramName = $\"@{colName}\";\n                paramNames.Add(paramName);\n\n        " +
+                    "        AddInsertParameter(command, paramName, info.Value, info.Type, info.IsJso" +
+                    "n, info.IsEncrypted);\n            }\n        }\n\n        // Single place that turn" +
+                    "s a (value, type, isJson, isEncrypted) into an NpgsqlParameter — shared by the\n " +
+                    "       // dictionary path (BuildParameters) and the cached-plan fast path, so th" +
+                    "ey behave identically.\n        private static void AddInsertParameter(NpgsqlComm" +
+                    "and command, string paramName, object? value, Type type, bool isJson, bool isEnc" +
+                    "rypted = false)\n        {\n            // Coerce only when the value is *actually" +
+                    "* an enum at runtime. A value convertor may have already\n            // turned a" +
+                    "n enum property into its DB representation (e.g. a string), in which case the de" +
+                    "clared\n            // type is still the enum but the value is not, and coercing " +
+                    "it here would corrupt or throw.\n            bool valueIsEnum = value != null && " +
+                    "value != DBNull.Value && value.GetType().IsEnum;\n            if (valueIsEnum)\n  " +
+                    "              value = Convert.ChangeType(value, Enum.GetUnderlyingType(value!.Ge" +
+                    "tType()));\n\n            // A DateTime column is \'timestamp without time zone\'. W" +
+                    "ith Kind=Utc Npgsql would infer \'timestamptz\'\n            // and PostgreSQL woul" +
+                    "d shift the value by the session TimeZone on store. Relabel Utc as Unspecified\n " +
+                    "           // so the wall-clock is stored verbatim regardless of session TimeZon" +
+                    "e.\n            if (value is DateTime __dt && __dt.Kind == DateTimeKind.Utc)\n    " +
+                    "            value = DateTime.SpecifyKind(__dt, DateTimeKind.Unspecified);\n      " +
+                    "      // Npgsql only writes a DateTimeOffset with offset 0 to \'timestamptz\'; Dat" +
+                    "eTimeOffset.Now carries the\n            // local offset. Normalize to UTC (same " +
+                    "instant) so the common case doesn\'t throw.\n            else if (value is DateTim" +
+                    "eOffset __dto && __dto.Offset != TimeSpan.Zero)\n                value = __dto.To" +
+                    "UniversalTime();\n            // Npgsql has no wire mapping for unsigned CLR type" +
+                    "s; widen to the signed/decimal type GetDbType targets.\n            else if (valu" +
+                    "e is ushort __us) value = (int)__us;\n            else if (value is uint __ui) va" +
+                    "lue = (long)__ui;\n            else if (value is ulong __ul) value = (decimal)__u" +
+                    "l;\n\n            var param = new NpgsqlParameter(paramName, value ?? DBNull.Value" +
+                    ");\n\n            if (value == null || value == DBNull.Value || valueIsEnum)\n     " +
+                    "           param.NpgsqlDbType = GetDbType(type);\n\n            if (isJson)\n      " +
+                    "          param.NpgsqlDbType = NpgsqlDbType.Jsonb;\n\n            if (isEncrypted)" +
+                    "\n                param.NpgsqlDbType = NpgsqlDbType.Bytea;\n\n            command.P" +
+                    "arameters.Add(param);\n        }\n\n        public static NpgsqlDbType GetDbType(Ty" +
+                    "pe type)\n        {\n            type = Nullable.GetUnderlyingType(type) ?? type;\n" +
+                    "\n            if (type.IsEnum)\n                type = Enum.GetUnderlyingType(type" +
+                    ");\n\n            return type switch\n            {\n                Type t when t =" +
+                    "= typeof(short) => NpgsqlDbType.Smallint,\n                Type t when t == typeo" +
+                    "f(byte) => NpgsqlDbType.Smallint,\n                Type t when t == typeof(sbyte)" +
+                    " => NpgsqlDbType.Smallint,\n\n                Type t when t == typeof(int) => Npgs" +
+                    "qlDbType.Integer,\n                Type t when t == typeof(ushort) => NpgsqlDbTyp" +
+                    "e.Integer,\n\n                Type t when t == typeof(long) => NpgsqlDbType.Bigint" +
+                    ",\n                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,\n\n       " +
+                    "         Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,\n\n              " +
+                    "  Type t when t == typeof(string) => NpgsqlDbType.Text,\n                Type t w" +
+                    "hen t == typeof(bool) => NpgsqlDbType.Boolean,\n                Type t when t == " +
+                    "typeof(DateTime) => NpgsqlDbType.Timestamp,\n                Type t when t == typ" +
+                    "eof(DateTimeOffset) => NpgsqlDbType.TimestampTz,\n                Type t when t =" +
+                    "= typeof(TimeSpan) => NpgsqlDbType.Interval,\n#if NET6_0_OR_GREATER\n             " +
+                    "   Type t when t == typeof(DateOnly) => NpgsqlDbType.Date,\n                Type " +
+                    "t when t == typeof(TimeOnly) => NpgsqlDbType.Time,\n#endif\n                Type t" +
+                    " when t == typeof(float) => NpgsqlDbType.Real,\n                Type t when t == " +
+                    "typeof(double) => NpgsqlDbType.Double,\n                Type t when t == typeof(d" +
+                    "ecimal) => NpgsqlDbType.Numeric,\n                Type t when t == typeof(Guid) =" +
+                    "> NpgsqlDbType.Uuid,\n                Type t when t == typeof(byte[]) => NpgsqlDb" +
+                    "Type.Bytea,\n                Type t when t == typeof(char) => NpgsqlDbType.Char,\n" +
+                    "                _ => NpgsqlDbType.Text\n            };\n        }\n\n        /// <su" +
+                    "mmary>\n        /// Inserts many rows efficiently as batched multi-row INSERTs — " +
+                    "one command per chunk of up to\n        /// ~65535/columns rows (PostgreSQL\'s per" +
+                    "-command parameter limit) instead of a command per row.\n        /// Auto-increme" +
+                    "nt columns are skipped by default (the database generates them); pass\n        //" +
+                    "/ <see cref=\"global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Incl" +
+                    "udeAutoIncrement\"/>\n        /// to insert them too, or <see cref=\"global::Socigy" +
+                    ".OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults\"/>\n        /// (" +
+                    "optionally with <paramref name=\"keep\"/>) to let the server fill <c>[Default]</c>" +
+                    " columns.\n        /// Returns the total rows inserted.\n        /// </summary>\n  " +
+                    "      public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbC" +
+                    "onnection connection, DbTransaction? transaction = null, global::Socigy.OpenSour" +
+                    "ce.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Co" +
+                    "re.CommandBuilders.InsertFields.Default, Expression<Func<T, object?[]>>? keep = " +
+                    "null, System.Threading.CancellationToken cancellationToken = default)\n        {\n" +
+                    "            if (rows == null) throw new ArgumentNullException(nameof(rows));\n   " +
+                    "         if (connection == null) throw new ArgumentNullException(nameof(connecti" +
+                    "on));\n\n            var list = rows as IList<T> ?? new List<T>(rows);\n           " +
+                    " if (list.Count == 0) return 0;\n\n            if (list[0] is not IInsertPlanProvi" +
+                    "der __planProvider)\n                throw new InvalidOperationException($\"{typeo" +
+                    "f(T).Name} does not provide an insert plan (IInsertPlanProvider).\");\n\n          " +
+                    "  var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResol" +
+                    "ver.Resolve<T>(\n                __planProvider.GetInsertPlan(global::Socigy.Open" +
+                    "Source.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields" +
+                    ")).Columns,\n                fields, keep, list[0]);\n            int colCount = c" +
+                    "ols.Length;\n            if (colCount == 0) return 0;\n\n            string tableNa" +
+                    "me = ((IDbTable)list[0]!).GetTableName();\n\n            // Column name = paramete" +
+                    "r name without the leading \'@\'.\n            var colNames = new string[colCount];" +
+                    "\n            for (int i = 0; i < colCount; i++)\n                colNames[i] = \"\\" +
+                    "\"\" + cols[i].ParameterName.Substring(1) + \"\\\"\";\n            string columnList = " +
+                    "string.Join(\", \", colNames);\n\n            bool shouldClose = connection.State !=" +
+                    " System.Data.ConnectionState.Open;\n            if (shouldClose) await connection" +
+                    ".OpenAsync(cancellationToken);\n            try\n            {\n                // " +
+                    "PostgreSQL caps a command at 65535 parameters; chunk rows so each command stays " +
+                    "under it.\n                int maxRowsPerBatch = Math.Max(1, 65535 / colCount);\n " +
+                    "               int total = 0;\n\n                for (int start = 0; start < list." +
+                    "Count; start += maxRowsPerBatch)\n                {\n                    int end =" +
+                    " Math.Min(start + maxRowsPerBatch, list.Count);\n                    await using " +
+                    "var command = connection.CreateCommand() as NpgsqlCommand;\n                    i" +
+                    "f (command == null)\n                        throw new InvalidOperationException(" +
+                    "\"Expected an NpgsqlConnection.\");\n                    if (transaction != null)\n " +
+                    "                       command.Transaction = transaction as NpgsqlTransaction;\n\n" +
+                    "                    var sb = new StringBuilder();\n                    sb.Append(" +
+                    "\"INSERT INTO \\\"\").Append(tableName).Append(\"\\\" (\").Append(columnList).Append(\") " +
+                    "VALUES \");\n                    for (int r = start; r < end; r++)\n               " +
+                    "     {\n                        if (r > start) sb.Append(\", \");\n                 " +
+                    "       sb.Append(\'(\');\n                        for (int c = 0; c < colCount; c++" +
+                    ")\n                        {\n                            if (c > 0) sb.Append(\", " +
+                    "\");\n                            string paramName = \"@p\" + r + \"_\" + c;\n         " +
+                    "                   sb.Append(paramName);\n                            AddInsertPa" +
+                    "rameter(command, paramName, cols[c].GetValue(list[r]!), cols[c].Type, cols[c].Is" +
+                    "Json, cols[c].IsEncrypted);\n                        }\n                        sb" +
+                    ".Append(\')\');\n                    }\n\n                    command.CommandText = s" +
+                    "b.ToString();\n                    total += await global::Socigy.OpenSource.DB.Co" +
+                    "re.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(\n                        comma" +
+                    "nd, \"INSERT\", ct => command.ExecuteNonQueryAsync(ct), cancellationToken);\n      " +
+                    "          }\n                return total;\n            }\n            finally\n    " +
+                    "        {\n                if (shouldClose) await connection.CloseAsync();\n      " +
+                    "      }\n        }\n    }\n}\n\n#nullable disable\n");
             
             #line default
             #line hidden

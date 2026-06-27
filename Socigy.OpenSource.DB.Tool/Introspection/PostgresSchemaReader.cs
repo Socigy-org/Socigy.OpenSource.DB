@@ -62,7 +62,8 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
         {
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"SELECT table_name, column_name, data_type, udt_name, is_nullable,
-                                       column_default, character_maximum_length, is_identity
+                                       column_default, character_maximum_length, is_identity,
+                                       numeric_precision, numeric_scale
                                 FROM information_schema.columns
                                 WHERE table_schema = @s
                                 ORDER BY table_name, ordinal_position;";
@@ -81,6 +82,8 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
                 string? columnDefault = r.IsDBNull(5) ? null : r.GetString(5);
                 int? maxLength = r.IsDBNull(6) ? (int?)null : r.GetInt32(6);
                 bool isIdentity = !r.IsDBNull(7) && r.GetString(7) == "YES";
+                int? numericPrecision = r.IsDBNull(8) ? (int?)null : r.GetInt32(8);
+                int? numericScale = r.IsDBNull(9) ? (int?)null : r.GetInt32(9);
 
                 bool isAutoIncrement = isIdentity
                     || (columnDefault != null && columnDefault.TrimStart().StartsWith("nextval(", StringComparison.OrdinalIgnoreCase));
@@ -91,9 +94,15 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
                 {
                     Name = columnName,
                     SourceName = Naming.ToPascalCase(columnName),
-                    DotnetType = PostgresInverseTranslator.PgTypeToCSharp(dataType, udtName),
-                    DatabaseType = BuildDatabaseType(dataType, maxLength),
-                    Nullable = nullable,
+                    DotnetType = PostgresInverseTranslator.PgTypeToCSharp(dataType, udtName, maxLength),
+                    // A JSON column canonicalizes to jsonb — the ORM stores both [RawJsonColumn]/[JsonColumn] as
+                    // jsonb, so the analyzer reports "jsonb"; emitting the raw "json" here caused a spurious (and
+                    // data-touching) ALTER ... TYPE jsonb on every scaffold->generate round-trip.
+                    DatabaseType = isJson ? "jsonb" : BuildDatabaseType(dataType, maxLength, numericPrecision, numericScale),
+                    // The analyzer never sets Nullable=false — a non-nullable column is Nullable==null. Storing
+                    // `false` here made every NOT NULL column compare unequal (false != null) and emit a spurious
+                    // SET NOT NULL on the first round-trip. Mirror the analyzer: true when nullable, null otherwise.
+                    Nullable = nullable ? true : (bool?)null,
                     IsAutoIncrement = isAutoIncrement ? true : (bool?)null,
                     MaxLength = (maxLength.HasValue && IsVarchar(dataType)) ? maxLength : null,
                     IsJsonColumn = isJson ? true : (bool?)null,
@@ -116,11 +125,24 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
             cmd.Parameters.AddWithValue("t", constraintType);
             cmd.Parameters.AddWithValue("s", schema);
             await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            // Rows arrive ORDER BY table_name, ordinal_position, so a per-table running index captures the key's
+            // column order. For a primary key this is recorded as PrimaryKeyOrder so a composite PK whose key order
+            // differs from the column declaration order survives the scaffold→migrate round-trip.
+            bool isPrimaryKey = string.Equals(constraintType, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase);
+            string? currentTable = null;
+            int keyOrdinal = 0;
             while (await r.ReadAsync(ct).ConfigureAwait(false))
             {
-                if (!tables.TryGetValue(r.GetString(0), out var table)) continue;
+                string tableName = r.GetString(0);
+                if (!tables.TryGetValue(tableName, out var table)) continue;
+                if (tableName != currentTable) { currentTable = tableName; keyOrdinal = 0; }
                 var col = table.Columns.FirstOrDefault(c => c.Name == r.GetString(1));
-                if (col != null) col.IsPrimaryKey = true;
+                if (col != null)
+                {
+                    col.IsPrimaryKey = true;
+                    if (isPrimaryKey) col.PrimaryKeyOrder = keyOrdinal;
+                }
+                keyOrdinal++;
             }
         }
 
@@ -183,10 +205,19 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
                 string tgtTable = r.GetString(1);
                 char onDelete = ReadPgChar(r, 2);
                 char onUpdate = ReadPgChar(r, 3);
-                var srcCols = (string[])r.GetValue(4);
-                var tgtCols = (string[])r.GetValue(5);
+                var srcCols = r.IsDBNull(4) ? Array.Empty<string>() : (string[])r.GetValue(4);
+                var tgtCols = r.IsDBNull(5) ? Array.Empty<string>() : (string[])r.GetValue(5);
 
                 if (!tables.TryGetValue(srcTable, out var table)) continue;
+
+                // The query filters only the source table's schema; the target may live in another schema and so
+                // was never scaffolded. Emitting [ForeignKey(typeof(<Target>))] for a class that doesn't exist
+                // produces uncompilable output, so skip (and warn) rather than reference a missing type.
+                if (!tables.ContainsKey(tgtTable))
+                {
+                    Logger.Warning($"Skipping foreign key {srcTable} -> {tgtTable}: the target table is not in the scaffolded schema '{schema}' (cross-schema FKs are not scaffolded).");
+                    continue;
+                }
 
                 table.Constraints.Add(new DbConstraint
                 {
@@ -218,9 +249,28 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
             => dataType.Equals("character varying", StringComparison.OrdinalIgnoreCase)
             || dataType.Equals("varchar", StringComparison.OrdinalIgnoreCase);
 
-        private static string BuildDatabaseType(string dataType, int? maxLength)
-            => IsVarchar(dataType) && maxLength.HasValue
-                ? $"character varying({maxLength.Value})"
-                : dataType;
+        internal static string BuildDatabaseType(string dataType, int? maxLength, int? numericPrecision, int? numericScale)
+        {
+            if (IsVarchar(dataType) && maxLength.HasValue)
+                return $"character varying({maxLength.Value})";
+            // An UNBOUNDED varchar (no length) is equivalent to text, and a scaffolded `string` property regenerates
+            // as "text"; returning the raw "character varying" produced a spurious (data-touching) ALTER ... TYPE text
+            // on every round-trip. Map it to text so the round-trip is a no-op.
+            if (IsVarchar(dataType) && !maxLength.HasValue)
+                return "text";
+            // Fixed-length character must carry its length so it round-trips against the forward map (CLR char ->
+            // "character(1)"); a bare "character" would report a spurious Type change on every scaffold→generate.
+            if ((dataType.Equals("character", StringComparison.OrdinalIgnoreCase)
+                 || dataType.Equals("char", StringComparison.OrdinalIgnoreCase)) && maxLength.HasValue)
+                return $"character({maxLength.Value})";
+            // Preserve numeric(precision[,scale]) so a scaffolded decimal column round-trips faithfully; an
+            // unconstrained numeric reports a NULL precision and stays plain "numeric".
+            if ((dataType.Equals("numeric", StringComparison.OrdinalIgnoreCase)
+                 || dataType.Equals("decimal", StringComparison.OrdinalIgnoreCase)) && numericPrecision.HasValue)
+                return numericScale.GetValueOrDefault() > 0
+                    ? $"numeric({numericPrecision.Value},{numericScale.Value})"
+                    : $"numeric({numericPrecision.Value})";
+            return dataType;
+        }
     }
 }

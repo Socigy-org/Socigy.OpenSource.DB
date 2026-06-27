@@ -16,6 +16,10 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
 
         public bool? Nullable { get; set; }
         public bool? IsPrimaryKey { get; set; }
+        /// <summary>Position within a composite primary key (0-based), from <c>[PrimaryKey(order)]</c> or the DB's
+        /// key-column ordinal. Null means follow declaration/column order. Orders the emitted <c>PRIMARY KEY (...)</c>
+        /// so a composite key whose key order differs from column order round-trips.</summary>
+        public int? PrimaryKeyOrder { get; set; }
         public bool? IsUnique { get; set; }
 
         public string DefaultValue { get; set; }

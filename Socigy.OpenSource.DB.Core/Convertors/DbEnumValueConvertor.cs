@@ -43,9 +43,13 @@ namespace Socigy.OpenSource.DB.Core.Convertors
             {
                 return (T?)Enum.Parse(typeof(T), enumValueName);
             }
-            else if (dbValue.GetType() == _UnderlayingType)
+            else if (dbValue is IConvertible)
             {
-                return Enum.ToObject(typeof(T), dbValue) is T enumValue ? enumValue : default;
+                // The DB integer width can differ from the enum's underlying type (e.g. a byte-backed enum is
+                // stored as smallint, so Npgsql returns a short). Normalize to the underlying type before
+                // ToObject instead of requiring an exact type match, which would throw on that width mismatch.
+                var normalized = Convert.ChangeType(dbValue, _UnderlayingType);
+                return Enum.ToObject(typeof(T), normalized) is T enumValue ? enumValue : default;
             }
             else
                 throw new InvalidOperationException($"Tried to convert DB value {dbValue.GetType().FullName} to {typeof(T).FullName} enum. Value: '{dbValue}'");

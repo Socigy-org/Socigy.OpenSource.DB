@@ -75,7 +75,18 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             else if (paramCtors.Count >= 1)
             {
                 positional = true;
-                foreach (var p in paramCtors[0].Parameters)
+                // INstanceConstructors is in declaration/metadata order, NOT by arity, so paramCtors[0] may be
+                // a convenience overload (e.g. `record T(string Name, int Priority) { T(string name) : this(name, 0) }`).
+                // Blindly taking [0] would silently drop members. Pick the widest constructor (the record's primary
+                // ctor); if two share the max arity it's genuinely ambiguous — report rather than guess.
+                int maxArity = paramCtors.Max(c => c.Parameters.Length);
+                var widest = paramCtors.Where(c => c.Parameters.Length == maxArity).ToList();
+                if (widest.Count > 1)
+                {
+                    ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.DtoNotMappable, loc, full));
+                    return;
+                }
+                foreach (var p in widest[0].Parameters)
                     members.Add((p.Name, p.Type));
             }
             else
@@ -84,7 +95,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 return;
             }
 
-            string id = Sanitize(full);
+            string id = MapperId(full);
 
             sb.AppendLine();
             sb.Append($"        internal static int[] Ordinals_{id}(DbDataReader r) => new int[] {{ ");
@@ -146,9 +157,41 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
             if (underlying.TypeKind == TypeKind.Enum)
             {
-                string eu = ((INamedTypeSymbol)underlying).EnumUnderlyingType!
-                    .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                return $"({guard}) ? default({castType}) : ({castType})({eu})r.GetFieldValue<{eu}>(o[{index}])";
+                var enumUnderlying = ((INamedTypeSymbol)underlying).EnumUnderlyingType!;
+                string eu = enumUnderlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                // Enums are stored as their underlying integer, but the unsigned/byte underlyings are stored WIDENED
+                // (byte/sbyte->smallint, ushort->integer, uint->bigint, ulong->numeric) and Npgsql has no reader
+                // handler to read those back directly — GetFieldValue<ushort>/<uint>/<ulong>/<byte> throws. Read the
+                // signed/decimal storage type and narrow (checked) to the underlying, matching ReadScalar and
+                // ApplyDbValue and the non-enum unsigned cases below. Other underlyings read directly.
+                string readExpr = enumUnderlying.SpecialType switch
+                {
+                    SpecialType.System_Byte or SpecialType.System_SByte => $"({eu})r.GetFieldValue<short>(o[{index}])",
+                    SpecialType.System_UInt16 => $"checked((ushort)r.GetFieldValue<int>(o[{index}]))",
+                    SpecialType.System_UInt32 => $"checked((uint)r.GetFieldValue<long>(o[{index}]))",
+                    SpecialType.System_UInt64 => $"checked((ulong)r.GetFieldValue<decimal>(o[{index}]))",
+                    _ => $"r.GetFieldValue<{eu}>(o[{index}])",
+                };
+                return $"({guard}) ? default({castType}) : ({castType})({readExpr})";
+            }
+
+            // Unsigned columns are stored widened (ushort->int, uint->bigint, ulong->numeric), and byte/sbyte are
+            // stored as smallint; Npgsql has no reader handler that narrows those back, so read the signed/decimal
+            // storage type and narrow, matching ReadScalar and the write side.
+            // checked() so an out-of-range stored value throws (matching the slow ApplyDbValue path and ReadScalar)
+            // instead of silently wrapping.
+            switch (underlying.SpecialType)
+            {
+                case SpecialType.System_UInt16:
+                    return $"({guard}) ? default({castType}) : ({castType})checked((ushort)r.GetFieldValue<int>(o[{index}]))";
+                case SpecialType.System_UInt32:
+                    return $"({guard}) ? default({castType}) : ({castType})checked((uint)r.GetFieldValue<long>(o[{index}]))";
+                case SpecialType.System_UInt64:
+                    return $"({guard}) ? default({castType}) : ({castType})checked((ulong)r.GetFieldValue<decimal>(o[{index}]))";
+                case SpecialType.System_Byte:
+                    return $"({guard}) ? default({castType}) : ({castType})checked((byte)r.GetFieldValue<short>(o[{index}]))";
+                case SpecialType.System_SByte:
+                    return $"({guard}) ? default({castType}) : ({castType})checked((sbyte)r.GetFieldValue<short>(o[{index}]))";
             }
 
             string readType = underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -157,12 +200,31 @@ namespace Socigy.OpenSource.DB.SourceGenerator
 
         /// <summary>Maps a fully-qualified name to a stable identifier used for the mapper method names.
         /// Shared with <see cref="ProcedureGenerator"/> so both sides compute the same id.</summary>
+        // The unique mapper method-name id for a DTO type's fully-qualified name. MUST be used by BOTH the mapper
+        // definition (here) and the procedure call site (ProcedureGenerator) so they reference the same method.
+        internal static string MapperId(string fullyQualifiedName)
+            => Sanitize(fullyQualifiedName) + "_" + StableHash(fullyQualifiedName);
+
         internal static string Sanitize(string s)
         {
             var sb = new StringBuilder(s.Length);
             foreach (char c in s)
                 sb.Append(char.IsLetterOrDigit(c) ? c : '_');
             return sb.ToString();
+        }
+
+        // A deterministic (FNV-1a) hash of the full type name, appended to the sanitized mapper id so that two
+        // distinct DTO types whose fully-qualified names differ ONLY at a separator (e.g. `A.B.C` vs namespace
+        // `A_B` type `C`) — which sanitize to the same identifier — get distinct method names instead of colliding
+        // into a duplicate-member (CS0111) compile error in the generated Procedures.g.cs.
+        internal static string StableHash(string s)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (char c in s) { hash ^= c; hash *= 16777619; }
+                return hash.ToString("x8");
+            }
         }
     }
 }

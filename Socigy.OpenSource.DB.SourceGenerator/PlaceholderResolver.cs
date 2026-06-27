@@ -213,15 +213,39 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             return false;
         }
 
+        private static readonly string IgnoreAttrName = typeof(Socigy.OpenSource.DB.Attributes.IgnoreAttribute).FullName!;
+        private static readonly string FlaggedEnumAttrName = typeof(Socigy.OpenSource.DB.Attributes.FlaggedEnumAttribute).FullName!;
+        private static readonly string FlaggedEnumTableAttrName = typeof(Socigy.OpenSource.DB.Attributes.FlaggedEnumTableAttribute).FullName!;
+
         private static IPropertySymbol? FindProperty(INamedTypeSymbol type, string propName)
         {
             for (INamedTypeSymbol? current = type; current != null; current = current.BaseType)
             {
-                var prop = current.GetMembers(propName).OfType<IPropertySymbol>().FirstOrDefault();
+                // Take the MOST-DERIVED declaration of this name (mapped or not) and accept it only if it is a real
+                // mapped column — do NOT fall through to a shadowed base declaration. This mirrors the table
+                // generator's EnumerateColumnProperties, which dedups by name before filtering, so a `new`-shadowed
+                // property marked [Ignore]/get-only in the derived type yields NO column there too. Falling through
+                // would resolve {{Derived.Prop}} to the base column the table generator never creates (a runtime
+                // "column does not exist"). Static/indexer declarations are skipped (they are never the column).
+                var prop = current.GetMembers(propName).OfType<IPropertySymbol>()
+                    .FirstOrDefault(p => !p.IsStatic && !p.IsIndexer);
                 if (prop != null)
-                    return prop;
+                    return IsMappedColumn(prop) ? prop : null;
             }
             return null;
+        }
+
+        private static bool IsMappedColumn(IPropertySymbol p)
+        {
+            if (p.IsStatic || p.SetMethod == null || p.SetMethod.IsInitOnly)
+                return false;
+            foreach (var a in p.GetAttributes())
+            {
+                var n = a.AttributeClass?.ToDisplayString();
+                if (n == IgnoreAttrName || n == FlaggedEnumAttrName || n == FlaggedEnumTableAttrName)
+                    return false;
+            }
+            return true;
         }
     }
 }

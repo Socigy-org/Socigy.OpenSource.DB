@@ -90,32 +90,52 @@ namespace Socigy.OpenSource.DB.Core.Migrations
         /// rolled-back migration as current. Here a rollback removes its migration from the applied set, so
         /// the result is the newest migration that is actually applied — or <see langword="null"/> if none.
         /// </summary>
-        public static string? ResolveCurrentVersion(IEnumerable<(string HumanId, DateTime AppliedAt, bool IsRollback)> records)
+        public static string? ResolveCurrentVersion(IEnumerable<(long Id, string HumanId, DateTime AppliedAt, bool IsRollback)> records)
         {
             if (records == null) throw new ArgumentNullException(nameof(records));
 
-            var ordered = records.OrderBy(r => r.AppliedAt).ToList();
+            var ordered = records.OrderBy(r => r.Id).ToList();
+
+            var applied = ResolveAppliedSet(ordered);
+            if (applied.Count == 0) return null;
+
+            // Among currently-applied migrations, the current version is the one most recently applied — by the
+            // monotonic insertion id (the true apply order), NOT AppliedAt (see ResolveAppliedSet).
+            string? current = null;
+            long bestId = long.MinValue;
+            foreach (var r in ordered)
+            {
+                if (!r.IsRollback && applied.Contains(r.HumanId) && (current == null || r.Id >= bestId))
+                {
+                    current = r.HumanId;
+                    bestId = r.Id;
+                }
+            }
+            return current;
+        }
+
+        /// <summary>
+        /// Resolves the set of HumanIds that are currently applied, honoring rollbacks: a non-rollback row
+        /// adds its migration to the set and a rollback row removes it. Pure and order-independent on input
+        /// (rows are sorted by the monotonic <c>Id</c> internally); never throws on valid data. Shared by
+        /// <see cref="ResolveCurrentVersion"/> and the migration manager's idempotency guard.
+        /// </summary>
+        public static HashSet<string> ResolveAppliedSet(IEnumerable<(long Id, string HumanId, DateTime AppliedAt, bool IsRollback)> records)
+        {
+            if (records == null) throw new ArgumentNullException(nameof(records));
 
             var applied = new HashSet<string>();
-            foreach (var r in ordered)
+            // Order by the monotonic insertion Id (the bigint auto-increment PK = the true apply order), NOT
+            // AppliedAt. AppliedAt is the app clock: two rows can tie (microsecond truncation, a coarse/virtualized
+            // clock, a tight UP/DOWN re-apply) or even invert under NTP skew, and the SQL reads have no inherent
+            // order — any of which would mis-net an UP/DOWN pair (leaving a rolled-back migration in the applied
+            // set, or dropping an applied one). Id is immune to all of that.
+            foreach (var r in records.OrderBy(r => r.Id))
             {
                 if (r.IsRollback) applied.Remove(r.HumanId);
                 else applied.Add(r.HumanId);
             }
-            if (applied.Count == 0) return null;
-
-            // Among currently-applied migrations, the current version is the one most recently applied.
-            string? current = null;
-            DateTime best = DateTime.MinValue;
-            foreach (var r in ordered)
-            {
-                if (!r.IsRollback && applied.Contains(r.HumanId) && (current == null || r.AppliedAt >= best))
-                {
-                    current = r.HumanId;
-                    best = r.AppliedAt;
-                }
-            }
-            return current;
+            return applied;
         }
     }
 #nullable disable

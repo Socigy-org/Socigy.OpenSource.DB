@@ -24,12 +24,17 @@ namespace Socigy.OpenSource.DB.UnitTests
             public bool IsActive { get; set; }
             public int? Age { get; set; }
             public decimal Amount { get; set; }
+            public Guid Gid { get; set; }
+            public DateOnly D { get; set; }
+            public char Initial { get; set; }
+            public string Last { get; set; } = "";
         }
 
         private static (string Sql, NpgsqlParameter[] Parameters) Where(Expression<Func<Foo, bool>> predicate)
         {
             var command = new NpgsqlCommand();
-            GetColumnName columns = name => "\"" + name + "\"";
+            // Mirror production: GetColumnDbName returns the bare column name and the visitor quotes it.
+            GetColumnName columns = name => name;
             var visitor = new PostgresqlWhereVisitor(predicate.Parameters[0], columns, command);
             string sql = visitor.Parse(predicate.Body);
             return (sql, command.Parameters.Cast<NpgsqlParameter>().ToArray());
@@ -125,6 +130,62 @@ namespace Socigy.OpenSource.DB.UnitTests
         public void UnsupportedStringMethod_Throws()
         {
             Assert.Throws<NotSupportedException>(() => Where(x => x.Name.PadLeft(3) == "abc"));
+        }
+
+        // Regression: `string + string` compiles to a BinaryExpression Add, which emitted SQL `+` ("operator does
+        // not exist: text + text"); it must emit `||`.
+        [Test]
+        public void StringConcat_EmitsSqlConcatOperator()
+        {
+            var (sql, _) = Where(x => x.Name + x.Last == "ab");
+            Assert.That(sql, Does.Contain("\"Name\" || \"Last\""));
+            Assert.That(sql, Does.Not.Contain("\"Name\" + "));
+        }
+
+        // Regression: a char comparison promotes to int==int and bound the code point (65) against the
+        // character(1) column ("character(1) = integer"); it must bind the char value as a 1-char string.
+        [Test]
+        public void CharComparison_BindsCharValueNotCodePoint()
+        {
+            var (sql, ps) = Where(x => x.Initial == 'A');
+            Assert.That(sql, Does.Contain("\"Initial\" = @p0"));
+            Assert.That(ps[0].Value, Is.EqualTo("A"));
+            Assert.That(ps[0].Value, Is.Not.EqualTo(65));
+        }
+
+        // Regression: a ternary in a predicate had no VisitConditional override → malformed SQL; it must emit CASE.
+        [Test]
+        public void Ternary_EmitsCaseExpression()
+        {
+            var (sql, _) = Where(x => (x.Id > 0 ? x.Amount : 0m) > 5m);
+            Assert.That(sql, Does.Contain("CASE WHEN"));
+            Assert.That(sql, Does.Contain(" THEN "));
+            Assert.That(sql, Does.Contain(" ELSE "));
+            Assert.That(sql, Does.Contain(" END"));
+        }
+
+        // An inline multi-arg constructor on the value side must fold to ONE parameter, not shatter into one
+        // @p per ctor argument (which produced broken SQL like "@p0@p1@p2" → PostgreSQL syntax error).
+        [Test]
+        public void InlineDateOnlyConstructor_FoldsToSingleParameter()
+        {
+            var (sql, ps) = Where(x => x.D > new DateOnly(2020, 1, 1));
+            Assert.That(sql, Does.Contain("\"D\" > @p0"));
+            Assert.That(ps, Has.Length.EqualTo(1), "the constructor must bind as one value, not one @p per arg");
+            Assert.That(ps[0].Value, Is.EqualTo(new DateOnly(2020, 1, 1)));
+        }
+
+        // A single-arg constructor was syntactically valid but bound the wrong CLR type — `new Guid("...")`
+        // bound the String, yielding a live `operator does not exist: uuid = text`. It must bind a Guid.
+        [Test]
+        public void InlineGuidConstructor_BindsGuidNotString()
+        {
+            var g = new Guid("22222222-2222-2222-2222-222222222222");
+            var (sql, ps) = Where(x => x.Gid == new Guid("22222222-2222-2222-2222-222222222222"));
+            Assert.That(sql, Does.Contain("\"Gid\" = @p0"));
+            Assert.That(ps, Has.Length.EqualTo(1));
+            Assert.That(ps[0].Value, Is.EqualTo(g));
+            Assert.That(ps[0].Value, Is.TypeOf<Guid>(), "must bind a Guid, not the String constructor argument");
         }
 
         // ---- Reflection-light closure evaluation (no Expression.Compile on the hot path) ----

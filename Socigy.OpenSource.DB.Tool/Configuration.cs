@@ -71,7 +71,13 @@ namespace Socigy.OpenSource.DB.Tool
                     Settings = (await JsonSerializer.DeserializeAsync<SocigySettings>(stream, JsonOptions))!;
                     await stream.DisposeAsync();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Surface the real parse/read error instead of swallowing it; a bare catch turned a JSON
+                    // syntax error into an opaque "Invalid configuration" with no clue where to look.
+                    Logger.Error($"Invalid configuration in socigy.json, please fix! Aborting... ({ex.Message})");
+                    throw new InvalidDataException($"Invalid configuration loaded from {SocigyConfigFilePath}", ex);
+                }
                 if (Settings == null)
                 {
                     Logger.Error("Invalid configuration in socigy.json, please fix! Aborting...");

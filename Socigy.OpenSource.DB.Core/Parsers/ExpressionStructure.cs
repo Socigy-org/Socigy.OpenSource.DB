@@ -89,6 +89,16 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                     R l = Compute(b.Left, rowParam);
                     R r = Compute(b.Right, rowParam);
                     bool cacheable = l.Cacheable && r.Cacheable;
+                    // A captured (non-literal) operand of a nullable-capable type in an (in)equality is rewritten
+                    // by the WHERE visitor to IS NULL / IS NOT NULL when it evaluates to null at runtime, but to
+                    // "= @p" / "<> @p" otherwise. Those two SQL shapes are indistinguishable in this structural
+                    // hash, so caching one and replaying it for the other returns wrong rows. Force a full
+                    // translation for that shape. A literal constant is already distinguished (TokNullConst vs
+                    // TokValue), and a non-nullable value-type operand (an int/Guid key) can never be null, so
+                    // both of those keep caching.
+                    if ((b.NodeType == ExpressionType.Equal || b.NodeType == ExpressionType.NotEqual)
+                        && (IsNullableCapturedValue(b.Left, l) || IsNullableCapturedValue(b.Right, r)))
+                        cacheable = false;
                     if (!l.Depends && !r.Depends)
                         return new R(TokValue, false, cacheable);
                     long h = Mix(Mix(FnvOffset, TokBinary), (long)b.NodeType);
@@ -100,7 +110,13 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                 case MethodCallExpression mc:
                 {
                     // Query.Custom(...) / Select.Custom(...) splice a runtime string into the SQL text — never cache.
-                    bool cacheable = mc.Method.Name != "Custom";
+                    // HasFlag is never cached either: the flag value is a constant that hashes to the same token
+                    // regardless of value, so a single-flag query and a composite one would collide and reuse the
+                    // wrong SQL (and bypass the composite-flag validation done during full translation).
+                    // CustomField("col") splices the column NAME into the SQL text and is otherwise value-only
+                    // (no row reference), so two different column names collapse to the same token — never cache.
+                    bool cacheable = mc.Method.Name != "Custom" && mc.Method.Name != "HasFlag"
+                        && mc.Method.Name != "CustomField";
 
                     long h = MixString(Mix(FnvOffset, TokMethod), mc.Method.Name);
                     h = Mix(h, mc.Method.DeclaringType?.GetHashCode() ?? 0);
@@ -117,6 +133,18 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                         depends |= a.Depends;
                         cacheable &= a.Cacheable;
                         h = Mix(h, a.Hash);
+
+                        // A StringComparison argument changes the SQL shape: Equals/Contains/StartsWith/EndsWith
+                        // emit LOWER(...)/ILIKE for the *IgnoreCase variants. It otherwise collapses to the same
+                        // value token as a case-sensitive call, so fold the actual value into the hash when it is
+                        // a literal, and refuse to cache when it is a runtime (non-constant) value.
+                        if (args[i].Type == typeof(StringComparison))
+                        {
+                            if (args[i] is ConstantExpression sc && sc.Value != null)
+                                h = Mix(h, (long)(int)sc.Value);
+                            else
+                                cacheable = false;
+                        }
                     }
 
                     if (!depends)
@@ -128,6 +156,25 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                     // Unmodelled node type — don't risk a wrong-SQL collision; force a full translation.
                     return new R(0, true, false);
             }
+        }
+
+        // The value side of an (in)equality (does not reference the row) that is not a literal constant and whose
+        // static type can hold null. Such an operand can flip the visitor between "= @p" and "IS NULL", a
+        // distinction this structural hash cannot otherwise see. Literal nulls are handled by TokNullConst, and a
+        // non-nullable value type can never be null, so both are excluded here.
+        private static bool IsNullableCapturedValue(Expression operand, R result)
+        {
+            if (result.Depends) return false;
+            // See through lifted conversions (e.g. a nullable comparison wraps the literal as (int?)5) to find a
+            // literal constant underneath. A literal is not a captured runtime value, and its null-ness is already
+            // encoded distinctly (TokNullConst vs TokValue), so it stays cacheable.
+            Expression inner = operand;
+            while (inner is UnaryExpression u
+                   && (u.NodeType == ExpressionType.Convert || u.NodeType == ExpressionType.ConvertChecked))
+                inner = u.Operand;
+            if (inner is ConstantExpression) return false;
+            Type t = operand.Type;
+            return !t.IsValueType || Nullable.GetUnderlyingType(t) != null;
         }
 
         private static long Mix(long hash, long value)

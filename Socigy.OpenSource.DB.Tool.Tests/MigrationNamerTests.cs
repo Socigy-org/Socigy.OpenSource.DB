@@ -16,6 +16,15 @@ public class MigrationNamerTests
     private static SchemaDiff Added(params string[] names)
         => new SchemaDiff { AddedTables = names.Select(n => new DbTable { Name = n }).ToList() };
 
+    // The migration id must include seconds (yyyyMMddHHmmss): a minute-only id collides for two migrations
+    // generated in the same minute (the filename overwrites) and sorts ambiguously.
+    [Test]
+    public void Migration_id_includes_seconds()
+    {
+        var id = MigrationNamer.GetMigrationId();
+        Assert.That(id, Does.Match("^[0-9]{14}$"), "expected yyyyMMddHHmmss (14 digits, with seconds)");
+    }
+
     [Test]
     public void Single_added_table_names_it()
         => Assert.That(MigrationNamer.GenerateUniqueName(Added("users")), Does.Contain("_AddUsers_"));

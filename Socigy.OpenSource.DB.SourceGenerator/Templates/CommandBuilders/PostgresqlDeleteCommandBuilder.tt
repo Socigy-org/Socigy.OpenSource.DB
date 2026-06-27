@@ -85,7 +85,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             return new PostgresqlWhereVisitor(param, getColName, command);
         }
 
-        public async Task<int> ExecuteAsync()
+        public async Task<int> ExecuteAsync(global::System.Threading.CancellationToken cancellationToken = default)
         {
 #if NET6_0_OR_GREATER
             if (_Batch != null)
@@ -96,7 +96,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("No DbConnection provided.");
 
             if (_Connection.State != System.Data.ConnectionState.Open)
-                await _Connection.OpenAsync();
+                await _Connection.OpenAsync(cancellationToken);
 
             await using var command = _Connection.CreateCommand() as NpgsqlCommand;
             if (command == null) return 0;
@@ -131,10 +131,30 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
                     whereBuilder.Append($"\"{colDbName}\" = {paramName}");
 
-                    NpgsqlParameter param = new(paramName, GetDbType(col.Value.Type))
-                    {
-                        Value = col.Value.Value ?? DBNull.Value
-                    };
+                    object? pkValue = col.Value.Value;
+                    // Whether the *original* PK value is a real enum (decided before the coercion below rewrites it
+                    // to its underlying int). A value convertor may already have produced a non-enum DB
+                    // representation (e.g. enum -> string), in which case this is false and we must NOT force a type.
+                    bool pkValueIsEnum = pkValue != null && pkValue != DBNull.Value && pkValue.GetType().IsEnum;
+                    // Coerce only when the value is *actually* an enum at runtime. Matches insert/update.
+                    if (pkValueIsEnum)
+                        pkValue = Convert.ChangeType(pkValue, Enum.GetUnderlyingType(pkValue.GetType()));
+                    if (pkValue is DateTime __dt && __dt.Kind == DateTimeKind.Utc)
+                        pkValue = DateTime.SpecifyKind(__dt, DateTimeKind.Unspecified);
+                    else if (pkValue is DateTimeOffset __dto && __dto.Offset != TimeSpan.Zero)
+                        pkValue = __dto.ToUniversalTime();
+                    else if (pkValue is ushort __us) pkValue = (int)__us;
+                    else if (pkValue is uint __ui) pkValue = (long)__ui;
+                    else if (pkValue is ulong __ul) pkValue = (decimal)__ul;
+
+                    // Mirror the UPDATE path: bind value-only so Npgsql infers the wire type from the runtime value,
+                    // and only FORCE NpgsqlDbType for a null (no value to infer from) or a real enum (int value, but
+                    // the column is the enum's integral type). Forcing GetDbType(col.Value.Type) unconditionally
+                    // broke a type-changing convertor PK (e.g. enum/Guid -> string): the string value was forced to
+                    // Integer/Uuid and Npgsql threw, while the identical UPDATE-by-instance succeeded.
+                    NpgsqlParameter param = new(paramName, pkValue ?? DBNull.Value);
+                    if (pkValue == null || pkValue == DBNull.Value || pkValueIsEnum)
+                        param.NpgsqlDbType = GetDbType(col.Value.Type);
 
                     command.Parameters.Add(param);
                 }
@@ -146,26 +166,40 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         DELETE FROM ""{<#= ClassName #>.TableName}""
         {where}";
 
-            return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DELETE", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
+            return await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "DELETE", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);
         }
 
         public NpgsqlDbType GetDbType(Type type)
         {
             type = Nullable.GetUnderlyingType(type) ?? type;
 
+            if (type.IsEnum)
+                type = Enum.GetUnderlyingType(type);
+
             return type switch
             {
                 Type t when t == typeof(int) => NpgsqlDbType.Integer,
+                Type t when t == typeof(uint) => NpgsqlDbType.Bigint,
                 Type t when t == typeof(long) => NpgsqlDbType.Bigint,
+                Type t when t == typeof(ulong) => NpgsqlDbType.Numeric,
+                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(ushort) => NpgsqlDbType.Integer,
+                Type t when t == typeof(byte) => NpgsqlDbType.Smallint,
+                Type t when t == typeof(sbyte) => NpgsqlDbType.Smallint,
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
+                Type t when t == typeof(DateTimeOffset) => NpgsqlDbType.TimestampTz,
+                Type t when t == typeof(TimeSpan) => NpgsqlDbType.Interval,
+#if NET6_0_OR_GREATER
+                Type t when t == typeof(DateOnly) => NpgsqlDbType.Date,
+                Type t when t == typeof(TimeOnly) => NpgsqlDbType.Time,
+#endif
                 Type t when t == typeof(float) => NpgsqlDbType.Real,
                 Type t when t == typeof(double) => NpgsqlDbType.Double,
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
                 Type t when t == typeof(Guid) => NpgsqlDbType.Uuid,
                 Type t when t == typeof(byte[]) => NpgsqlDbType.Bytea,
-                Type t when t == typeof(short) => NpgsqlDbType.Smallint,
                 Type t when t == typeof(char) => NpgsqlDbType.Char,
                 _ => NpgsqlDbType.Text
             };

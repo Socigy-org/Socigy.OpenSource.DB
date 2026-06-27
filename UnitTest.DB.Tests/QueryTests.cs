@@ -1,4 +1,5 @@
 using UnitTest.DB;
+using static Socigy.OpenSource.DB.Core.SyntaxHelper.DB;
 
 namespace UnitTest.DB.Tests;
 
@@ -42,6 +43,77 @@ public class QueryTests : BaseUnitTest
     // ------------------------------------------------------------------
     // WHERE predicates
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // LIMIT boundary — Limit(0) must return zero rows, not the whole table.
+    // Regression: the single-table parser treated limit==0 as "no limit set" (the -1 sentinel),
+    // took the no-LIMIT cached fast path on a filtered query, and returned every row.
+    // ------------------------------------------------------------------
+
+    [Test]
+    public async Task Query_LimitZero_WithFilter_ReturnsNoRows()
+    {
+        // Filtered + no select/orderBy is exactly the shape that took the buggy cached fast path.
+        var rows = await TestItem.Query(x => x.Priority > 0)
+            .Limit(0)
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Is.Empty, "Limit(0) must return zero rows, not the full table");
+    }
+
+    [Test]
+    public async Task Query_LimitZero_NoFilter_ReturnsNoRows()
+    {
+        var rows = await TestItem.Query()
+            .Limit(0)
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Is.Empty);
+    }
+
+    [Test]
+    public async Task Query_LimitTwo_ReturnsTwoRows()
+    {
+        var rows = await TestItem.Query(x => x.Priority > 0)
+            .Limit(2)
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(2));
+    }
+
+    // A Select.Case() terminated with End() (an ELSE-less CASE) used to emit no END -> malformed SQL. It now
+    // closes the CASE; with an As("name") alias the projected value round-trips into the property.
+    [Test]
+    public async Task SelectCase_EndWithoutElse_ProducesValidSql()
+    {
+        var rows = await TestItem.Query(x => x.Id == IdA)
+            .Select(x => new object?[] { Select.Case().When(x.Priority >= 10).Then("hi").End().As("name") })
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(1));
+        Assert.That(rows[0].Name, Is.EqualTo("hi"), "ELSE-less CASE with a matching WHEN returns the THEN value");
+    }
+
+    // A get-only computed property must be ignored by the generator (not a column) and still work at runtime.
+    [Test]
+    public async Task ComputedProperty_IsNotAColumn_AndComputesFromMappedColumns()
+    {
+        var rows = await TestItem.Query(x => x.Id == IdA)
+            .WithConnection(Connection)
+            .ExecuteAsync()
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(1));
+        Assert.That(rows[0].Display, Is.EqualTo("Alpha#10"), "computed property derives from the mapped Name/Priority columns");
+    }
 
     [Test]
     public async Task Query_EqualityFilter_ReturnsMatchingRow()

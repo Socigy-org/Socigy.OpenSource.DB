@@ -12,6 +12,14 @@ namespace Socigy.OpenSource.DB.Core.Context
     /// and disposed automatically, so business code never touches a <see cref="System.Data.Common.DbConnection"/>.
     /// Because <typeparamref name="TDatabase"/> is an interface, services depending on this are fully mockable.
     /// </summary>
+    /// <remarks>
+    /// The scope pins a single connection with one active command at a time (PostgreSQL has no MARS), so the
+    /// <c>work</c> delegate must issue its database operations <b>sequentially</b> (<c>await</c> each before the
+    /// next). Running them in parallel within one scope, e.g. <c>await Task.WhenAll(db.Users.CountAsync(),
+    /// db.Orders.CountAsync())</c>, throws "a command is already active" rather than corrupting the connection;
+    /// use separate <see cref="ExecuteAsync(Func{TDatabase, Task}, CancellationToken)"/> calls for genuine
+    /// concurrency (each gets its own connection).
+    /// </remarks>
     /// <typeparam name="TDatabase">The generated context interface (e.g. <c>IAuthDb</c>).</typeparam>
     public interface ISocigyDatabaseFactory<TDatabase>
     {

@@ -27,7 +27,20 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
         /// <summary>Advances the reader one row, counting rows for <c>db.response.returned_rows</c>.</summary>
         public async Task<bool> ReadAsync(CancellationToken cancellationToken = default)
         {
-            bool more = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            bool more;
+            try
+            {
+                // Npgsql streams rows, so a server-side error (or a broken connection) surfaces here mid-stream.
+                // Record it on the span as a failure; otherwise the later Dispose would call Complete() and the
+                // span would be reported as a successful query that simply returned fewer rows.
+                more = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (System.Exception ex)
+            {
+                _scope.SetReturnedRows(_rows);
+                _scope.Fail(ex);
+                throw;
+            }
             if (more) _rows++;
             return more;
         }

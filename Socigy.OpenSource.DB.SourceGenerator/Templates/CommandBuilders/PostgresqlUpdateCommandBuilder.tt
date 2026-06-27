@@ -210,7 +210,15 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
 
             // IMPORTANT: only use explicit WithFields() when not in AllFields mode
             if (_UpdateClause != null && !AllFieldsSet)
-                return updateVisitor.Parse(_UpdateClause);
+            {
+                var setClause = updateVisitor.Parse(_UpdateClause);
+                // An empty selector (WithFields(x => new object[] { })) would emit "SET  WHERE ..." — malformed
+                // SQL. Fail with a clear message instead of a Postgres syntax error.
+                if (string.IsNullOrWhiteSpace(setClause))
+                    throw new InvalidOperationException(
+                        "WithFields(...) selected no columns to update. Select at least one non-key column, or use WithAllFields().");
+                return setClause;
+            }
 
             HashSet<string>? excludedDbColumns = BuildExcludedDbColumns(command);
 
@@ -226,6 +234,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 if (excludedDbColumns != null && excludedDbColumns.Contains(dbColumnName))
                     continue;
 
+                // Never write the primary key or a serial/auto-increment column into SET. With a custom
+                // WHERE that matches multiple rows, writing the instance's PK into every matched row would
+                // clobber their keys (duplicate-key error or silent key reassignment).
+                if (info.IsPrimaryKey || info.IsAutoIncrement)
+                    continue;
+
                 if (!first)
                     sb.Append(", ");
 
@@ -237,11 +251,15 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                     ?? throw new InvalidOperationException("Expected NpgsqlCommand.");
 
                 object? dbValue = NormalizeDbValue(info.Type, info.Value);
+                // Only force the column's DB type when the value is actually an enum at runtime, matching the
+                // insert path. A value convertor may have produced a string for an enum-declared column, in which
+                // case forcing GetDbType (e.g. Integer) onto the string parameter would throw.
+                bool valueIsEnum = info.Value != null && info.Value != DBNull.Value && info.Value.GetType().IsEnum;
 
                 p.ParameterName = paramName;
                 p.Value = dbValue ?? DBNull.Value;
 
-                if (dbValue == null || dbValue == DBNull.Value || IsEnumType(info.Type))
+                if (dbValue == null || dbValue == DBNull.Value || valueIsEnum)
                     p.NpgsqlDbType = GetDbType(info.Type);
 
                 if (info.IsJson)
@@ -267,7 +285,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <returns>A task that represents the asynchronous operation. The task result contains the number of rows affected by
         /// the update command. Returns 0 if the command could not be created.</returns>
         /// <exception cref="InvalidOperationException">Thrown if a DbBatch was provided, or if no DbConnection is available.</exception>
-        public async Task<int> ExecuteAsync()
+        public async Task<int> ExecuteAsync(global::System.Threading.CancellationToken cancellationToken = default)
         {
 #if NET6_0_OR_GREATER
             if (_Batch != null)
@@ -278,7 +296,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("No DbConnection provided.");
 
             if (_Connection.State != System.Data.ConnectionState.Open)
-                await _Connection.OpenAsync();
+                await _Connection.OpenAsync(cancellationToken);
 
             await using var command = _Connection.CreateCommand() as NpgsqlCommand;
             if (command == null) return 0;
@@ -300,14 +318,15 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                     string colName = col.Key;
 
                     object? dbValue = NormalizeDbValue(col.Value.Type, col.Value.Value);
+                    bool pkValueIsEnum = col.Value.Value != null && col.Value.Value != DBNull.Value && col.Value.Value.GetType().IsEnum;
 
                     var param = new NpgsqlParameter(paramName, dbValue ?? DBNull.Value);
 
-                    if (dbValue == null || dbValue == DBNull.Value || IsEnumType(col.Value.Type))
+                    if (dbValue == null || dbValue == DBNull.Value || pkValueIsEnum)
                         param.NpgsqlDbType = GetDbType(col.Value.Type);
 
                     command.Parameters.Add(param);
-                    predicates.Add($"{colName} = {paramName}");
+                    predicates.Add($"\"{colName}\" = {paramName}");
                 }
 
                 where = "WHERE " + string.Join(" AND ", predicates);
@@ -318,7 +337,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         SET {BuildSetClause(command)}
         {where}";
 
-            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "UPDATE", ct => command.ExecuteNonQueryAsync(ct), default, _Diagnostics);
+            int rowsAffected = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteNonQueryAsync(command, "UPDATE", ct => command.ExecuteNonQueryAsync(ct), cancellationToken, _Diagnostics);
             return rowsAffected;
         }
 
@@ -346,6 +365,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 Type t when t == typeof(string) => NpgsqlDbType.Text,
                 Type t when t == typeof(bool) => NpgsqlDbType.Boolean,
                 Type t when t == typeof(DateTime) => NpgsqlDbType.Timestamp,
+                Type t when t == typeof(DateTimeOffset) => NpgsqlDbType.TimestampTz,
+                Type t when t == typeof(TimeSpan) => NpgsqlDbType.Interval,
+#if NET6_0_OR_GREATER
+                Type t when t == typeof(DateOnly) => NpgsqlDbType.Date,
+                Type t when t == typeof(TimeOnly) => NpgsqlDbType.Time,
+#endif
                 Type t when t == typeof(float) => NpgsqlDbType.Real,
                 Type t when t == typeof(double) => NpgsqlDbType.Double,
                 Type t when t == typeof(decimal) => NpgsqlDbType.Numeric,
@@ -367,11 +392,26 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (value == null || value == DBNull.Value)
                 return value;
 
-            var actualType = Nullable.GetUnderlyingType(type) ?? type;
-            if (!actualType.IsEnum)
+            // Store a Kind=Utc DateTime as a naive 'timestamp' (relabel Unspecified) so PostgreSQL does not
+            // shift it by the session TimeZone, matching the column type and the insert/COPY paths.
+            if (value is DateTime dt && dt.Kind == DateTimeKind.Utc)
+                return DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+            // 'timestamptz' only accepts a DateTimeOffset at offset 0; normalize to the same UTC instant.
+            if (value is DateTimeOffset dto && dto.Offset != TimeSpan.Zero)
+                return dto.ToUniversalTime();
+            // No Npgsql wire mapping for unsigned CLR types; widen to the signed/decimal type GetDbType targets.
+            if (value is ushort us) return (int)us;
+            if (value is uint ui) return (long)ui;
+            if (value is ulong ul) return (decimal)ul;
+
+            // Coerce only when the value is *actually* an enum at runtime. A value convertor may have already
+            // turned an enum property into its DB representation (e.g. a string), in which case the declared type
+            // is still the enum but the value is not, and coercing it to the underlying integer would throw.
+            // Matches AddInsertParameter in the insert builder.
+            if (!value.GetType().IsEnum)
                 return value;
 
-            var enumUnderlyingType = Enum.GetUnderlyingType(actualType);
+            var enumUnderlyingType = Enum.GetUnderlyingType(value.GetType());
             return Convert.ChangeType(value, enumUnderlyingType);
         }
     }

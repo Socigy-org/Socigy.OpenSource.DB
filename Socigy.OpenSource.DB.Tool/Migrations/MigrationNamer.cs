@@ -90,8 +90,11 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
 
         public static string GetMigrationId()
         {
+            // Include seconds: a minute-only id makes two migrations generated in the same minute collide (the
+            // filename overwrites) and sort ambiguously. Seconds keep the id monotonic with wall-clock; an older
+            // minute-only id stays a lexical prefix of a same-minute second id, so apply ordering is preserved.
             var now = DateTime.UtcNow;
-            return $"{now.Year}{now.Month:D2}{now.Day:D2}{now.Hour:D2}{now.Minute:D2}";
+            return $"{now.Year}{now.Month:D2}{now.Day:D2}{now.Hour:D2}{now.Minute:D2}{now.Second:D2}";
         }
 
         /// <summary>
@@ -147,7 +150,7 @@ namespace Socigy.OpenSource.DB.Tool.Migrations
                             sb.AppendLine($"  AddConstraint:{tableAlteration.Table.Name}.{con.Type}");
                         }
 
-                    if (tableAlteration.RemovedColumns != null)
+                    if (tableAlteration.RemovedConstraints != null)
                         foreach (var con in tableAlteration.RemovedConstraints?.OrderBy(c => c.Type).ThenBy(c => string.Join(",", c.Columns.OrderBy(x => x))))
                         {
                             sb.AppendLine($"  RemoveConstraint:{tableAlteration.Table.Name}.{con.Type}");

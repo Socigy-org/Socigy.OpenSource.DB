@@ -19,7 +19,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers
         private readonly CreateSelectVisitor _NewSelect;
         private readonly CreateWhereVisitor _NewWhere;
         private readonly CreateOrderByVisitor _NewOrderBy;
-        public SqlQueryBuilderExpressionParser(DbCommand command, GetColumnName getColumNames, CreateSelectVisitor newSelect, CreateWhereVisitor newWhere, CreateOrderByVisitor newOrderBy)
+
+        // Per-column [ValueConvertor] lookup: property name -> ConvertToDbValue wrapper, or null for a
+        // non-convertor column. Null for tables with no convertor columns (the common case), so the WHERE
+        // visitor's convertor branch is skipped entirely and there is zero translation overhead.
+        private readonly Func<string, Func<object?, object?>?>? _GetColumnConvertor;
+
+        public SqlQueryBuilderExpressionParser(DbCommand command, GetColumnName getColumNames, CreateSelectVisitor newSelect, CreateWhereVisitor newWhere, CreateOrderByVisitor newOrderBy,
+            Func<string, Func<object?, object?>?>? getColumnConvertor = null)
         {
             _Command = command;
             _GetColumName = getColumNames;
@@ -28,6 +35,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             _NewSelect = newSelect;
             _NewWhere = newWhere;
             _NewOrderBy = newOrderBy;
+            _GetColumnConvertor = getColumnConvertor;
         }
 
         /// <summary>
@@ -40,7 +48,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers
         public string BuildCommand(string tableName, Expression<Func<T, object?[]>>? select, Expression<Func<T, bool>>? where,
             Expression<Func<T, object?[]>>? orderBy, bool isDescending, int limit, int offset)
         {
-            if (select == null && orderBy == null && where != null && limit <= 0 && offset <= 0
+            // limit < 0 is the "no limit set" sentinel (-1). limit == 0 is an explicit Limit(0) and must emit
+            // LIMIT 0 (zero rows), so it cannot take the no-limit fast path below.
+            if (select == null && orderBy == null && where != null && limit < 0 && offset <= 0
                 && _Command.Parameters.Count == 0
                 && ExpressionStructure.TryComputeHash(where.Body, where.Parameters[0], out long hash))
             {
@@ -53,13 +63,17 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                 }
 
                 var visitor = _NewWhere(where.Parameters[0], _GetColumName, _Command);
+                if (_GetColumnConvertor != null && visitor is Postgresql.PostgresqlWhereVisitor pwv)
+                    pwv.ColumnConvertor = _GetColumnConvertor;
                 _Sql.Clear();
                 _Sql.Append("SELECT * FROM ");
                 _Sql.Append(tableName);
                 _Sql.Append(visitor.Parse(where.Body));
                 string fullSql = _Sql.ToString();
 
-                if (visitor is IParameterRecorder recorder
+                // A predicate that applied a [ValueConvertor] is not cacheable: the replay path rebinds from the
+                // source expression and would skip the convertor, binding the raw value against the converted column.
+                if (visitor is IParameterRecorder recorder && !recorder.UsedConvertor
                     && TryBuildPlan(where.Body, recorder.RecordedParameters, out ParamSlot[] plan))
                 {
                     QueryShapeCache.Add(type, hash, new CompiledQuery(fullSql, plan));
@@ -70,7 +84,8 @@ namespace Socigy.OpenSource.DB.Core.Parsers
 
             // Non-cacheable shape — full translation.
             Process(tableName, select, where, orderBy, isDescending);
-            if (limit > 0) AddLimit(limit);
+            // >= 0 (not > 0): Limit(0) must emit LIMIT 0 to return zero rows. -1 (unset) emits nothing.
+            if (limit >= 0) AddLimit(limit);
             if (offset > 0) AddOffset(offset);
             return ToString();
         }
@@ -138,8 +153,10 @@ namespace Socigy.OpenSource.DB.Core.Parsers
 
         public string ProcessWhere(Expression<Func<T, bool>> where)
         {
-            return _NewWhere(where.Parameters[0], _GetColumName, _Command)
-              .Parse(where);
+            var visitor = _NewWhere(where.Parameters[0], _GetColumName, _Command);
+            if (_GetColumnConvertor != null && visitor is Postgresql.PostgresqlWhereVisitor pwv)
+                pwv.ColumnConvertor = _GetColumnConvertor;
+            return visitor.Parse(where);
         }
 
         public string ProcessOrderBy(Expression<Func<T, object?[]>> orderBy, bool isDesc)

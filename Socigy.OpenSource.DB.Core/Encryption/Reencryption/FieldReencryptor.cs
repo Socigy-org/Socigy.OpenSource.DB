@@ -163,7 +163,10 @@ namespace Socigy.OpenSource.DB.Core.Encryption.Reencryption
                 }
                 catch
                 {
-                    tx?.Rollback();
+                    // A broken connection / aborted transaction is the common reason the batch threw; rolling back
+                    // such a transaction throws again and would mask the original failure. Swallow only the
+                    // rollback error so the real cause propagates, matching the other transactional sites.
+                    try { tx?.Rollback(); } catch { /* preserve the original exception */ }
                     throw;
                 }
                 finally
@@ -251,7 +254,16 @@ namespace Socigy.OpenSource.DB.Core.Encryption.Reencryption
                 {
                     var pk = new object?[pkCount];
                     for (int i = 0; i < pkCount; i++)
-                        pk[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    {
+                        // Keyset pagination compares (pk) > (@cursor); a NULL key makes that comparison
+                        // UNKNOWN, which would silently drop the row from every later batch. Fail loud instead.
+                        if (reader.IsDBNull(i))
+                            throw new InvalidOperationException(
+                                "Re-encryption uses keyset pagination over the primary key, which cannot handle NULL key values. " +
+                                "Table '" + sqlTable + "' has a row with a NULL key column '" + pkColumns[i] +
+                                "'. Ensure the identifying columns are NOT NULL.");
+                        pk[i] = reader.GetValue(i);
+                    }
 
                     var enc = new byte[encrypted.Count][];
                     for (int i = 0; i < encrypted.Count; i++)

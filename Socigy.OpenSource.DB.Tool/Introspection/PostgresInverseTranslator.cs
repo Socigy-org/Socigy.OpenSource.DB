@@ -63,9 +63,15 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
         /// fallback) to the canonical CLR type the emitter should declare. The chosen CLR type is the one
         /// whose forward <c>CSharpTypeMapping</c> entry produces this SQL type, so the round-trip is stable.
         /// </summary>
-        public static string PgTypeToCSharp(string dataType, string? udtName)
+        public static string PgTypeToCSharp(string dataType, string? udtName, int? maxLength = null)
         {
             string t = (dataType ?? "").Trim().ToLowerInvariant();
+
+            // character(n)/char(n) is a fixed-length STRING, not a single character. Only n==1 is representable as
+            // a C# char; widen n>1 to string so multi-character values aren't truncated.
+            if (t == "character" || t == "char")
+                return (maxLength.HasValue && maxLength.Value != 1) ? "string" : "char";
+
             switch (t)
             {
                 case "smallint": return "short";
@@ -83,8 +89,6 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
                 case "text": return "string";
                 case "character varying":
                 case "varchar": return "string"; // length captured separately via [StringLength]
-                case "character":
-                case "char": return "char";
                 case "timestamp without time zone": return "DateTime";
                 case "timestamp with time zone": return "DateTimeOffset";
                 case "date": return "DateOnly";
@@ -112,9 +116,12 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
         }
 
         /// <summary>Removes PostgreSQL <c>::type</c> casts (e.g. <c>'utc'::text</c> → <c>'utc'</c>,
-        /// <c>'seq'::regclass</c> → <c>'seq'</c>) so defaults compare cleanly against the generator's output.</summary>
+        /// <c>'seq'::regclass</c> → <c>'seq'</c>, <c>'x'::public.citext</c> → <c>'x'</c>) so defaults compare
+        /// cleanly against the generator's output. The type-name class includes <c>.</c> and <c>"</c> so a
+        /// schema-qualified or quoted cast (<c>::public.citext</c>, <c>::"public"."citext"</c>) is fully removed —
+        /// otherwise only the unqualified leg was stripped, leaving <c>'x'.citext</c> as a bogus literal default.</summary>
         private static string StripCasts(string expr)
             => System.Text.RegularExpressions.Regex.Replace(
-                expr, @"::\s*""?[A-Za-z_][A-Za-z0-9_ ]*""?(\s*\([0-9, ]*\))?", "");
+                expr, @"::\s*""?[A-Za-z_][A-Za-z0-9_."" ]*""?(\s*\([0-9, ]*\))?", "");
     }
 }

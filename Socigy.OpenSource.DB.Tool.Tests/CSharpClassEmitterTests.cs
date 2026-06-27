@@ -102,4 +102,62 @@ public class CSharpClassEmitterTests
         Assert.That(src, Does.Contain("Keys = [nameof(UserId)]"));
         Assert.That(src, Does.Contain("TargetKeys = [nameof(User.Id)]"));
     }
+
+    // Regression: a scaffolded class dropped every UNIQUE constraint (the emitter only handled FKs), so a
+    // scaffold→generate round-trip emitted a DROP CONSTRAINT and silently lost uniqueness. A single-column unique
+    // must emit a property-level [Unique] (the form the analyzer reads back).
+    [Test]
+    public void Emits_Unique_For_SingleColumnUniqueConstraint()
+    {
+        var t = new DbTable
+        {
+            Name = "accounts",
+            SourceName = "Account",
+            Columns = new List<DbColumn>
+            {
+                new DbColumn { Name = "id", SourceName = "Id", DotnetType = "Guid", Nullable = false, IsPrimaryKey = true },
+                new DbColumn { Name = "email", SourceName = "Email", DotnetType = "string", Nullable = false },
+                new DbColumn { Name = "name", SourceName = "Name", DotnetType = "string", Nullable = false },
+            },
+            Constraints = new List<DbConstraint>
+            {
+                new DbConstraint { Type = DbConstraint.Types.Unique, TableName = "accounts", Columns = new[] { "email" } },
+            }
+        };
+
+        var src = CSharpClassEmitter.Emit(new DbSchema { Tables = new List<DbTable> { t } }, "MyApp.Data")["Account.cs"];
+
+        // The Email property carries [Unique]; Name (no unique constraint) does not.
+        Assert.That(src, Does.Match(@"\[Unique\]\s*\r?\n\s*public string Email"));
+        Assert.That(src, Does.Not.Match(@"\[Unique\]\s*\r?\n\s*public string Name"));
+    }
+
+    // A composite (multi-column) UNIQUE maps to a class-level [Unique(nameof(A), nameof(B))] using property names,
+    // the form the analyzer reads back — so it round-trips instead of being dropped.
+    [Test]
+    public void Emits_ClassLevelUnique_For_CompositeUniqueConstraint()
+    {
+        var t = new DbTable
+        {
+            Name = "memberships",
+            SourceName = "Membership",
+            Columns = new List<DbColumn>
+            {
+                new DbColumn { Name = "id", SourceName = "Id", DotnetType = "Guid", Nullable = false, IsPrimaryKey = true },
+                new DbColumn { Name = "org_id", SourceName = "OrgId", DotnetType = "Guid", Nullable = false },
+                new DbColumn { Name = "user_id", SourceName = "UserId", DotnetType = "Guid", Nullable = false },
+            },
+            Constraints = new List<DbConstraint>
+            {
+                new DbConstraint { Type = DbConstraint.Types.Unique, TableName = "memberships", Columns = new[] { "org_id", "user_id" } },
+            }
+        };
+
+        var src = CSharpClassEmitter.Emit(new DbSchema { Tables = new List<DbTable> { t } }, "MyApp.Data")["Membership.cs"];
+
+        // Class-level [Unique(nameof(OrgId), nameof(UserId))], mapped from the DB column names to property names.
+        Assert.That(src, Does.Match(@"\[Unique\(nameof\(OrgId\), nameof\(UserId\)\)\]\s*\r?\n\s*public partial class Membership"));
+        // The composite columns must NOT also carry a property-level [Unique].
+        Assert.That(src, Does.Not.Match(@"\[Unique\]\s*\r?\n\s*public Guid OrgId"));
+    }
 }

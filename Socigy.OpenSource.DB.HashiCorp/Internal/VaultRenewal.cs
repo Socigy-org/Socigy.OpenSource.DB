@@ -16,11 +16,20 @@ namespace Socigy.OpenSource.DB.HashiCorp.Internal
         /// </summary>
         public static TimeSpan NextDelay(double? secondsRemaining, TimeSpan fallback)
         {
-            TimeSpan candidate = secondsRemaining.HasValue && secondsRemaining.Value > 0
-                ? TimeSpan.FromSeconds(secondsRemaining.Value * 2.0 / 3.0)
-                : fallback;
+            if (secondsRemaining is double s && s > 0)
+            {
+                var ttl = TimeSpan.FromSeconds(s);
+                var candidate = TimeSpan.FromSeconds(s * 2.0 / 3.0);
+                if (candidate >= Floor)
+                    return candidate;
+                // 2/3 of the TTL is below the busy-loop floor. Prefer the floor, but NEVER schedule the renewal
+                // at or after the lease expires — for a very short lease (floor >= TTL) renew at 2/3 instead, so
+                // the credential is always renewed before it dies even if that means a tighter loop.
+                return Floor < ttl ? Floor : candidate;
+            }
 
-            return candidate < Floor ? Floor : candidate;
+            // Unknown / non-positive TTL: fall back to the configured interval, floored against a busy loop.
+            return fallback < Floor ? Floor : fallback;
         }
     }
 #nullable disable

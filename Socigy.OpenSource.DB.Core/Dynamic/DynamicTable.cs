@@ -34,6 +34,11 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         private static readonly ConcurrentDictionary<(Type, string), string[]> _mapCache =
             new ConcurrentDictionary<(Type, string), string[]>();
 
+        // Cap the cache so a long-running multi-tenant process that maps many distinct runtime table names
+        // (e.g. one table per tenant) cannot grow it without bound. The cached value is a cheap, re-derivable
+        // information_schema lookup, so arbitrary eviction on overflow is acceptable.
+        private const int MapCacheMaxEntries = 4096;
+
         // Per-closed-type shared state: the metadata prototype (stateless for the hooks we call) and the
         // parser delegates. Cached statically so a handle/query doesn't allocate them every call.
         private static readonly T _proto = new T();
@@ -171,17 +176,18 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         public async Task<TResult?> ScalarAsync<TResult>(Expression<Func<T, object?>> selector, CancellationToken cancellationToken = default)
         {
             var result = await RunScalarAsync(Quote(AggColumn(selector)), cancellationToken).ConfigureAwait(false);
-            if (result == null || result is DBNull) return default;
-            var target = typeof(TResult);
-            return (TResult)Convert.ChangeType(result, Nullable.GetUnderlyingType(target) ?? target);
+            // Use the shared width-tolerant converter (the join aggregate path already does). A raw
+            // Convert.ChangeType crashes for a DateTimeOffset result (not IConvertible) and for an enum target
+            // read back as its underlying int — both of which ApplyDbValue handles.
+            return ColumnInfo.ApplyDbValue<TResult>(result);
         }
 
         private async Task<TResult?> AggregateAsync<TResult>(string func, Expression<Func<T, object?>> selector, CancellationToken cancellationToken) where TResult : struct
         {
             var result = await RunScalarAsync(func + "(" + Quote(AggColumn(selector)) + ")", cancellationToken).ConfigureAwait(false);
-            if (result == null || result is DBNull) return null;
-            var target = typeof(TResult);
-            return (TResult)Convert.ChangeType(result, Nullable.GetUnderlyingType(target) ?? target);
+            // Shared converter: MIN/MAX of a DateTimeOffset (timestamptz read as DateTime) or an enum column
+            // (stored as int) crashed under Convert.ChangeType; ApplyDbValue handles null/DBNull -> null too.
+            return ColumnInfo.ApplyDbValue<TResult>(result);
         }
 
         private async Task<object?> RunScalarAsync(string projection, CancellationToken cancellationToken)
@@ -198,16 +204,17 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
         }
 
-        public Task<int> InsertAsync(T row, bool includeAutoFields = false, CancellationToken cancellationToken = default)
-            => InsertMultipleAsync(new[] { row }, includeAutoFields, cancellationToken);
+        public Task<int> InsertAsync(T row, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
+            => InsertMultipleAsync(new[] { row }, fields, keep, cancellationToken);
 
-        public async Task<int> InsertMultipleAsync(IEnumerable<T> rows, bool includeAutoFields = false, CancellationToken cancellationToken = default)
+        public async Task<int> InsertMultipleAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             var list = rows as IList<T> ?? new List<T>(rows);
             if (list.Count == 0) return 0;
 
-            InsertColumnDescriptor[] cols = _proto.InsertColumns(includeAutoFields);
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
+                _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keep, (IDbTable)_proto);
             if (cols.Length == 0) return 0;
 
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -259,13 +266,14 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         /// are NOT propagated back to the instances (COPY has no <c>RETURNING</c>); use
         /// <see cref="InsertMultipleAsync"/> when you need generated keys.
         /// </summary>
-        public async Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, bool includeAutoFields = false, CancellationToken cancellationToken = default)
+        public async Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             var list = rows as IReadOnlyList<T> ?? new List<T>(rows);
             if (list.Count == 0) return 0UL;
 
-            InsertColumnDescriptor[] cols = _proto.InsertColumns(includeAutoFields);
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
+                _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keep, (IDbTable)_proto);
             if (cols.Length == 0) return 0UL;
 
             var boxed = new object[list.Count];
@@ -351,8 +359,16 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             {
                 using var command = lease.Connection.CreateCommand();
                 if (_tx != null) command.Transaction = _tx;
-                command.CommandText = "SELECT column_name FROM information_schema.columns WHERE table_name = @t ORDER BY ordinal_position";
-                AddParameter(command, "@t", _tableName, typeof(string));
+                // Resolve the relation through the connection's search_path with to_regclass and read its columns
+                // from pg_catalog, scoped to that single OID. A bare 'WHERE table_name = @t' against
+                // information_schema.columns matches the name in EVERY schema, so a same-named table in another
+                // schema would merge foreign columns into the extras list and corrupt every materialized row.
+                // This resolves exactly the table that all other queries on this instance hit (Quote(_tableName)).
+                command.CommandText =
+                    "SELECT a.attname FROM pg_catalog.pg_attribute a " +
+                    "WHERE a.attrelid = to_regclass(@t) AND a.attnum > 0 AND NOT a.attisdropped " +
+                    "ORDER BY a.attnum";
+                AddParameter(command, "@t", Quote(_tableName), typeof(string));
 
                 await using var instr = await DbDiagnostics.ExecuteReaderAsync(
                     command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _diag).ConfigureAwait(false);
@@ -366,6 +382,15 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
             finally { await lease.DisposeAsync().ConfigureAwait(false); }
 
             var arr = extras.ToArray();
+            if (_mapCache.Count >= MapCacheMaxEntries && !_mapCache.ContainsKey(key))
+            {
+                // Evict arbitrary entries to stay under the cap (ConcurrentDictionary has no LRU).
+                foreach (var staleKey in _mapCache.Keys)
+                {
+                    _mapCache.TryRemove(staleKey, out _);
+                    if (_mapCache.Count < MapCacheMaxEntries) break;
+                }
+            }
             _mapCache[key] = arr;
             _customColumns = new List<string>(arr);
             return this;
@@ -470,9 +495,22 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         // to jsonb in the SQL text; enums are reduced to their underlying value).
         private static void AddParameter(DbCommand command, string name, object? value, Type type)
         {
-            var actual = Nullable.GetUnderlyingType(type) ?? type;
-            if (actual.IsEnum && value != null && !(value is DBNull))
-                value = Convert.ChangeType(value, Enum.GetUnderlyingType(actual));
+            // Coerce only when the value is *actually* an enum at runtime (a value convertor may have already
+            // produced a non-enum DB representation for an enum-declared column). Matches the insert/update paths.
+            if (value != null && !(value is DBNull) && value.GetType().IsEnum)
+                value = Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()));
+
+            // Store a Kind=Utc DateTime as a naive 'timestamp' so PostgreSQL doesn't shift it by the session
+            // TimeZone (Npgsql would otherwise infer 'timestamptz' from Kind=Utc).
+            if (value is DateTime dt && dt.Kind == DateTimeKind.Utc)
+                value = DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+            // 'timestamptz' only accepts a DateTimeOffset at offset 0; normalize to the same UTC instant.
+            else if (value is DateTimeOffset dto && dto.Offset != TimeSpan.Zero)
+                value = dto.ToUniversalTime();
+            // No Npgsql wire mapping for unsigned CLR types; widen before binding.
+            else if (value is ushort us) value = (int)us;
+            else if (value is uint ui) value = (long)ui;
+            else if (value is ulong ul) value = (decimal)ul;
 
             var p = command.CreateParameter();
             p.ParameterName = name;

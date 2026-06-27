@@ -20,6 +20,13 @@ namespace Socigy.OpenSource.DB.Core.Encryption.Reencryption
         /// Required to re-encrypt values whose encryptor has no version concept (e.g. a plain single-key
         /// encryptor); otherwise such values are left untouched.
         /// </summary>
+        /// <remarks>
+        /// A pass commits per batch and is not resumable, so if it dies partway the table is left with some
+        /// rows on the old key and some on the new. With a versioned encryptor (<c>KeyringFieldEncryptor</c> or
+        /// Vault Transit) both keys still decrypt, so a re-run finishes the job safely. With a plain single-key
+        /// <c>AesFieldEncryptor</c> whose key you are swapping, keep BOTH the old and new keys loaded (run the
+        /// pass through a keyring that holds both) until it completes, or a partial pass becomes undecryptable.
+        /// </remarks>
         public bool Force { get; set; }
 
         /// <summary>Optional per-batch progress callback (table name, rows scanned so far, cells upgraded so far).</summary>

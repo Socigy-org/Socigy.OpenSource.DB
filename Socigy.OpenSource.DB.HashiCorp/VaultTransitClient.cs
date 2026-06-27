@@ -183,13 +183,20 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 string key = part.Substring(0, eq);
                 string value = part.Substring(eq + 1);
                 if (key == "current")
-                    keyring.Current = int.Parse(value);
+                    keyring.Current = ParseId(value, part);
                 else
-                    keyring.Keys[int.Parse(key)] = value;
+                    keyring.Keys[ParseId(key, part)] = value;
             }
             if (keyring.Keys.Count == 0)
                 throw new FormatException("Keyring has no keys.");
             return keyring;
+
+            // Culture-invariant, overflow-safe id parse so a corrupted KV field fails as a clear
+            // "malformed keyring" rather than an unscoped FormatException/OverflowException.
+            static int ParseId(string text, string part)
+                => int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id)
+                    ? id
+                    : throw new FormatException($"Malformed keyring entry '{part}'.");
         }
 
         public int NextId()

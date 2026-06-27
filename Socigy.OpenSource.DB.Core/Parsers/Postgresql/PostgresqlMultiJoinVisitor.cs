@@ -39,15 +39,17 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         }
 
         /// <summary>Resolves an <c>object?[]</c> selector lambda body into a comma-separated <c>alias."col"</c> list (ORDER BY).</summary>
-        public string ResolveColumnList(LambdaExpression selector)
+        public string ResolveColumnList(LambdaExpression selector, bool descending = false)
         {
             var body = selector.Body;
             IReadOnlyList<Expression> elements = body is NewArrayExpression na
                 ? (IReadOnlyList<Expression>)na.Expressions
                 : new[] { body };
 
+            // Apply DESC per column: "ORDER BY a, b DESC" only sorts b descending, so a multi-key
+            // descending sort must repeat the keyword on every key.
             var parts = new List<string>(elements.Count);
-            foreach (var e in elements) parts.Add(ResolveColumn(e));
+            foreach (var e in elements) parts.Add(descending ? ResolveColumn(e) + " DESC" : ResolveColumn(e));
             return string.Join(", ", parts);
         }
 
@@ -94,6 +96,24 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
             if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
 
+            // char comparison: C# promotes `a.Initial == 'A'` (char) to int==int — one side is Convert(char->int)
+            // over the column, the other a folded int code point — which binds against character(1) as an integer
+            // ("character = integer"). Bind the value back as a 1-char string. Mirrors the single-table WHERE visitor.
+            if (IsComparisonOperator(node.NodeType))
+            {
+                bool leftChar = IsCharPromotion(node.Left);
+                bool rightChar = IsCharPromotion(node.Right);
+                if (leftChar ^ rightChar)
+                {
+                    _Sql.Append("(");
+                    EmitCharComparisonOperand(node.Left, leftChar);
+                    _Sql.Append(ComparisonOperatorSql(node.NodeType));
+                    EmitCharComparisonOperand(node.Right, rightChar);
+                    _Sql.Append(")");
+                    return node;
+                }
+            }
+
             _Sql.Append("(");
             Visit(node.Left);
             _Sql.Append(node.NodeType switch
@@ -106,7 +126,9 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
                 ExpressionType.GreaterThanOrEqual => " >= ",
                 ExpressionType.LessThan => " < ",
                 ExpressionType.LessThanOrEqual => " <= ",
-                ExpressionType.Add => " + ",
+                // string concatenation is `||` in PostgreSQL; `string + string` compiles to NodeType=Add but
+                // `text + text` has no operator.
+                ExpressionType.Add => node.Type == typeof(string) ? " || " : " + ",
                 ExpressionType.Subtract => " - ",
                 ExpressionType.Multiply => " * ",
                 ExpressionType.Divide => " / ",
@@ -144,10 +166,75 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
             return base.VisitMethodCall(node);
         }
 
+        // An inline constructor on the value side of an ON/WHERE comparison (e.g. `a.Created > new DateTime(...)`,
+        // `b.Gid == new Guid("...")`) must fold to a SINGLE parameter. Without this, the base visitor recurses
+        // into the constructor arguments and emits one @p per arg ("@p0@p1@p2", broken SQL) or binds a single-arg
+        // ctor's string instead of the Guid. Mirrors the single-table WHERE visitor.
+        protected override Expression VisitNew(NewExpression node)
+        {
+            if (TryEvaluate(node, out var v)) { AddParameter(v); return node; }
+            throw new NotSupportedException(
+                $"Unsupported constructor '{node.Type.Name}' in SQL JOIN translation: {node}");
+        }
+
+        // A ternary in an ON/WHERE (e.g. `(a.X > 0 ? a.Y : a.Z) == b.W`) must become a SQL CASE — without this the
+        // base visitor emits the branches with no CASE/WHEN/THEN scaffolding (malformed SQL). Mirrors the WHERE
+        // visitor. A param-independent test is evaluated now and the chosen branch inlined.
+        protected override Expression VisitConditional(ConditionalExpression node)
+        {
+            if (IsDependentOnParam(node.Test))
+            {
+                _Sql.Append("CASE WHEN ");
+                Visit(node.Test);
+                _Sql.Append(" THEN ");
+                Visit(node.IfTrue);
+                _Sql.Append(" ELSE ");
+                Visit(node.IfFalse);
+                _Sql.Append(" END");
+            }
+            else
+            {
+                Visit(ExpressionEvaluator.Evaluate(node.Test) is true ? node.IfTrue : node.IfFalse);
+            }
+            return node;
+        }
+
+        private static bool IsCharPromotion(Expression e) =>
+            e is UnaryExpression u && (u.NodeType == ExpressionType.Convert || u.NodeType == ExpressionType.ConvertChecked)
+                && u.Operand.Type == typeof(char);
+
+        private static bool IsComparisonOperator(ExpressionType t) =>
+            t is ExpressionType.Equal or ExpressionType.NotEqual or ExpressionType.GreaterThan
+              or ExpressionType.GreaterThanOrEqual or ExpressionType.LessThan or ExpressionType.LessThanOrEqual;
+
+        private static string ComparisonOperatorSql(ExpressionType t) => t switch
+        {
+            ExpressionType.Equal => " = ",
+            ExpressionType.NotEqual => " <> ",
+            ExpressionType.GreaterThan => " > ",
+            ExpressionType.GreaterThanOrEqual => " >= ",
+            ExpressionType.LessThan => " < ",
+            ExpressionType.LessThanOrEqual => " <= ",
+            _ => " = "
+        };
+
+        private void EmitCharComparisonOperand(Expression side, bool isCharColumn)
+        {
+            if (isCharColumn) { Visit(((UnaryExpression)side).Operand); return; }
+            if (TryEvaluate(side, out var v) && v != null)
+                AddParameter(((char)System.Convert.ToInt32(v)).ToString());
+            else
+                Visit(side);
+        }
+
         private void AddParameter(object? value)
         {
-            if (value is Enum e)
-                value = Convert.ChangeType(e, Enum.GetUnderlyingType(e.GetType()));
+            // Use the same normalization as the single-table WHERE path (enum->underlying, DateTime Kind=Utc->
+            // Unspecified, DateTimeOffset->UTC, unsigned widening). The join path previously normalized ONLY enums,
+            // so a UTC DateTime, an offset DateTimeOffset, or an unsigned value bound in an ON/WHERE was silently
+            // shifted by the session time zone, rejected, or unmappable — while the identical single-table query
+            // was correct.
+            value = WhereParameter.Normalize(value);
 
             string paramName = $"@p{_Command.Parameters.Count}";
             var p = _Command.CreateParameter();
