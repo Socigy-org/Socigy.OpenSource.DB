@@ -13,7 +13,12 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<!-- Deliberately NOT GeneratePackageOnBuild: NuGet drops Build from the Pack target's dependencies when
+		     it is set (NuGet.Build.Tasks.Pack.targets), so a plain "dotnet pack" would silently package whatever
+		     stale assembly happened to be in bin/$(Configuration) instead of compiling, and would fail with an
+		     obscure NU5026 on a clean tree. It also made a build of any project referencing this one re-run this
+		     package's full pack. "dotnet pack" now builds first, like everywhere else; CI builds explicitly and
+		     packs with NoBuild, so it is unaffected. -->
 		<Title>Socigy DB</Title>
 		<!-- NuGet version for this package. Defined in Directory.Build.props ($(DbPackageVersion)),
 		     independently of the HashiCorp package and the base $(Version). -->
