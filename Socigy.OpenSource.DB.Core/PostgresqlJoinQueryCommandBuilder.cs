@@ -34,6 +34,10 @@ namespace Socigy.OpenSource.DB.Core
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> Where(Expression<Func<T, TJoin, bool>> where) { _plan.Where = where; return this; }
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderBy(Expression<Func<T, TJoin, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = false; return this; }
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderByDesc(Expression<Func<T, TJoin, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = true; return this; }
+        /// <summary>AOT-safe order-by naming the DRIVING table's columns by string (property or DB column name) instead of an Expression selector.</summary>
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderBy(params string[] columns) { _plan.OrderByColumns = columns; _plan.OrderDesc = false; return this; }
+        /// <summary>AOT-safe order-by (descending) naming the DRIVING table's columns by string.</summary>
+        public PostgresqlJoinQueryCommandBuilder<T, TJoin> OrderByDesc(params string[] columns) { _plan.OrderByColumns = columns; _plan.OrderDesc = true; return this; }
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> Limit(int limit) { _plan.Limit = limit; return this; }
         public PostgresqlJoinQueryCommandBuilder<T, TJoin> Offset(int offset) { _plan.Offset = offset; return this; }
 

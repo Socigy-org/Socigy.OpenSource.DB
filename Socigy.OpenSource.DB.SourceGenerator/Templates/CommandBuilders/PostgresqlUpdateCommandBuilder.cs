@@ -17,7 +17,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator.Templates.CommandBuilders {
     public partial class PostgresqlUpdateCommandBuilder : PostgresqlUpdateCommandBuilderBase {
         
         
-        #line 423 "PostgresqlUpdateCommandBuilder.tt"
+        #line 463 "PostgresqlUpdateCommandBuilder.tt"
 
 	public string ClassName { get; set; }
 	public string Namespace { get; set; }
@@ -162,31 +162,33 @@ using ");
                     "leRow;\n        private Expression<Func<T, bool>> _WhereClause;\n\n        private " +
                     "bool AllFieldsSet = false;\n        private Expression<Func<T, object?[]>> _Updat" +
                     "eClause;\n        private Expression<Func<T, object?[]>> _UpdateExceptClause;\n\n  " +
-                    "      public Postgresql");
+                    "      // AOT-safe string-named field selectors (set by the params-string WithFie" +
+                    "lds/ExceptFields overloads).\n        private string[]? _UpdateColumns;\n        p" +
+                    "rivate string[]? _UpdateExceptColumns;\n\n        public Postgresql");
             
             #line default
             #line hidden
             
-            #line 103 "PostgresqlUpdateCommandBuilder.tt"
+            #line 107 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 103 "PostgresqlUpdateCommandBuilder.tt"
+            #line 107 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("UpdateCommandBuilder(T rowInstance)\n        {\n            _TableRow = rowInstance" +
                     ";\n        }\n\n        public Postgresql");
             
             #line default
             #line hidden
             
-            #line 108 "PostgresqlUpdateCommandBuilder.tt"
+            #line 112 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 108 "PostgresqlUpdateCommandBuilder.tt"
+            #line 112 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@"UpdateCommandBuilder<T> Where(Expression<Func<T, bool>> where)
         {
             _WhereClause = where;
@@ -197,7 +199,7 @@ using ");
         {
             return new PostgresqlWhereVisitor(param, getColName, command);
         }
-        private ISqlVisitor GetUpdateSetVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
+        private PostgresqlUpdateVisitor GetUpdateSetVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
         {
             return new PostgresqlUpdateVisitor(param, getColName, command, _TableRow);
         }
@@ -213,29 +215,29 @@ using ");
             #line default
             #line hidden
             
-            #line 129 "PostgresqlUpdateCommandBuilder.tt"
+            #line 133 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 129 "PostgresqlUpdateCommandBuilder.tt"
+            #line 133 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("UpdateCommandBuilder{T}\"/> instance for method chaining.</returns>\n        public" +
                     " Postgresql");
             
             #line default
             #line hidden
             
-            #line 130 "PostgresqlUpdateCommandBuilder.tt"
+            #line 134 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 130 "PostgresqlUpdateCommandBuilder.tt"
+            #line 134 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@"UpdateCommandBuilder<T> WithAllFields()
         {
-            if (_UpdateClause != null)
+            if (_UpdateClause != null || _UpdateColumns != null)
                 throw new InvalidOperationException(""Cannot combine WithAllFields() with WithFields()."");
 
             AllFieldsSet = true;
@@ -254,13 +256,13 @@ using ");
             #line default
             #line hidden
             
-            #line 146 "PostgresqlUpdateCommandBuilder.tt"
+            #line 150 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 146 "PostgresqlUpdateCommandBuilder.tt"
+            #line 150 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@"UpdateCommandBuilder{T}""/> instance with the specified fields configured.</returns>
         /// <exception cref=""InvalidOperationException"">Thrown if all fields have already been specified using <see cref=""WithAllFields""/>.</exception>
         public Postgresql");
@@ -268,13 +270,13 @@ using ");
             #line default
             #line hidden
             
-            #line 148 "PostgresqlUpdateCommandBuilder.tt"
+            #line 152 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 148 "PostgresqlUpdateCommandBuilder.tt"
+            #line 152 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@"UpdateCommandBuilder<T> WithFields(Expression<Func<T, object?[]>> select)
         {
             if (AllFieldsSet)
@@ -284,6 +286,30 @@ using ");
                 throw new InvalidOperationException(""Cannot combine WithFields() with ExceptFields()."");
 
             _UpdateClause = select;
+            return this;
+        }
+
+        /// <summary>AOT-safe overload of <see cref=""WithFields(Expression{Func{T, object[]}})""/> naming the updated columns by string (C# property name) instead of an Expression selector.</summary>
+        public Postgresql");
+            
+            #line default
+            #line hidden
+            
+            #line 165 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 165 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(@"UpdateCommandBuilder<T> WithFields(params string[] select)
+        {
+            if (AllFieldsSet)
+                throw new InvalidOperationException(""Cannot specify individual fields when WithAllFields() is set."");
+            if (_UpdateExceptClause != null || _UpdateExceptColumns != null)
+                throw new InvalidOperationException(""Cannot combine WithFields() with ExceptFields()."");
+
+            _UpdateColumns = select;
             return this;
         }
 
@@ -299,26 +325,26 @@ using ");
             #line default
             #line hidden
             
-            #line 167 "PostgresqlUpdateCommandBuilder.tt"
+            #line 183 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 167 "PostgresqlUpdateCommandBuilder.tt"
+            #line 183 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("UpdateCommandBuilder{T}\"/> instance with the specified fields excluded from updat" +
                     "es.</returns>\n        public Postgresql");
             
             #line default
             #line hidden
             
-            #line 168 "PostgresqlUpdateCommandBuilder.tt"
+            #line 184 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 168 "PostgresqlUpdateCommandBuilder.tt"
+            #line 184 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@"UpdateCommandBuilder<T> ExceptFields(Expression<Func<T, object?[]>> except)
         {
             if (_UpdateClause != null)
@@ -328,8 +354,34 @@ using ");
             return this;
         }
 
+        /// <summary>AOT-safe overload of <see cref=""ExceptFields(Expression{Func{T, object[]}})""/> naming the excluded columns by string (property or DB column name).</summary>
+        public Postgresql");
+            
+            #line default
+            #line hidden
+            
+            #line 194 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
+            
+            #line default
+            #line hidden
+            
+            #line 194 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(@"UpdateCommandBuilder<T> ExceptFields(params string[] except)
+        {
+            if (_UpdateClause != null || _UpdateColumns != null)
+                throw new InvalidOperationException(""Cannot combine ExceptFields() with WithFields()."");
+
+            _UpdateExceptColumns = except;
+            return this;
+        }
+
         private HashSet<string>? BuildExcludedDbColumns(NpgsqlCommand command)
         {
+            // AOT-safe ExceptFields(string[]) path: map the names directly (property or DB column name) to DB names.
+            if (_UpdateExceptColumns != null)
+                return global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(_UpdateExceptColumns, _TableRow);
+
             if (_UpdateExceptClause == null)
                 return null;
 
@@ -340,13 +392,13 @@ using ");
             #line default
             #line hidden
             
-            #line 184 "PostgresqlUpdateCommandBuilder.tt"
+            #line 214 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 184 "PostgresqlUpdateCommandBuilder.tt"
+            #line 214 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@".GetColumnDbName,
                 command);
 
@@ -362,13 +414,13 @@ using ");
             #line default
             #line hidden
             
-            #line 194 "PostgresqlUpdateCommandBuilder.tt"
+            #line 224 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 194 "PostgresqlUpdateCommandBuilder.tt"
+            #line 224 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(@".GetColumnDbName(memberName);
                 if (!string.IsNullOrEmpty(dbName))
                     excludedDbColumns.Add(dbName);
@@ -388,84 +440,91 @@ using ");
             #line default
             #line hidden
             
-            #line 208 "PostgresqlUpdateCommandBuilder.tt"
+            #line 238 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 208 "PostgresqlUpdateCommandBuilder.tt"
-            this.Write(".GetColumnDbName,\n                command);\n\n            // IMPORTANT: only use e" +
-                    "xplicit WithFields() when not in AllFields mode\n            if (_UpdateClause !=" +
-                    " null && !AllFieldsSet)\n            {\n                var setClause = updateVisi" +
-                    "tor.Parse(_UpdateClause);\n                // An empty selector (WithFields(x => " +
-                    "new object[] { })) would emit \"SET  WHERE ...\" — malformed\n                // SQ" +
-                    "L. Fail with a clear message instead of a Postgres syntax error.\n               " +
-                    " if (string.IsNullOrWhiteSpace(setClause))\n                    throw new Invalid" +
-                    "OperationException(\n                        \"WithFields(...) selected no columns" +
-                    " to update. Select at least one non-key column, or use WithAllFields().\");\n     " +
-                    "           return setClause;\n            }\n\n            HashSet<string>? exclude" +
-                    "dDbColumns = BuildExcludedDbColumns(command);\n\n            Dictionary<string, Co" +
-                    "lumnInfo> allColumns = _TableRow.GetColumns();\n            var sb = new StringBu" +
-                    "ilder();\n            bool first = true;\n\n            foreach (var kv in allColum" +
-                    "ns)\n            {\n                var dbColumnName = kv.Key;\n                var" +
-                    " info = kv.Value;\n\n                if (excludedDbColumns != null && excludedDbCo" +
-                    "lumns.Contains(dbColumnName))\n                    continue;\n\n                // " +
-                    "Never write the primary key or a serial/auto-increment column into SET. With a c" +
-                    "ustom\n                // WHERE that matches multiple rows, writing the instance\'" +
-                    "s PK into every matched row would\n                // clobber their keys (duplica" +
-                    "te-key error or silent key reassignment).\n                if (info.IsPrimaryKey " +
-                    "|| info.IsAutoIncrement)\n                    continue;\n\n                if (!fir" +
-                    "st)\n                    sb.Append(\", \");\n\n                first = false;\n\n      " +
-                    "          string paramName = $\"@p{command.Parameters.Count}\";\n\n                v" +
-                    "ar p = command.CreateParameter()\n                    ?? throw new InvalidOperati" +
-                    "onException(\"Expected NpgsqlCommand.\");\n\n                object? dbValue = Norma" +
-                    "lizeDbValue(info.Type, info.Value);\n                // Only force the column\'s D" +
-                    "B type when the value is actually an enum at runtime, matching the\n             " +
-                    "   // insert path. A value convertor may have produced a string for an enum-decl" +
-                    "ared column, in which\n                // case forcing GetDbType (e.g. Integer) o" +
-                    "nto the string parameter would throw.\n                bool valueIsEnum = info.Va" +
-                    "lue != null && info.Value != DBNull.Value && info.Value.GetType().IsEnum;\n\n     " +
-                    "           p.ParameterName = paramName;\n                p.Value = dbValue ?? DBN" +
-                    "ull.Value;\n\n                if (dbValue == null || dbValue == DBNull.Value || va" +
-                    "lueIsEnum)\n                    p.NpgsqlDbType = GetDbType(info.Type);\n\n         " +
-                    "       if (info.IsJson)\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;" +
-                    "\n\n                if (info.IsEncrypted)\n                    p.NpgsqlDbType = Npg" +
-                    "sqlDbType.Bytea;\n\n                command.Parameters.Add(p);\n                sb." +
-                    "Append($\"\\\"{dbColumnName}\\\" = {paramName}\");\n            }\n\n            return s" +
-                    "b.ToString();\n        }\n\n        /// <summary>\n        /// Executes the update c" +
-                    "ommand asynchronously against the database connection and returns the number of " +
-                    "rows\n        /// affected.\n        /// </summary>\n        /// <remarks>If the da" +
-                    "tabase connection is not already open, this method opens it before executing\n   " +
-                    "     /// the command. The update is performed using either the specified WHERE c" +
-                    "lause or the primary key columns of\n        /// the table row.</remarks>\n       " +
-                    " /// <returns>A task that represents the asynchronous operation. The task result" +
-                    " contains the number of rows affected by\n        /// the update command. Returns" +
-                    " 0 if the command could not be created.</returns>\n        /// <exception cref=\"I" +
-                    "nvalidOperationException\">Thrown if a DbBatch was provided, or if no DbConnectio" +
-                    "n is available.</exception>\n        public async Task<int> ExecuteAsync(global::" +
-                    "System.Threading.CancellationToken cancellationToken = default)\n        {\n#if NE" +
-                    "T6_0_OR_GREATER\n            if (_Batch != null)\n                throw new Invali" +
-                    "dOperationException(\"Cannot execute command when DbBatch was provided.\");\n#endif" +
-                    "\n\n            if (_Connection == null)\n                throw new InvalidOperatio" +
-                    "nException(\"No DbConnection provided.\");\n\n            if (_Connection.State != S" +
-                    "ystem.Data.ConnectionState.Open)\n                await _Connection.OpenAsync(can" +
-                    "cellationToken);\n\n            await using var command = _Connection.CreateComman" +
-                    "d() as NpgsqlCommand;\n            if (command == null) return 0;\n\n            if" +
-                    " (_Transaction != null)\n                command.Transaction = _Transaction as Np" +
-                    "gsqlTransaction;\n\n            string? where = null;\n            if (_WhereClause" +
-                    " != null)\n                where = GetWhereVisitor(_WhereClause.Parameters[0], ");
+            #line 238 "PostgresqlUpdateCommandBuilder.tt"
+            this.Write(".GetColumnDbName,\n                command);\n\n            // AOT-safe WithFields(s" +
+                    "tring[]) path: build the SET clause from the named columns directly.\n           " +
+                    " if (_UpdateColumns != null && !AllFieldsSet)\n            {\n                var " +
+                    "setClause = updateVisitor.ParseColumns(_UpdateColumns);\n                if (stri" +
+                    "ng.IsNullOrWhiteSpace(setClause))\n                    throw new InvalidOperation" +
+                    "Exception(\n                        \"WithFields(...) selected no columns to updat" +
+                    "e. Select at least one non-key column, or use WithAllFields().\");\n              " +
+                    "  return setClause;\n            }\n\n            // IMPORTANT: only use explicit W" +
+                    "ithFields() when not in AllFields mode\n            if (_UpdateClause != null && " +
+                    "!AllFieldsSet)\n            {\n                var setClause = updateVisitor.Parse" +
+                    "(_UpdateClause);\n                // An empty selector (WithFields(x => new objec" +
+                    "t[] { })) would emit \"SET  WHERE ...\" — malformed\n                // SQL. Fail w" +
+                    "ith a clear message instead of a Postgres syntax error.\n                if (stri" +
+                    "ng.IsNullOrWhiteSpace(setClause))\n                    throw new InvalidOperation" +
+                    "Exception(\n                        \"WithFields(...) selected no columns to updat" +
+                    "e. Select at least one non-key column, or use WithAllFields().\");\n              " +
+                    "  return setClause;\n            }\n\n            HashSet<string>? excludedDbColumn" +
+                    "s = BuildExcludedDbColumns(command);\n\n            Dictionary<string, ColumnInfo>" +
+                    " allColumns = _TableRow.GetColumns();\n            var sb = new StringBuilder();\n" +
+                    "            bool first = true;\n\n            foreach (var kv in allColumns)\n     " +
+                    "       {\n                var dbColumnName = kv.Key;\n                var info = k" +
+                    "v.Value;\n\n                if (excludedDbColumns != null && excludedDbColumns.Con" +
+                    "tains(dbColumnName))\n                    continue;\n\n                // Never wri" +
+                    "te the primary key or a serial/auto-increment column into SET. With a custom\n   " +
+                    "             // WHERE that matches multiple rows, writing the instance\'s PK into" +
+                    " every matched row would\n                // clobber their keys (duplicate-key er" +
+                    "ror or silent key reassignment).\n                if (info.IsPrimaryKey || info.I" +
+                    "sAutoIncrement)\n                    continue;\n\n                if (!first)\n     " +
+                    "               sb.Append(\", \");\n\n                first = false;\n\n               " +
+                    " string paramName = $\"@p{command.Parameters.Count}\";\n\n                var p = co" +
+                    "mmand.CreateParameter()\n                    ?? throw new InvalidOperationExcepti" +
+                    "on(\"Expected NpgsqlCommand.\");\n\n                object? dbValue = NormalizeDbVal" +
+                    "ue(info.Type, info.Value);\n                // Only force the column\'s DB type wh" +
+                    "en the value is actually an enum at runtime, matching the\n                // ins" +
+                    "ert path. A value convertor may have produced a string for an enum-declared colu" +
+                    "mn, in which\n                // case forcing GetDbType (e.g. Integer) onto the s" +
+                    "tring parameter would throw.\n                bool valueIsEnum = info.Value != nu" +
+                    "ll && info.Value != DBNull.Value && info.Value.GetType().IsEnum;\n\n              " +
+                    "  p.ParameterName = paramName;\n                p.Value = dbValue ?? DBNull.Value" +
+                    ";\n\n                if (dbValue == null || dbValue == DBNull.Value || valueIsEnum" +
+                    ")\n                    p.NpgsqlDbType = GetDbType(info.Type);\n\n                if" +
+                    " (info.IsJson)\n                    p.NpgsqlDbType = NpgsqlDbType.Jsonb;\n\n       " +
+                    "         if (info.IsEncrypted)\n                    p.NpgsqlDbType = NpgsqlDbType" +
+                    ".Bytea;\n\n                command.Parameters.Add(p);\n                sb.Append($\"" +
+                    "\\\"{dbColumnName}\\\" = {paramName}\");\n            }\n\n            return sb.ToStrin" +
+                    "g();\n        }\n\n        /// <summary>\n        /// Executes the update command as" +
+                    "ynchronously against the database connection and returns the number of rows\n    " +
+                    "    /// affected.\n        /// </summary>\n        /// <remarks>If the database co" +
+                    "nnection is not already open, this method opens it before executing\n        /// " +
+                    "the command. The update is performed using either the specified WHERE clause or " +
+                    "the primary key columns of\n        /// the table row.</remarks>\n        /// <ret" +
+                    "urns>A task that represents the asynchronous operation. The task result contains" +
+                    " the number of rows affected by\n        /// the update command. Returns 0 if the" +
+                    " command could not be created.</returns>\n        /// <exception cref=\"InvalidOpe" +
+                    "rationException\">Thrown if a DbBatch was provided, or if no DbConnection is avai" +
+                    "lable.</exception>\n        public async Task<int> ExecuteAsync(global::System.Th" +
+                    "reading.CancellationToken cancellationToken = default)\n        {\n#if NET6_0_OR_G" +
+                    "REATER\n            if (_Batch != null)\n                throw new InvalidOperatio" +
+                    "nException(\"Cannot execute command when DbBatch was provided.\");\n#endif\n\n       " +
+                    "     if (_Connection == null)\n                throw new InvalidOperationExceptio" +
+                    "n(\"No DbConnection provided.\");\n\n            if (_Connection.State != System.Dat" +
+                    "a.ConnectionState.Open)\n                await _Connection.OpenAsync(cancellation" +
+                    "Token);\n\n            await using var command = _Connection.CreateCommand() as Np" +
+                    "gsqlCommand;\n            if (command == null) return 0;\n\n            if (_Transa" +
+                    "ction != null)\n                command.Transaction = _Transaction as NpgsqlTrans" +
+                    "action;\n\n            string? where = null;\n            if (_WhereClause != null)" +
+                    "\n                where = GetWhereVisitor(_WhereClause.Parameters[0], ");
             
             #line default
             #line hidden
             
-            #line 309 "PostgresqlUpdateCommandBuilder.tt"
+            #line 349 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( ClassName ));
             
             #line default
             #line hidden
             
-            #line 309 "PostgresqlUpdateCommandBuilder.tt"
+            #line 349 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(".GetColumnDbName, command).Parse(_WhereClause);\n            else\n            {\n  " +
                     "              var predicates = new List<string>();\n\n                Dictionary<s" +
                     "tring, ColumnInfo> columns = _TableRow.GetPrimaryColumns();\n                fore" +
@@ -535,13 +594,13 @@ using ");
             #line default
             #line hidden
             
-            #line 418 "PostgresqlUpdateCommandBuilder.tt"
+            #line 458 "PostgresqlUpdateCommandBuilder.tt"
             this.Write(this.ToStringHelper.ToStringWithCulture( CustomPostClass ));
             
             #line default
             #line hidden
             
-            #line 418 "PostgresqlUpdateCommandBuilder.tt"
+            #line 458 "PostgresqlUpdateCommandBuilder.tt"
             this.Write("\n}\n\n#nullable disable\n\n");
             
             #line default

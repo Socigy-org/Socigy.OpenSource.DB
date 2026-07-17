@@ -62,6 +62,23 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         }
 
         /// <summary>
+        /// AOT-safe SET builder: emits the SET assignments for the named columns (C# property names) directly,
+        /// without an <c>Expression</c> selector (which forces <c>Expression.NewArrayInit</c>, <c>[RequiresDynamicCode]</c>).
+        /// Reuses <see cref="EmitAssignment"/> so quoting, value reading (incl. value convertors), JSON casting and
+        /// normalization match the expression path. Requires a non-null entity.
+        /// </summary>
+        public string ParseColumns(string[] memberNames)
+        {
+            _Sql.Clear();
+            _firstAssignment = true;
+            _extractionMode = false;
+            foreach (var name in memberNames)
+                if (!string.IsNullOrEmpty(name))
+                    EmitAssignment(name);
+            return _Sql.ToString();
+        }
+
+        /// <summary>
         /// Walks the expression and returns the C# property names of every column
         /// referenced on the row parameter — without touching SQL or parameters.
         /// Used by <c>ExceptFields</c> to build an exclusion set.
@@ -182,13 +199,10 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
 
         private bool EvaluateBoolean(Expression test)
         {
-            if (IsDependentOnParam(test))
-            {
-                // Predicate over the entity instance — requires a compiled delegate with the row parameter.
-                var lambda = Expression.Lambda(test, _rowParam);
-                return lambda.Compile().DynamicInvoke(_Entity) is true;
-            }
-            return ExpressionEvaluator.Evaluate(test) is true;
+            // Interpret the test against the concrete entity via reflection (no Expression.Compile, which is
+            // [RequiresDynamicCode] and unusable under NativeAOT). The row parameter is bound to the entity; a
+            // param-independent test ignores it.
+            return ExpressionEvaluator.EvaluateWithParameter(test, _rowParam, _Entity) is true;
         }
 
         private bool IsDependentOnParam(Expression e)

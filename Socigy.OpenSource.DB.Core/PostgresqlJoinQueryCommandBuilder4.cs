@@ -22,6 +22,10 @@ namespace Socigy.OpenSource.DB.Core
         public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> Where(Expression<Func<T1, T2, T3, T4, bool>> where) { _plan.Where = where; return this; }
         public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> OrderBy(Expression<Func<T1, T2, T3, T4, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = false; return this; }
         public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> OrderByDesc(Expression<Func<T1, T2, T3, T4, object?[]>> keys) { _plan.OrderBy = keys; _plan.OrderDesc = true; return this; }
+        /// <summary>AOT-safe order-by naming the DRIVING table's columns by string (property or DB column name).</summary>
+        public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> OrderBy(params string[] columns) { _plan.OrderByColumns = columns; _plan.OrderDesc = false; return this; }
+        /// <summary>AOT-safe order-by (descending) naming the DRIVING table's columns by string.</summary>
+        public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> OrderByDesc(params string[] columns) { _plan.OrderByColumns = columns; _plan.OrderDesc = true; return this; }
         public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> Limit(int limit) { _plan.Limit = limit; return this; }
         public PostgresqlJoinQueryCommandBuilder<T1, T2, T3, T4> Offset(int offset) { _plan.Offset = offset; return this; }
 

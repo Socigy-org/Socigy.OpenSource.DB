@@ -128,6 +128,17 @@ namespace Socigy.OpenSource.DB.UnitTests
         public void DifferentOperator_ProducesDifferentHash()
             => Assert.That(Hash(x => x.Id < 5), Is.Not.EqualTo(Hash(x => x.Id > 5)));
 
+        // == and != emit "= @p" vs "<> @p", so a shared cache key would replay one shape's SQL for the other
+        // and return exactly the complement of the intended rows.
+        [Test]
+        public void EqualAndNotEqual_ProduceDifferentHashes()
+            => Assert.That(Hash(x => x.Id == 5), Is.Not.EqualTo(Hash(x => x.Id != 5)));
+
+        [Test]
+        public void EqualAndNotEqual_DifferInsideACompositePredicate()
+            => Assert.That(Hash(x => x.Name == "a" && x.Id == 5),
+                Is.Not.EqualTo(Hash(x => x.Name == "a" && x.Id != 5)));
+
         [Test]
         public void DifferentColumn_ProducesDifferentHash()
             => Assert.That(Hash(x => x.Id == 5), Is.Not.EqualTo(Hash(x => x.Age == 5)));

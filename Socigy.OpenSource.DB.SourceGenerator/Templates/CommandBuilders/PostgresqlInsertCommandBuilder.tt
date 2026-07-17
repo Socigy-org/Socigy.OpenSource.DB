@@ -147,6 +147,23 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         }
 
         /// <summary>
+        /// AOT-safe overload of <see cref="WithFields(Expression{Func{T, object[]}})"/> naming the fields by string
+        /// (a property name such as <c>nameof(Row.Name)</c>, or a DB column name) instead of an <c>Expression</c>
+        /// selector — the expression form forces <c>Expression.NewArrayInit</c> (<c>[RequiresDynamicCode]</c>) at the
+        /// call site and cannot be used under NativeAOT.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> WithFields(params string[] select)
+        {
+            if (_ForceAllFields)
+                throw new InvalidOperationException("Cannot combine WithFields() with WithAllFields().");
+            if (_ExcludedDbColumns != null)
+                throw new InvalidOperationException("Cannot combine WithFields() with ExcludeFields().");
+
+            _SelectedDbColumns = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(select, _TableRow);
+            return this;
+        }
+
+        /// <summary>
         /// Excludes the specified fields from the INSERT statement.
         /// Auto-increment columns are also excluded unless <see cref="WithAllFields"/> is called.
         /// </summary>
@@ -156,6 +173,16 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("Cannot combine ExcludeFields() with WithFields().");
 
             _ExcludedDbColumns = ExtractDbColumnNames(except);
+            return this;
+        }
+
+        /// <summary>AOT-safe overload of <see cref="ExcludeFields(Expression{Func{T, object[]}})"/> naming the fields by string.</summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeFields(params string[] except)
+        {
+            if (_SelectedDbColumns != null)
+                throw new InvalidOperationException("Cannot combine ExcludeFields() with WithFields().");
+
+            _ExcludedDbColumns = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(except, _TableRow);
             return this;
         }
 
@@ -199,6 +226,21 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("ExcludeAutoFields() has already been called. Use one form or the other.");
             _ExcludeAutoFields = true;
             _IncludedAutoFields = ExtractDbColumnNames(include);
+            return this;
+        }
+
+        /// <summary>
+        /// AOT-safe overload of <see cref="ExcludeAutoFields(Expression{Func{T, object[]}})"/> naming the kept columns
+        /// by string (a property name such as <c>nameof(Row.Id)</c>, or a DB column name).
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFields(params string[] include)
+        {
+            if (_ForceAllFields)
+                throw new InvalidOperationException("Cannot combine ExcludeAutoFields() with WithAllFields().");
+            if (_ExcludeAutoFields && _IncludedAutoFields == null)
+                throw new InvalidOperationException("ExcludeAutoFields() has already been called. Use one form or the other.");
+            _ExcludeAutoFields = true;
+            _IncludedAutoFields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(include, _TableRow);
             return this;
         }
 
@@ -472,20 +514,44 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// (optionally with <paramref name="keep"/>) to let the server fill <c>[Default]</c> columns.
         /// Returns the total rows inserted.
         /// </summary>
-        public static async Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, System.Threading.CancellationToken cancellationToken = default)
+        public static Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, System.Threading.CancellationToken cancellationToken = default)
+        {
+            var (list, planProvider) = __PrepareInsertMultiple(rows, connection);
+            if (list.Count == 0) return Task.FromResult(0);
+            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve<T>(
+                planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
+                fields, keep, list[0]);
+            return __InsertResolvedMultipleAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        /// <summary>
+        /// AOT-safe overload of <see cref="InsertMultipleAsync(IEnumerable{T}, DbConnection, DbTransaction, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, Expression{Func{T, object[]}}, System.Threading.CancellationToken)"/>
+        /// naming the kept columns by string (property name or DB column name) instead of an <c>Expression</c>
+        /// selector — the expression form forces <c>Expression.NewArrayInit</c> (<c>[RequiresDynamicCode]</c>).
+        /// Supplying <paramref name="keepColumns"/> implies <c>ServerDefaults</c> for the unlisted <c>[Default]</c> columns.
+        /// </summary>
+        public static Task<int> InsertMultipleAsync(IEnumerable<T> rows, DbConnection connection, string[] keepColumns, DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, System.Threading.CancellationToken cancellationToken = default)
+        {
+            var (list, planProvider) = __PrepareInsertMultiple(rows, connection);
+            if (list.Count == 0) return Task.FromResult(0);
+            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve(
+                planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
+                fields, keepColumns, list[0]);
+            return __InsertResolvedMultipleAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        private static (IList<T> list, IInsertPlanProvider planProvider) __PrepareInsertMultiple(IEnumerable<T> rows, DbConnection connection)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             if (connection == null) throw new ArgumentNullException(nameof(connection));
-
             var list = rows as IList<T> ?? new List<T>(rows);
-            if (list.Count == 0) return 0;
-
-            if (list[0] is not IInsertPlanProvider __planProvider)
+            if (list.Count > 0 && list[0] is not IInsertPlanProvider)
                 throw new InvalidOperationException($"{typeof(T).Name} does not provide an insert plan (IInsertPlanProvider).");
+            return (list, list.Count == 0 ? null! : (IInsertPlanProvider)list[0]!);
+        }
 
-            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve<T>(
-                __planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
-                fields, keep, list[0]);
+        private static async Task<int> __InsertResolvedMultipleAsync(IList<T> list, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] cols, DbConnection connection, DbTransaction? transaction, System.Threading.CancellationToken cancellationToken)
+        {
             int colCount = cols.Length;
             if (colCount == 0) return 0;
 

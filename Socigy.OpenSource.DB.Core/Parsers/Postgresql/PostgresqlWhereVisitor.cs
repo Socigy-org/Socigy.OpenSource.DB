@@ -167,8 +167,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers.Postgresql
         {
             if (TryEvaluate(node, out var value)) { EmitParam(node, ParamTransform.Value, value); return node; }
 
-            if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
-            if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+            // Only an (in)equality against null becomes IS NULL / IS NOT NULL. Other operators that can carry a
+            // null literal (notably `x.Col ?? null`) must fall through to their own handling — rewriting a
+            // Coalesce to "col IS NOT NULL" would emit a boolean where a value belongs.
+            if (node.NodeType == ExpressionType.Equal || node.NodeType == ExpressionType.NotEqual)
+            {
+                if (IsNullConstant(node.Right)) { Visit(node.Left); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+                if (IsNullConstant(node.Left)) { Visit(node.Right); _Sql.Append(node.NodeType == ExpressionType.Equal ? " IS NULL" : " IS NOT NULL"); return node; }
+            }
 
             // Same null semantics when an operand is a captured variable/expression that evaluates to null,
             // not just a literal `null`. Otherwise `col = @p` / `col <> @p` with a NULL parameter match no

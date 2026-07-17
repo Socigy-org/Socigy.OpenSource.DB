@@ -100,6 +100,10 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         private Expression<Func<T, object?[]>> _UpdateClause;
         private Expression<Func<T, object?[]>> _UpdateExceptClause;
 
+        // AOT-safe string-named field selectors (set by the params-string WithFields/ExceptFields overloads).
+        private string[]? _UpdateColumns;
+        private string[]? _UpdateExceptColumns;
+
         public Postgresql<#= ClassName #>UpdateCommandBuilder(T rowInstance)
         {
             _TableRow = rowInstance;
@@ -115,7 +119,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         {
             return new PostgresqlWhereVisitor(param, getColName, command);
         }
-        private ISqlVisitor GetUpdateSetVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
+        private PostgresqlUpdateVisitor GetUpdateSetVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
         {
             return new PostgresqlUpdateVisitor(param, getColName, command, _TableRow);
         }
@@ -129,7 +133,7 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         /// <returns>The current <see cref="Postgresql<#= ClassName #>UpdateCommandBuilder{T}"/> instance for method chaining.</returns>
         public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithAllFields()
         {
-            if (_UpdateClause != null)
+            if (_UpdateClause != null || _UpdateColumns != null)
                 throw new InvalidOperationException("Cannot combine WithAllFields() with WithFields().");
 
             AllFieldsSet = true;
@@ -157,6 +161,18 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             return this;
         }
 
+        /// <summary>AOT-safe overload of <see cref="WithFields(Expression{Func{T, object[]}})"/> naming the updated columns by string (C# property name) instead of an Expression selector.</summary>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> WithFields(params string[] select)
+        {
+            if (AllFieldsSet)
+                throw new InvalidOperationException("Cannot specify individual fields when WithAllFields() is set.");
+            if (_UpdateExceptClause != null || _UpdateExceptColumns != null)
+                throw new InvalidOperationException("Cannot combine WithFields() with ExceptFields().");
+
+            _UpdateColumns = select;
+            return this;
+        }
+
         /// <summary>
         /// Excludes the specified fields from being updated in the command builder.
         /// </summary>
@@ -174,8 +190,22 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             return this;
         }
 
+        /// <summary>AOT-safe overload of <see cref="ExceptFields(Expression{Func{T, object[]}})"/> naming the excluded columns by string (property or DB column name).</summary>
+        public Postgresql<#= ClassName #>UpdateCommandBuilder<T> ExceptFields(params string[] except)
+        {
+            if (_UpdateClause != null || _UpdateColumns != null)
+                throw new InvalidOperationException("Cannot combine ExceptFields() with WithFields().");
+
+            _UpdateExceptColumns = except;
+            return this;
+        }
+
         private HashSet<string>? BuildExcludedDbColumns(NpgsqlCommand command)
         {
+            // AOT-safe ExceptFields(string[]) path: map the names directly (property or DB column name) to DB names.
+            if (_UpdateExceptColumns != null)
+                return global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(_UpdateExceptColumns, _TableRow);
+
             if (_UpdateExceptClause == null)
                 return null;
 
@@ -207,6 +237,16 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                     ?? Expression.Parameter(typeof(T), "x"),
                 <#= ClassName #>.GetColumnDbName,
                 command);
+
+            // AOT-safe WithFields(string[]) path: build the SET clause from the named columns directly.
+            if (_UpdateColumns != null && !AllFieldsSet)
+            {
+                var setClause = updateVisitor.ParseColumns(_UpdateColumns);
+                if (string.IsNullOrWhiteSpace(setClause))
+                    throw new InvalidOperationException(
+                        "WithFields(...) selected no columns to update. Select at least one non-key column, or use WithAllFields().");
+                return setClause;
+            }
 
             // IMPORTANT: only use explicit WithFields() when not in AllFields mode
             if (_UpdateClause != null && !AllFieldsSet)

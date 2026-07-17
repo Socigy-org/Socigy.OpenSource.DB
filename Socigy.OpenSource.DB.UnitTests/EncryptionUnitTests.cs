@@ -192,6 +192,42 @@ namespace Socigy.OpenSource.DB.UnitTests
             Assert.That(ex!.Message, Does.Contain("[Encrypted]"));
         }
 
+        // ── IsProfileConfigured: a readiness check that covers named profiles ────────
+        // IsConfigured only reports the DEFAULT, so it cannot tell you whether an [Encrypted(Profile = "…")]
+        // column is ready — the profile stays silently missing until the first write to such a column throws.
+        [Test]
+        public void IsProfileConfigured_tracks_named_profiles_independently_of_the_default()
+        {
+            // Unique per run: SocigyFieldEncryption is process-wide static and profiles are never removed.
+            string profile = "unit-" + Guid.NewGuid().ToString("N");
+            string never = "never-" + Guid.NewGuid().ToString("N");
+
+            Assert.That(SocigyFieldEncryption.IsProfileConfigured(profile), Is.False, "not registered yet");
+
+            SocigyFieldEncryption.Configure(profile, new AesFieldEncryptor(NewKey()));
+            Assert.That(SocigyFieldEncryption.IsProfileConfigured(profile), Is.True);
+
+            // The actual bug this closes: a configured default must not make an unregistered profile look ready.
+            SocigyFieldEncryption.Configure(new AesFieldEncryptor(NewKey()));
+            try
+            {
+                Assert.That(SocigyFieldEncryption.IsConfigured, Is.True, "default is configured");
+                Assert.That(SocigyFieldEncryption.IsProfileConfigured(never), Is.False,
+                    "a never-registered profile must report false even when the default is configured");
+
+                // A null/empty profile means "the default".
+                Assert.That(SocigyFieldEncryption.IsProfileConfigured(null), Is.True);
+                Assert.That(SocigyFieldEncryption.IsProfileConfigured(""), Is.True);
+            }
+            finally
+            {
+                ResetAmbient();
+            }
+
+            Assert.That(SocigyFieldEncryption.IsProfileConfigured(null), Is.False, "default cleared");
+            Assert.That(SocigyFieldEncryption.IsProfileConfigured(profile), Is.True, "named profiles are unaffected");
+        }
+
         // ── AutoDecrypt = false (raw + lazy decrypt) ────────────────────────────────
         [Test]
         public void AutoDecrypt_false_exposes_raw_and_lazily_decrypts_into_field()

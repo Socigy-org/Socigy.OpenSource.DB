@@ -40,6 +40,19 @@ namespace Socigy.OpenSource.DB.Core.Encryption
         /// <summary>Whether the default encryptor has been configured.</summary>
         public static bool IsConfigured => _current != null;
 
+        /// <summary>
+        /// Whether an encryptor is configured for <paramref name="profile"/> (null/empty -> the default profile).
+        /// <see cref="IsConfigured"/> only covers the default, so it cannot tell you whether an
+        /// <c>[Encrypted(Profile = "…")]</c> column is ready — a missing profile would otherwise stay silent
+        /// until the first read/write of such a column threw from <see cref="Require(string?)"/>.
+        /// </summary>
+        public static bool IsProfileConfigured(string? profile)
+        {
+            if (string.IsNullOrEmpty(profile)) return _current != null;
+            var profiles = _profiles;   // one volatile read of the immutable snapshot; lock-free like Require
+            return profiles != null && profiles.ContainsKey(profile!);
+        }
+
         /// <summary>Sets the process-wide default field encryptor. Thread-safe; the swap is atomic and lock-free for readers.</summary>
         public static void Configure(IFieldEncryptor encryptor)
         {

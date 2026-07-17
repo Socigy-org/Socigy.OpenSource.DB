@@ -281,9 +281,17 @@ namespace <#= Namespace #>
         public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Linq.Expressions.Expression<global::System.Func<<#= ClassName #>, object?[]>>? keep = null, global::System.Threading.CancellationToken cancellationToken = default)
             => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, transaction, fields, keep, cancellationToken);
 
+        /// <summary>AOT-safe overload of <see cref="InsertMultipleAsync(global::System.Collections.Generic.IEnumerable{<#= ClassName #>}, DbConnection, global::System.Data.Common.DbTransaction, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, global::System.Linq.Expressions.Expression{global::System.Func{<#= ClassName #>, object[]}}, global::System.Threading.CancellationToken)"/> naming the kept columns by string (property or DB column name) instead of an Expression selector.</summary>
+        public static Task<int> InsertMultipleAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, string[] keepColumns, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Threading.CancellationToken cancellationToken = default)
+            => <#= DbEnginePrefix #>InsertCommandBuilder<<#= ClassName #>>.InsertMultipleAsync(rows, connection, keepColumns, transaction, fields, cancellationToken);
+
         /// <summary>Inserts many instances via PostgreSQL binary COPY (much faster than the multi-row INSERT for large batches, and not bound by the 65535-parameter limit). COPY cannot use RETURNING, so database-generated values are not propagated back. Pass <c>InsertFields.ServerDefaults</c> to omit <c>[Default]</c> columns so the server default applies, or <c>keep</c> to write some of them yourself. Returns the number of rows written.</summary>
         public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Linq.Expressions.Expression<global::System.Func<<#= ClassName #>, object?[]>>? keep = null, global::System.Threading.CancellationToken cancellationToken = default)
             => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync<<#= ClassName #>>(rows, connection, transaction, fields, keep, cancellationToken);
+
+        /// <summary>AOT-safe overload of <see cref="InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable{<#= ClassName #>}, DbConnection, global::System.Data.Common.DbTransaction, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, global::System.Linq.Expressions.Expression{global::System.Func{<#= ClassName #>, object[]}}, global::System.Threading.CancellationToken)"/> naming the kept columns by string.</summary>
+        public static global::System.Threading.Tasks.Task<ulong> InsertMultipleCopyAsync(global::System.Collections.Generic.IEnumerable<<#= ClassName #>> rows, DbConnection connection, string[] keepColumns, global::System.Data.Common.DbTransaction? transaction = null, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, global::System.Threading.CancellationToken cancellationToken = default)
+            => global::Socigy.OpenSource.DB.Core.Bulk.BulkCopy.InsertMultipleCopyAsync<<#= ClassName #>>(rows, connection, keepColumns, transaction, fields, cancellationToken);
 
         /// <summary>Returns a new update command builder for this instance.</summary>
         public <#= DbEnginePrefix #><#= ClassName #>UpdateCommandBuilder<<#= ClassName #>> Update()
@@ -578,6 +586,11 @@ namespace <#= Namespace #>
             private Expression<Func<<#= ClassName #>, object?[]>>? _OrderByClause;
             private bool _OrderByDescending = false;
 
+            // AOT-safe string-named projection / order-by (set by the params-string Select/OrderBy/OrderByDesc
+            // overloads). When set they take precedence over the Expression clauses above.
+            private string[]? _SelectColumns;
+            private string[]? _OrderByColumns;
+
             private int _Limit = -1;
             private int _Offset = -1;
 
@@ -633,6 +646,13 @@ namespace <#= Namespace #>
                 return this;
             }
 
+            /// <summary>AOT-safe overload of <see cref="Select(Expression{Func{<#= ClassName #>, object[]}})"/> naming the projected columns by string (property or DB column name) instead of an Expression selector (which forces Expression.NewArrayInit, [RequiresDynamicCode]).</summary>
+            public TableQueryBuilder Select(params string[] columns)
+            {
+                _SelectColumns = columns;
+                return this;
+            }
+
             /// <summary>Filters results to rows matching the predicate.</summary>
             public TableQueryBuilder Where(Expression<Func<<#= ClassName #>, bool>> where)
             {
@@ -674,6 +694,22 @@ namespace <#= Namespace #>
                 return this;
             }
 
+            /// <summary>AOT-safe overload of <see cref="OrderBy(Expression{Func{<#= ClassName #>, object[]}})"/> naming the sort columns by string (property or DB column name).</summary>
+            public TableQueryBuilder OrderBy(params string[] columns)
+            {
+                _OrderByColumns = columns;
+                _OrderByDescending = false;
+                return this;
+            }
+
+            /// <summary>AOT-safe overload of <see cref="OrderByDesc(Expression{Func{<#= ClassName #>, object[]}})"/> naming the sort columns by string (property or DB column name).</summary>
+            public TableQueryBuilder OrderByDesc(params string[] columns)
+            {
+                _OrderByColumns = columns;
+                _OrderByDescending = true;
+                return this;
+            }
+
             private ISqlVisitor GetSelectVisitor(ParameterExpression param, GetColumnName getColName, DbCommand command)
             {
                 return new <#= DbEnginePrefix #>SelectVisitor(param, getColName, command);
@@ -709,7 +745,7 @@ namespace <#= Namespace #>
                     command.Transaction = _Transaction;
 
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor<#= ConvertorArg() #>);
-                command.CommandText = parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
+                command.CommandText = parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset, _SelectColumns, _OrderByColumns);
 
                 await using var __instr = await global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.ExecuteReaderAsync(command, "SELECT", ct => command.ExecuteReaderAsync(ct), cancellationToken, _Diagnostics);
                 var reader = __instr.Reader;
@@ -725,7 +761,7 @@ namespace <#= Namespace #>
             public string Compile(DbCommand command)
             {
                 var parser = new SqlQueryBuilderExpressionParser<<#= ClassName #>>(command, <#= ClassName #>.GetColumnDbName, GetSelectVisitor, GetWhereVisitor, GetOrderByVisitor<#= ConvertorArg() #>);
-                return parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset);
+                return parser.BuildCommand(<#= ClassName #>.TableName, _SelectClause, _WhereClause, _OrderByClause, _OrderByDescending, _Limit, _Offset, _SelectColumns, _OrderByColumns);
             }
 
             // ── Scalar / aggregate queries ─────────────────────────────────────────────

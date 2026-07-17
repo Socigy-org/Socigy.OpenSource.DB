@@ -20,5 +20,23 @@ namespace Socigy.OpenSource.DB.HashiCorp
     {
         Task RotateAsync(CancellationToken cancellationToken = default);
     }
+
+    /// <summary>
+    /// Loads one encryptor's key material and installs it under <see cref="Profile"/>. Registered once per
+    /// encryption helper call, so a default plus any number of named profiles can coexist — the DI container
+    /// keeps every registration of this interface, unlike <c>AddHostedService</c>, which de-duplicates by
+    /// implementation type and would silently drop the second primer.
+    /// </summary>
+    internal interface IVaultEncryptionPrimer
+    {
+        /// <summary>The profile this primer activates; <see langword="null"/>/empty for the default encryptor.</summary>
+        string? Profile { get; }
+
+        /// <summary>
+        /// Primes and activates the encryptor. Safe to call more than once: the work runs at most once per
+        /// successful attempt, so <c>UseSocigyVaultEncryption()</c> and the later hosted-service start share it.
+        /// </summary>
+        Task PrimeAsync(CancellationToken cancellationToken = default);
+    }
 #nullable disable
 }

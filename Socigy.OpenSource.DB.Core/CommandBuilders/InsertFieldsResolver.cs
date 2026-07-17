@@ -34,11 +34,38 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
             Expression<Func<T, object?[]>>? keep,
             IDbTable sample)
         {
-            bool serverDefaults = fields == InsertFields.ServerDefaults || keep != null;
+            HashSet<string>? kept = keep == null ? null : ExtractDbColumnNames(keep, sample);
+            return ApplyServerDefaults(columns, fields, keep != null, kept);
+        }
+
+        /// <summary>
+        /// AOT-safe overload of <see cref="Resolve{T}(InsertColumnDescriptor[], InsertFields, Expression{Func{T, object[]}}, IDbTable)"/>
+        /// that names the kept columns by string instead of an <c>Expression</c> selector (which forces
+        /// <c>Expression.NewArrayInit</c> at the call site — <c>[RequiresDynamicCode]</c>, unusable under NativeAOT).
+        /// Each name is a property name (e.g. <c>nameof(Row.Id)</c>); a value that is already a DB column name is
+        /// accepted as-is.
+        /// </summary>
+        public static InsertColumnDescriptor[] Resolve(
+            InsertColumnDescriptor[] columns,
+            InsertFields fields,
+            string[]? keepColumns,
+            IDbTable sample)
+        {
+            // A non-null keepColumns implies ServerDefaults (matching the Expression overload, where a non-null
+            // selector — even an empty array — drops the unlisted [Default] columns so the server fills them).
+            bool hasKeep = keepColumns != null;
+            HashSet<string>? kept = hasKeep ? MapDbColumnNames(keepColumns!, sample) : null;
+            return ApplyServerDefaults(columns, fields, hasKeep, kept);
+        }
+
+        // Shared filter: when the server fills [Default] columns (ServerDefaults, or any keep), drop those columns so
+        // the database default applies — except the ones named in <paramref name="kept"/> (matched by DB column name).
+        private static InsertColumnDescriptor[] ApplyServerDefaults(
+            InsertColumnDescriptor[] columns, InsertFields fields, bool hasKeep, HashSet<string>? kept)
+        {
+            bool serverDefaults = fields == InsertFields.ServerDefaults || hasKeep;
             if (!serverDefaults)
                 return columns;
-
-            HashSet<string>? kept = keep == null ? null : ExtractDbColumnNames(keep, sample);
 
             var result = new List<InsertColumnDescriptor>(columns.Length);
             foreach (var d in columns)
@@ -60,6 +87,22 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
                 var db = sample.GetDbColumnName(name);
                 if (!string.IsNullOrEmpty(db))
                     set.Add(db!);
+            }
+            return set;
+        }
+
+        // Maps each supplied name to its DB column name (the same mapping the expression path applies after extracting
+        // member names). A name that resolves via GetDbColumnName is a property name; one that does not is taken to be
+        // a DB column name already (so a generated "&lt;Prop&gt;ColumnName" constant also works).
+        public static HashSet<string> MapDbColumnNames(string[] names, IDbTable sample)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var name in names)
+            {
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                var db = sample.GetDbColumnName(name);
+                set.Add(!string.IsNullOrEmpty(db) ? db! : name);
             }
             return set;
         }

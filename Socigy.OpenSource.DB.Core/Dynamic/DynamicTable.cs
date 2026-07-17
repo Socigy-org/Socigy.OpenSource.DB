@@ -207,14 +207,33 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         public Task<int> InsertAsync(T row, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
             => InsertMultipleAsync(new[] { row }, fields, keep, cancellationToken);
 
-        public async Task<int> InsertMultipleAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
+        /// <summary>AOT-safe overload of <see cref="InsertAsync(T, InsertFields, Expression{Func{T, object[]}}, CancellationToken)"/> naming the kept columns by string (property or DB column name).</summary>
+        public Task<int> InsertAsync(T row, string[] keepColumns, InsertFields fields = InsertFields.Default, CancellationToken cancellationToken = default)
+            => InsertMultipleAsync(new[] { row }, keepColumns, fields, cancellationToken);
+
+        public Task<int> InsertMultipleAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             var list = rows as IList<T> ?? new List<T>(rows);
-            if (list.Count == 0) return 0;
-
+            if (list.Count == 0) return Task.FromResult(0);
             InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
                 _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keep, (IDbTable)_proto);
+            return InsertManyResolvedAsync(list, cols, cancellationToken);
+        }
+
+        /// <summary>AOT-safe overload of <see cref="InsertMultipleAsync(IEnumerable{T}, InsertFields, Expression{Func{T, object[]}}, CancellationToken)"/> naming the kept columns by string.</summary>
+        public Task<int> InsertMultipleAsync(IEnumerable<T> rows, string[] keepColumns, InsertFields fields = InsertFields.Default, CancellationToken cancellationToken = default)
+        {
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+            var list = rows as IList<T> ?? new List<T>(rows);
+            if (list.Count == 0) return Task.FromResult(0);
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve(
+                _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keepColumns, (IDbTable)_proto);
+            return InsertManyResolvedAsync(list, cols, cancellationToken);
+        }
+
+        private async Task<int> InsertManyResolvedAsync(IList<T> list, InsertColumnDescriptor[] cols, CancellationToken cancellationToken)
+        {
             if (cols.Length == 0) return 0;
 
             var lease = await LeaseAsync(cancellationToken).ConfigureAwait(false);
@@ -266,14 +285,29 @@ namespace Socigy.OpenSource.DB.Core.Dynamic
         /// are NOT propagated back to the instances (COPY has no <c>RETURNING</c>); use
         /// <see cref="InsertMultipleAsync"/> when you need generated keys.
         /// </summary>
-        public async Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
+        public Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, InsertFields fields = InsertFields.Default, Expression<Func<T, object?[]>>? keep = null, CancellationToken cancellationToken = default)
         {
             if (rows == null) throw new ArgumentNullException(nameof(rows));
             var list = rows as IReadOnlyList<T> ?? new List<T>(rows);
-            if (list.Count == 0) return 0UL;
-
+            if (list.Count == 0) return Task.FromResult(0UL);
             InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
                 _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keep, (IDbTable)_proto);
+            return CopyResolvedAsync(list, cols, cancellationToken);
+        }
+
+        /// <summary>AOT-safe overload of <see cref="InsertMultipleCopyAsync(IEnumerable{T}, InsertFields, Expression{Func{T, object[]}}, CancellationToken)"/> naming the kept columns by string.</summary>
+        public Task<ulong> InsertMultipleCopyAsync(IEnumerable<T> rows, string[] keepColumns, InsertFields fields = InsertFields.Default, CancellationToken cancellationToken = default)
+        {
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+            var list = rows as IReadOnlyList<T> ?? new List<T>(rows);
+            if (list.Count == 0) return Task.FromResult(0UL);
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve(
+                _proto.InsertColumns(InsertFieldsResolver.IncludesAutoIncrement(fields)), fields, keepColumns, (IDbTable)_proto);
+            return CopyResolvedAsync(list, cols, cancellationToken);
+        }
+
+        private async Task<ulong> CopyResolvedAsync(IReadOnlyList<T> list, InsertColumnDescriptor[] cols, CancellationToken cancellationToken)
+        {
             if (cols.Length == 0) return 0UL;
 
             var boxed = new object[list.Count];

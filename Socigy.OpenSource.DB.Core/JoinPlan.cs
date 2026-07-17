@@ -39,6 +39,9 @@ namespace Socigy.OpenSource.DB.Core
         public LambdaExpression? Where;
         public LambdaExpression? OrderBy;
         public bool OrderDesc;
+        // AOT-safe order-by by string column names (resolved against the DRIVING table), set by the params-string
+        // OrderBy/OrderByDesc overloads. Takes precedence over the Expression OrderBy when set.
+        public string[]? OrderByColumns;
         public int Limit = -1;
         public int Offset = -1;
 
@@ -50,6 +53,7 @@ namespace Socigy.OpenSource.DB.Core
                 Where = Where,
                 OrderBy = OrderBy,
                 OrderDesc = OrderDesc,
+                OrderByColumns = OrderByColumns,
                 Limit = Limit,
                 Offset = Offset,
             };
@@ -110,7 +114,28 @@ namespace Socigy.OpenSource.DB.Core
             sb.Append(string.Join(", ", select));
             AppendFromAndJoins(sb, command);
             AppendWhere(sb, command);
-            if (OrderBy != null)
+            if (OrderByColumns != null && HasNonEmptyName(OrderByColumns))
+            {
+                // AOT-safe order-by: resolve each name against the DRIVING table (alias a0) and qualify it.
+                var driving = Steps[0];
+                sb.Append(" ORDER BY ");
+                bool firstOrder = true;
+                foreach (var name in OrderByColumns)
+                {
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+                    if (!firstOrder)
+                        sb.Append(", ");
+                    firstOrder = false;
+                    string? db = driving.Prototype.GetDbColumnName(name);
+                    string ident = !string.IsNullOrEmpty(db) ? db! : name;
+                    // Double any embedded quote so an unresolved (raw) name cannot break out of the quoted identifier.
+                    sb.Append(driving.Alias).Append(".\"").Append(ident.Replace("\"", "\"\"")).Append('"');
+                    if (OrderDesc)
+                        sb.Append(" DESC");
+                }
+            }
+            else if (OrderBy != null)
             {
                 var visitor = new PostgresqlMultiJoinVisitor(MapFor(OrderBy), command);
                 sb.Append(" ORDER BY ").Append(visitor.ResolveColumnList(OrderBy, OrderDesc));
@@ -118,6 +143,15 @@ namespace Socigy.OpenSource.DB.Core
             if (Limit >= 0) sb.Append(" LIMIT ").Append(Limit);
             if (Offset >= 0) sb.Append(" OFFSET ").Append(Offset);
             return sb.ToString();
+        }
+
+        // True when the order-by name array has at least one non-empty entry (otherwise emit no ORDER BY,
+        // rather than a dangling "ORDER BY " with no columns).
+        private static bool HasNonEmptyName(string[] names)
+        {
+            foreach (var n in names)
+                if (!string.IsNullOrEmpty(n)) return true;
+            return false;
         }
 
         private void AppendFromAndJoins(StringBuilder sb, DbCommand command)

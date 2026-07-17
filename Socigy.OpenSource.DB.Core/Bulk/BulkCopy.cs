@@ -49,6 +49,39 @@ namespace Socigy.OpenSource.DB.Core.Bulk
 
             InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
                 list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns, fields, keep, list[0]);
+            return CopyResolvedAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        /// <summary>
+        /// AOT-safe overload of <see cref="InsertMultipleCopyAsync{T}(IEnumerable{T}, DbConnection, DbTransaction, InsertFields, Expression{Func{T, object[]}}, CancellationToken)"/>
+        /// naming the kept columns by string (property name or DB column name) instead of an <c>Expression</c>
+        /// selector — the expression form forces <c>Expression.NewArrayInit</c> (<c>[RequiresDynamicCode]</c>).
+        /// Supplying <paramref name="keepColumns"/> implies <c>ServerDefaults</c> for the unlisted <c>[Default]</c> columns.
+        /// </summary>
+        public static Task<ulong> InsertMultipleCopyAsync<T>(
+            IEnumerable<T> rows,
+            DbConnection connection,
+            string[] keepColumns,
+            DbTransaction? transaction = null,
+            InsertFields fields = InsertFields.Default,
+            CancellationToken cancellationToken = default)
+            where T : class, IDbTable, IInsertPlanProvider
+        {
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+            if (connection == null) throw new ArgumentNullException(nameof(connection));
+
+            IReadOnlyList<T> list = rows as IReadOnlyList<T> ?? new List<T>(rows);
+            if (list.Count == 0) return Task.FromResult(0UL);
+
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve(
+                list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns, fields, keepColumns, list[0]);
+            return CopyResolvedAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        private static Task<ulong> CopyResolvedAsync<T>(IReadOnlyList<T> list, InsertColumnDescriptor[] cols,
+            DbConnection connection, DbTransaction? transaction, CancellationToken cancellationToken)
+            where T : class, IDbTable
+        {
             if (cols.Length == 0) return Task.FromResult(0UL);
 
             string tableName = list[0].GetTableName();

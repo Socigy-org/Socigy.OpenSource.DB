@@ -169,6 +169,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        Task<bool> InsertAsync({e} entity, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null);");
             sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Use <c>InsertFields</c> to control which columns the database fills, and <paramref name=\"keep\"/> to write some <c>[Default]</c> columns yourself. Returns the total rows inserted.</summary>");
             sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null, CancellationToken cancellationToken = default);");
+            sb.AppendLine($"        /// <summary>AOT-safe overload of <c>InsertAsync</c> naming the kept columns by string (property or DB column name) instead of an Expression selector.</summary>");
+            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, string[] keepColumns);");
+            sb.AppendLine($"        /// <summary>AOT-safe overload of <c>InsertMultipleAsync</c> naming the kept columns by string.</summary>");
+            sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, string[] keepColumns, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, CancellationToken cancellationToken = default);");
             sb.AppendLine($"        Task<int> UpdateAsync({e} entity);");
             sb.AppendLine($"        Task<int> DeleteAsync({pred} predicate);");
             sb.AppendLine($"        Task ForEachAsync({pred}? predicate, Func<{e}, Task> onRow, CancellationToken cancellationToken = default);");
@@ -278,6 +282,36 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("            {");
             sb.AppendLine("                var __tx = _scope.HasAmbientTransaction ? _scope.AmbientTransaction : null;");
             sb.AppendLine($"                return await {e}.InsertMultipleAsync(entities, __acq.Connection, __tx, fields, keep, cancellationToken);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            // AOT-safe overloads: name the kept columns by string (property or DB column name) instead of an
+            // Expression selector, which forces Expression.NewArrayInit ([RequiresDynamicCode]) at the call site.
+            sb.AppendLine($"        /// <summary>AOT-safe overload of <see cref=\"InsertAsync({e}, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, Expression{{Func{{{e}, object[]}}}})\"/> naming the kept columns by string.</summary>");
+            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, string[] keepColumns)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var __b = entity.Insert();");
+            sb.AppendLine("                __b.ExcludeAutoFields(keepColumns);");
+            EmitEnlist(sb, "__b");
+            sb.AppendLine("                return await __b.ExecuteAsync();");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            sb.AppendLine($"        /// <summary>AOT-safe overload of <see cref=\"InsertMultipleAsync(IEnumerable{{{e}}}, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, Expression{{Func{{{e}, object[]}}}}, CancellationToken)\"/> naming the kept columns by string.</summary>");
+            sb.AppendLine($"        public async Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, string[] keepColumns, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, CancellationToken cancellationToken = default)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var __tx = _scope.HasAmbientTransaction ? _scope.AmbientTransaction : null;");
+            sb.AppendLine($"                return await {e}.InsertMultipleAsync(entities, __acq.Connection, keepColumns, __tx, fields, cancellationToken);");
             sb.AppendLine("            }");
             sb.AppendLine("            finally { await _scope.ReleaseAsync(__acq.Connection, __acq.OwnedByOperation); }");
             sb.AppendLine("        }");

@@ -225,6 +225,7 @@ builder.Services.AddSocigyVaultEnvelopeEncryption(o =>
     o.Address = "https://vault:8200"; o.AppRoleId = "…"; o.AppRoleSecretId = "…";
     o.TransitKeyName = "socigy-db";
     o.EnableBackgroundRotation = true;          // optional; or call RotateAsync() manually
+    o.RotationInterval = TimeSpan.FromDays(90); // optional; default 90 days
 });
 
 // 3) EaaS-direct — Vault encrypts/decrypts each field (a round-trip per field). For a few
@@ -240,12 +241,31 @@ builder.Services.AddSocigyVaultTransitEncryption(o =>
 > **OpenBao** is supported as a drop-in for HashiCorp Vault — point the same options at your OpenBao
 > address (its KV-v2 and Transit APIs are wire-compatible). The integration test suite passes against both.
 
+**Activate before any data work.** `AddSocigyVault*Encryption` only *registers* the encryptors; they are
+primed from Vault at host start. Anything that touches an `[Encrypted]` column before `Run()` — notably the
+migration call in the quickstart above — needs encryption activated first:
+
+```csharp
+var app = builder.Build();
+
+await app.UseSocigyVaultEncryption();     // primes + activates every registered profile
+await app.EnsureLatestMyDbMigration();    // safe now: [Encrypted] columns are usable
+
+app.Run();
+```
+
+It is idempotent, so the startup priming simply finds the work already done. Not needed for
+`AddSocigyAesEncryption`, whose key is available synchronously at registration.
+
 **Per-column profiles** — run one mode by default and route specific columns to another:
 
 ```csharp
 [Encrypted] public string Email { get; set; }                    // default encryptor (e.g. envelope)
 [Encrypted(Profile = "transit")] public string Ssn { get; set; }  // EaaS-direct
 ```
+
+Check readiness with `SocigyFieldEncryption.IsProfileConfigured("transit")` (`IsConfigured` covers only the
+default profile).
 
 **Key rotation** — with envelope mode old rows stay readable after a rotation, and any row your app
 re-saves migrates to the new key automatically. To proactively rewrite old rows (e.g. to retire a key

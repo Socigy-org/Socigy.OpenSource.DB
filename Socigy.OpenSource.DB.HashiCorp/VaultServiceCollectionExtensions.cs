@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Socigy.OpenSource.DB.Core.Credentials;
 using Socigy.OpenSource.DB.Core.Encryption;
+using Socigy.OpenSource.DB.HashiCorp.Internal;
 
 namespace Socigy.OpenSource.DB.HashiCorp
 {
@@ -35,9 +38,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
             services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultFieldEncryptor>());
-            services.AddHostedService(sp => new VaultEncryptionPrimingService(
-                sp.GetRequiredService<VaultFieldEncryptor>(), null,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            AddEncryptionPriming(services, sp => sp.GetRequiredService<VaultFieldEncryptor>(), profile: null);
             services.AddHostedService(sp => new VaultAuthRenewalService(
                 sp.GetRequiredService<VaultClientProvider>(),
                 sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
@@ -65,9 +66,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             if (string.IsNullOrEmpty(options.Profile))
                 services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultEnvelopeEncryptor>());
 
-            services.AddHostedService(sp => new VaultEncryptionPrimingService(
-                sp.GetRequiredService<VaultEnvelopeEncryptor>(), options.Profile,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            AddEncryptionPriming(services, sp => sp.GetRequiredService<VaultEnvelopeEncryptor>(), options.Profile);
             services.AddHostedService(sp => new VaultAuthRenewalService(
                 sp.GetRequiredService<VaultClientProvider>(),
                 sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
@@ -98,13 +97,33 @@ namespace Socigy.OpenSource.DB.HashiCorp
             if (string.IsNullOrEmpty(options.Profile))
                 services.TryAddSingleton<IFieldEncryptor>(sp => sp.GetRequiredService<VaultTransitFieldEncryptor>());
 
-            services.AddHostedService(sp => new VaultEncryptionPrimingService(
-                sp.GetRequiredService<VaultTransitFieldEncryptor>(), options.Profile,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            AddEncryptionPriming(services, sp => sp.GetRequiredService<VaultTransitFieldEncryptor>(), options.Profile);
             services.AddHostedService(sp => new VaultAuthRenewalService(
                 sp.GetRequiredService<VaultClientProvider>(),
                 sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
+            if (options.EnableBackgroundRotation)
+                // Registered as a plain IHostedService (not AddHostedService) so an envelope rotator already
+                // registered cannot de-duplicate this one away by implementation type.
+                services.AddSingleton<IHostedService>(sp => new VaultEncryptionRotationService(
+                    sp.GetRequiredService<VaultTransitFieldEncryptor>(), options.RotationInterval,
+                    sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Rotation")));
             return services;
+        }
+
+        /// <summary>
+        /// Registers one primer for this encryptor/profile, plus the single hosted service that primes them all.
+        /// The primer is a plain enumerable singleton so every profile survives; the hosted service goes through
+        /// <c>AddHostedService</c>, whose de-duplication by implementation type collapses the repeated
+        /// registrations to exactly one collector.
+        /// </summary>
+        private static void AddEncryptionPriming(IServiceCollection services,
+            Func<IServiceProvider, IVaultPrimableEncryptor> encryptor, string? profile)
+        {
+            services.AddSingleton<IVaultEncryptionPrimer>(sp => new VaultEncryptionPrimer(
+                encryptor(sp), profile,
+                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
+            services.AddHostedService(sp => new VaultEncryptionPrimingService(
+                sp.GetServices<IVaultEncryptionPrimer>()));
         }
 
         /// <summary>
@@ -186,39 +205,84 @@ namespace Socigy.OpenSource.DB.HashiCorp
     }
 
     /// <summary>
-    /// Loads an encryptor's key material from Vault at startup and installs it as the ambient encryptor — as the
-    /// default when <see cref="_profile"/> is null/empty, or under that named profile otherwise.
+    /// Loads one encryptor's key material from Vault and installs it as the ambient encryptor — as the default
+    /// when <see cref="Profile"/> is null/empty, or under that named profile otherwise. Registered per encryption
+    /// helper call (as <see cref="IVaultEncryptionPrimer"/>, which DI never de-duplicates), so every profile is
+    /// activated rather than only the first.
     /// </summary>
-    internal sealed class VaultEncryptionPrimingService : IHostedService
+    internal sealed class VaultEncryptionPrimer : IVaultEncryptionPrimer
     {
         private readonly IVaultPrimableEncryptor _encryptor;
-        private readonly string? _profile;
         private readonly ILogger? _logger;
+        private readonly object _gate = new object();
+        private Task? _priming;
 
-        public VaultEncryptionPrimingService(IVaultPrimableEncryptor encryptor, string? profile, ILogger? logger = null)
+        public VaultEncryptionPrimer(IVaultPrimableEncryptor encryptor, string? profile, ILogger? logger = null)
         {
             _encryptor = encryptor;
-            _profile = profile;
+            Profile = profile;
             _logger = logger;
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public string? Profile { get; }
+
+        public Task PrimeAsync(CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                // Memoize the in-flight/completed task so an explicit UseSocigyVaultEncryption() and the later
+                // hosted-service start share one Vault round-trip. A faulted/cancelled attempt is retried: a
+                // transient Vault outage during activation must not permanently poison host startup.
+                // (A bool flag would be wrong here — a second caller could return before Configure() had run.)
+                if (_priming == null || _priming.IsFaulted || _priming.IsCanceled)
+                    _priming = PrimeCoreAsync(cancellationToken);
+                return _priming;
+            }
+        }
+
+        private async Task PrimeCoreAsync(CancellationToken cancellationToken)
         {
             await _encryptor.RefreshAsync(cancellationToken).ConfigureAwait(false);
-            SocigyFieldEncryption.Configure(_profile, _encryptor);
+            SocigyFieldEncryption.Configure(Profile, _encryptor);
             _logger?.LogInformation("Vault field encryption primed and activated ({Profile}).",
-                string.IsNullOrEmpty(_profile) ? "default profile" : "profile '" + _profile + "'");
+                string.IsNullOrEmpty(Profile) ? "default profile" : "profile '" + Profile + "'");
+        }
+    }
+
+    /// <summary>
+    /// Primes every registered <see cref="IVaultEncryptionPrimer"/> at host start. One instance covers all of
+    /// them, so <c>AddHostedService</c>'s de-duplication by implementation type is now correct rather than a
+    /// silent dropper of profiles. Priming is idempotent, so calling
+    /// <c>UseSocigyVaultEncryption()</c> before <c>Run()</c> makes this a no-op.
+    /// </summary>
+    internal sealed class VaultEncryptionPrimingService : IHostedService
+    {
+        private readonly IEnumerable<IVaultEncryptionPrimer> _primers;
+
+        public VaultEncryptionPrimingService(IEnumerable<IVaultEncryptionPrimer> primers) => _primers = primers;
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            foreach (var primer in _primers)
+                await primer.PrimeAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
-    /// <summary>Rotates a Vault-backed encryptor's key on a background interval (one-shot timer re-armed each tick).</summary>
+    /// <summary>
+    /// Rotates a Vault-backed encryptor's key on a background interval (one-shot timer re-armed each tick).
+    /// The interval can exceed what <see cref="Timer"/> accepts as a dueTime (~49.7 days, and the default
+    /// RotationInterval is 90), so every arm is clamped and a long interval is walked in clamped hops:
+    /// a tick that fires before the interval has really elapsed just re-arms without rotating.
+    /// </summary>
     internal sealed class VaultEncryptionRotationService : IHostedService, IDisposable
     {
         private readonly IVaultRotatableEncryptor _encryptor;
         private readonly TimeSpan _interval;
         private readonly ILogger? _logger;
+        // Monotonic elapsed time since the last rotation attempt (Environment.TickCount64 is not in netstandard2.0).
+        private readonly Stopwatch _sinceLastRotation = new Stopwatch();
         private Timer? _timer;
         private volatile bool _stopped;
 
@@ -231,12 +295,32 @@ namespace Socigy.OpenSource.DB.HashiCorp
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _timer = new Timer(async _ => await TickAsync().ConfigureAwait(false), null, _interval, Timeout.InfiniteTimeSpan);
+            _sinceLastRotation.Restart();
+            // Arm through Arm() rather than the ctor: passing the raw interval here would throw for anything
+            // over ~49.7 days, killing host startup (the default 90-day RotationInterval did exactly that).
+            _timer = new Timer(async _ => await TickAsync().ConfigureAwait(false), null,
+                Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            Arm(_interval);
             return Task.CompletedTask;
+        }
+
+        private void Arm(TimeSpan remaining)
+        {
+            if (_stopped) return;
+            var delay = VaultRenewal.ClampToTimer(remaining);
+            try { _timer?.Change(delay, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
         }
 
         private async Task TickAsync()
         {
+            var arm = VaultRenewal.NextRotationArm(_interval - _sinceLastRotation.Elapsed, out bool rotateNow);
+            if (!rotateNow)
+            {
+                // The interval is longer than one timer hop; keep waiting out the remainder.
+                Arm(arm);
+                return;
+            }
+
             try
             {
                 await _encryptor.RotateAsync().ConfigureAwait(false);
@@ -248,8 +332,9 @@ namespace Socigy.OpenSource.DB.HashiCorp
             }
             finally
             {
-                if (!_stopped)
-                    try { _timer?.Change(_interval, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
+                // Reset after an attempt, success or not, so a failed rotation retries a full interval later.
+                _sinceLastRotation.Restart();
+                Arm(_interval);
             }
         }
 

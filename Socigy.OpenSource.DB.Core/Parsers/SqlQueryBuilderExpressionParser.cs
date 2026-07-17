@@ -46,11 +46,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers
         /// reuse the cached SQL string. Everything else falls back to a full translation.
         /// </summary>
         public string BuildCommand(string tableName, Expression<Func<T, object?[]>>? select, Expression<Func<T, bool>>? where,
-            Expression<Func<T, object?[]>>? orderBy, bool isDescending, int limit, int offset)
+            Expression<Func<T, object?[]>>? orderBy, bool isDescending, int limit, int offset,
+            string[]? selectColumns = null, string[]? orderByColumns = null)
         {
             // limit < 0 is the "no limit set" sentinel (-1). limit == 0 is an explicit Limit(0) and must emit
-            // LIMIT 0 (zero rows), so it cannot take the no-limit fast path below.
-            if (select == null && orderBy == null && where != null && limit < 0 && offset <= 0
+            // LIMIT 0 (zero rows), so it cannot take the no-limit fast path below. The string-named projection /
+            // order-by (the AOT-safe Select/OrderBy overloads) also disable the fast path, like their Expression forms.
+            if (select == null && orderBy == null && selectColumns == null && orderByColumns == null
+                && where != null && limit < 0 && offset <= 0
                 && _Command.Parameters.Count == 0
                 && ExpressionStructure.TryComputeHash(where.Body, where.Parameters[0], out long hash))
             {
@@ -83,7 +86,7 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             }
 
             // Non-cacheable shape — full translation.
-            Process(tableName, select, where, orderBy, isDescending);
+            Process(tableName, select, where, orderBy, isDescending, selectColumns, orderByColumns);
             // >= 0 (not > 0): Limit(0) must emit LIMIT 0 to return zero rows. -1 (unset) emits nothing.
             if (limit >= 0) AddLimit(limit);
             if (offset > 0) AddOffset(offset);
@@ -120,9 +123,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             return true;
         }
 
-        public void Process(string tableName, Expression<Func<T, object?[]>>? select, Expression<Func<T, bool>>? where, Expression<Func<T, object?[]>>? orderBy, bool isDescending)
+        public void Process(string tableName, Expression<Func<T, object?[]>>? select, Expression<Func<T, bool>>? where, Expression<Func<T, object?[]>>? orderBy, bool isDescending,
+            string[]? selectColumns = null, string[]? orderByColumns = null)
         {
-            if (select == null)
+            // A named list with at least one non-empty entry projects those columns; an all-empty/whitespace array
+            // (e.g. Select("")) is treated as "no projection" and falls back to * rather than emitting "SELECT  FROM".
+            if (HasNonEmpty(selectColumns))
+                AppendNamedColumnList(selectColumns!, descending: false);
+            else if (select == null)
                 _Sql.Append("* ");
             else
                 _Sql.Append(ProcessSelect(select));
@@ -132,8 +140,44 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             if (where != null)
                 _Sql.Append(ProcessWhere(where));
 
-            if (orderBy != null)
+            if (HasNonEmpty(orderByColumns))
+            {
+                _Sql.Append(" ORDER BY ");
+                AppendNamedColumnList(orderByColumns!, isDescending);
+            }
+            else if (orderBy != null)
                 _Sql.Append(ProcessOrderBy(orderBy, isDescending));
+        }
+
+        // True when the array has at least one non-empty name (so it produces a non-empty column list).
+        private static bool HasNonEmpty(string[]? columns)
+        {
+            if (columns == null) return false;
+            foreach (var c in columns)
+                if (!string.IsNullOrEmpty(c)) return true;
+            return false;
+        }
+
+        // Builds a quoted column list from string names (the AOT-safe Select/OrderBy overloads). A name is resolved
+        // to its DB column via the same map the visitors use; one that does not resolve is taken to be a DB name
+        // already. ORDER BY descending applies DESC per column (matching the OrderBy visitor's output).
+        private void AppendNamedColumnList(string[] columns, bool descending)
+        {
+            bool first = true;
+            foreach (var name in columns)
+            {
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                if (!first)
+                    _Sql.Append(", ");
+                first = false;
+                string? db = _GetColumName(name);
+                string ident = !string.IsNullOrEmpty(db) ? db! : name;
+                // Double any embedded quote so an unresolved (raw) name cannot break out of the quoted identifier.
+                _Sql.Append('"').Append(ident.Replace("\"", "\"\"")).Append('"');
+                if (descending)
+                    _Sql.Append(" DESC");
+            }
         }
 
         public void AddLimit(int limit)

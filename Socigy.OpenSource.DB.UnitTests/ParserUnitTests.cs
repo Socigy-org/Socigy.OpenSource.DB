@@ -217,5 +217,55 @@ namespace Socigy.OpenSource.DB.UnitTests
             Assert.That(ps[0].Value, Is.AssignableTo<int[]>());
             Assert.That((int[])ps[0].Value!, Is.EqualTo(new[] { 1, 2, 3 }));
         }
+
+        // ── != over a NON-nullable column ───────────────────────────────────────────
+        // Reported as "!= matches no rows" for a Guid column. It translates to a plain <>: the
+        // "OR col IS NULL" widening is gated on the column being Nullable<T>, and that widening could only
+        // ever ADD rows anyway, never empty a result set.
+        [Test]
+        public void NotEqual_NonNullableGuid_EmitsPlainNotEquals()
+        {
+            var g = Guid.NewGuid();
+            var (sql, ps) = Where(x => x.Gid != g);
+            Assert.That(sql, Does.Contain("\"Gid\" <> @p0"));
+            Assert.That(sql, Does.Not.Contain("IS NULL"), "a non-nullable column must not get the nullable widening");
+            Assert.That(ps, Has.Length.EqualTo(1));
+            Assert.That(ps[0].Value, Is.EqualTo(g));
+            Assert.That(ps[0].Value, Is.TypeOf<Guid>(), "a Guid must bind as uuid, not as text");
+        }
+
+        [Test]
+        public void NotEqual_CombinedWithEquality_EmitsBothClauses()
+        {
+            var g = Guid.NewGuid();
+            var (sql, ps) = Where(x => x.Id == 1 && x.Gid != g);
+            Assert.That(sql, Does.Contain("\"Id\" = @p0"));
+            Assert.That(sql, Does.Contain(" AND "));
+            Assert.That(sql, Does.Contain("\"Gid\" <> @p1"), "the inequality must survive alongside the equality key");
+            Assert.That(sql, Does.Not.Contain("IS NULL"));
+            Assert.That(ps, Has.Length.EqualTo(2));
+        }
+
+        [Test]
+        public void NotEqual_NullableColumn_WidensToIncludeNulls()
+        {
+            // The counterpart: a nullable column DOES get the widening, because in C# `null != 5` is true.
+            int? age = 5;
+            var (sql, _) = Where(x => x.Age != age);
+            Assert.That(sql, Does.Contain("\"Age\" <> @p0"));
+            Assert.That(sql, Does.Contain("\"Age\" IS NULL"));
+        }
+
+        // ── Coalesce with a null literal ────────────────────────────────────────────
+        // The literal-null -> IS NULL / IS NOT NULL rewrite used to run for ANY node type, so a Coalesce
+        // whose right side is null emitted "col IS NOT NULL" (a boolean) where a value belongs.
+        [Test]
+        public void Coalesce_WithNullLiteral_EmitsCoalesceNotIsNotNull()
+        {
+            var (sql, _) = Where(x => (x.Name ?? null) == "a");
+            Assert.That(sql, Does.Contain("COALESCE"), "?? must stay a COALESCE");
+            Assert.That(sql, Does.Not.Contain("IS NOT NULL"),
+                "the null-literal rewrite must be gated to == / != only");
+        }
     }
 }
