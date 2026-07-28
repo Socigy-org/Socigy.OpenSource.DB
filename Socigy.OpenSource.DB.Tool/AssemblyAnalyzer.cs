@@ -224,6 +224,117 @@ namespace Socigy.OpenSource.DB.Tool
             return null;
         }
 
+        /// <summary>
+        /// Reads an <c>[Index]</c> attribute into a <see cref="DbIndex"/>.
+        /// </summary>
+        /// <param name="implicitColumn">
+        /// The property the attribute sits on, for the property-level form; null for the class-level form,
+        /// which lists its columns as constructor arguments.
+        /// </param>
+        /// <remarks>
+        /// The attribute lets sort order be given either as a scalar covering every key column or as arrays
+        /// naming individual ones. Both are expanded into the per-column sets here so that the comparer, the
+        /// planner and every generator see a single representation.
+        /// </remarks>
+        private static DbIndex? ReadIndexAttribute(CustomAttributeData attribute, string tableName, string? implicitColumn)
+        {
+            var columns = new List<string>();
+            if (implicitColumn != null)
+            {
+                columns.Add(implicitColumn);
+            }
+            else if (attribute.ConstructorArguments.Count > 0 &&
+                     attribute.ConstructorArguments[0].Value is IEnumerable<CustomAttributeTypedArgument> arr)
+            {
+                foreach (var item in arr)
+                    if (item.Value is string s && !string.IsNullOrWhiteSpace(s)) columns.Add(s);
+            }
+
+            if (columns.Count == 0)
+                return null;
+
+            var index = new DbIndex { TableName = tableName, Columns = columns };
+
+            bool allDescending = false;
+            string? allNulls = null;
+            List<string>? descending = null, nullsFirst = null, nullsLast = null;
+
+            foreach (var namedArg in attribute.NamedArguments)
+            {
+                switch (namedArg.MemberName)
+                {
+                    case nameof(IndexAttribute.Name):
+                        index.Name = namedArg.TypedValue.Value as string;
+                        break;
+                    case nameof(IndexAttribute.Unique):
+                        index.IsUnique = namedArg.TypedValue.Value is bool b && b;
+                        break;
+                    case nameof(IndexAttribute.Method):
+                        index.Method = namedArg.TypedValue.Value as string;
+                        break;
+                    case nameof(IndexAttribute.RawMethod):
+                        index.RawMethod = namedArg.TypedValue.Value as string;
+                        break;
+                    case nameof(IndexAttribute.Where):
+                        index.Where = namedArg.TypedValue.Value as string;
+                        break;
+                    case nameof(IndexAttribute.Include):
+                        index.IncludeColumns = ReadStringArray(namedArg);
+                        break;
+                    case nameof(IndexAttribute.Descending):
+                        allDescending = namedArg.TypedValue.Value is bool d && d;
+                        break;
+                    case nameof(IndexAttribute.Nulls):
+                        allNulls = namedArg.TypedValue.Value as string;
+                        break;
+                    case nameof(IndexAttribute.DescendingColumns):
+                        descending = ReadStringArray(namedArg);
+                        break;
+                    case nameof(IndexAttribute.NullsFirstColumns):
+                        nullsFirst = ReadStringArray(namedArg);
+                        break;
+                    case nameof(IndexAttribute.NullsLastColumns):
+                        nullsLast = ReadStringArray(namedArg);
+                        break;
+                }
+            }
+
+            // Expand the scalars over every key column, then let the arrays override per column.
+            var descendingSet = new List<string>(allDescending ? columns : []);
+            var nullsFirstSet = new List<string>(allNulls == DbIndexNulls.First ? columns : []);
+            var nullsLastSet = new List<string>(allNulls == DbIndexNulls.Last ? columns : []);
+
+            foreach (var col in descending ?? [])
+                if (!descendingSet.Contains(col)) descendingSet.Add(col);
+
+            foreach (var col in nullsFirst ?? [])
+            {
+                nullsLastSet.Remove(col);
+                if (!nullsFirstSet.Contains(col)) nullsFirstSet.Add(col);
+            }
+
+            foreach (var col in nullsLast ?? [])
+            {
+                nullsFirstSet.Remove(col);
+                if (!nullsLastSet.Contains(col)) nullsLastSet.Add(col);
+            }
+
+            if (descendingSet.Count > 0) index.DescendingColumns = descendingSet;
+            if (nullsFirstSet.Count > 0) index.NullsFirstColumns = nullsFirstSet;
+            if (nullsLastSet.Count > 0) index.NullsLastColumns = nullsLastSet;
+
+            return index;
+        }
+
+        private static List<string> ReadStringArray(CustomAttributeNamedArgument namedArg)
+        {
+            var values = new List<string>();
+            if (namedArg.TypedValue.Value is IEnumerable<CustomAttributeTypedArgument> arr)
+                foreach (var item in arr)
+                    if (item.Value is string s && !string.IsNullOrWhiteSpace(s)) values.Add(s);
+            return values;
+        }
+
         private static readonly string TableAttributeFullName = typeof(TableAttribute).FullName!;
         private static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName!;
         private static readonly string RenamedAttributeFullName = typeof(RenamedAttribute).FullName!;
@@ -232,6 +343,7 @@ namespace Socigy.OpenSource.DB.Tool
         private static readonly string IgnoreAttributeFullName = typeof(IgnoreAttribute).FullName!;
         private static readonly string PrimaryKeyAttributeFullName = typeof(PrimaryKeyAttribute).FullName!;
         private static readonly string UniqueAttributeFullName = typeof(UniqueAttribute).FullName!;
+        private static readonly string IndexAttributeFullName = typeof(IndexAttribute).FullName!;
         private static readonly string ColumnAttributeFullName = typeof(ColumnAttribute).FullName!;
         private static readonly string DefaultAttributeFullName = typeof(DefaultAttribute).FullName!;
         private static readonly string AutoIncrementAttributeFullName = typeof(AutoIncrementAttribute).FullName!;
@@ -442,6 +554,21 @@ namespace Socigy.OpenSource.DB.Tool
                         });
                     }
                 }
+                else if (attribute.AttributeType.FullName == IndexAttributeFullName)
+                {
+                    // Class-level [Index(col1, col2, ...)] — a COMPOSITE index (the property-level form is read
+                    // in the per-property loop). [Index] is AllowMultiple, so every occurrence is read.
+                    var index = ReadIndexAttribute(attribute, table.Name, implicitColumn: null);
+                    if (index == null)
+                    {
+                        Logger.Error($"[Index] on class '{tableType.FullName}' lists no columns. Put it on a property " +
+                                     "for a single-column index, or pass the column names for a composite one. Skipping.");
+                        continue;
+                    }
+
+                    table.Indexes ??= [];
+                    table.Indexes.Add(index);
+                }
             }
 
             // Two-pass: first collect regular columns, then handle flagged-enum properties
@@ -477,6 +604,19 @@ namespace Socigy.OpenSource.DB.Tool
                     {
                         table.Constraints ??= [];
                         (table.Constraints as List<DbConstraint>).AddRange(constraints);
+                    }
+
+                    // Property-level [Index] — a single-column index over this property. Read here rather than
+                    // in ProcessColumn because indexes hang off the table, not the column. [Index] is
+                    // AllowMultiple, so a column can carry a plain and a partial index at once.
+                    foreach (var indexAttr in member.CustomAttributes
+                                 .Where(a => a.AttributeType.FullName == IndexAttributeFullName))
+                    {
+                        var index = ReadIndexAttribute(indexAttr, table.Name, implicitColumn: member.Name);
+                        if (index == null) continue;
+
+                        table.Indexes ??= [];
+                        table.Indexes.Add(index);
                     }
                 }
                 catch (Exception ex)

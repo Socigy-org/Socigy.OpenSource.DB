@@ -118,6 +118,7 @@ await user.Delete().WithConnection(conn).ExecuteAsync();
 - **Migrations** - CLI tool analyses your compiled assembly and generates PostgreSQL DDL; a tracking table handles incremental applies
 - **JOINs** - `Join`, `LeftJoin`, `RightJoin`, `FullOuterJoin`, `NaturalJoin`, `CrossJoin`
 - **Set operations** - `Union`, `UnionAll`, `Intersect`, `IntersectAll`, `Except`, `ExceptAll`
+- **Indexes** - `[Index]` on a property or class, with composite keys, uniqueness, partial filters, covering columns, sort order, and engine-neutral index methods
 - **Flagged enums** - `[FlaggedEnum]` generates a junction table and typed flag helpers
 - **JSON columns** - `[JsonColumn]` and `[RawJsonColumn]` for JSONB with optional AOT-safe typed serialisation
 - **Procedure mapping** - write SQL in `.sql` files, get strongly-typed async wrappers at compile time
@@ -181,6 +182,73 @@ dotnet build -c DB_Migration
 ```
 
 Migration files land in `Socigy/Migrations/`. Apply them at startup with `EnsureLatestMyDbMigration()` or manage them manually via `IMigrationManager.EnsureLatestVersion()`.
+
+### Indexes
+
+Declare an index with `[Index]`: on a property for a single column, or on the class for a composite one.
+
+```csharp
+[Table("users")]
+[Index(nameof(TenantId), nameof(Email), Unique = true)]
+public partial class User
+{
+    [PrimaryKey, Default(DbDefaults.Guid.Random)] public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+
+    [Index] public string Email { get; set; }
+    [Index(Where = "status <> 'deleted'")] public string Status { get; set; }
+    [Index(Method = DbIndexMethods.FullText)] public string Bio { get; set; }
+}
+```
+
+The attribute may be repeated, so a column can carry a plain index and a partial one at the same time. Names are
+derived from the table and columns (`IX_users_email`, `UX_` when unique) unless you set `Name` yourself.
+
+| Option | Effect |
+| ------- | ------- |
+| `Unique` | Enforces uniqueness across the key columns |
+| `Method` | What the index is for, as a `DbIndexMethods` constant: `Default`, `Hash`, `FullText`, `Spatial`, `Contains`, `BlockRange` |
+| `Where` | Restricts the index to matching rows (a partial index) |
+| `Include` | Non-key columns stored in the index so a query reading only these avoids the table |
+| `Descending`, `Nulls` | Sort order for every key column |
+| `DescendingColumns`, `NullsFirstColumns`, `NullsLastColumns` | Sort order for individual key columns |
+
+`Method` names the *intent* rather than a specific database's access method, so a model stays portable: each
+engine maps it to its own equivalent (`FullText` becomes `USING gin` on PostgreSQL) and reports a warning when it
+has none. When an engine cannot express an option at all, an option that only affects performance is dropped with
+a warning, while one that would change what the database enforces (uniqueness, or a filter on a unique index) is
+reported as an error instead of being silently weakened.
+
+`Where` and `RawMethod` are escape hatches passed to the database verbatim; a model using either is tied to one
+engine.
+
+Creating an index locks the table against writes until it is built. `CREATE INDEX CONCURRENTLY` is not generated,
+because a migration and its bookkeeping row are applied in a single transaction and a concurrent build cannot run
+inside one.
+
+### Rolling back
+
+Every generated migration carries a `DownSql` script that inverts its `UpSql`. Pass an older migration id to the
+generated manager's `EnsureMigration(migrationId)` and each migration between the current and the target version
+is rolled back in turn. The DOWN script and its bookkeeping row run in a single transaction, so a migration is
+never left half reverted.
+
+Two things are worth knowing about what a rollback does and does not restore:
+
+- **The migration history table is never dropped.** `_scg_migrations` is infrastructure rather than part of your
+  schema, and the rollback row is written into it as part of the same transaction, so it is excluded from every
+  DOWN script. Rolling back the very first migration leaves you with an empty user schema and an intact history
+  table whose last row records the rollback, and rolling forward again from there re-applies cleanly because
+  the first migration creates that one table with `CREATE TABLE IF NOT EXISTS`.
+- **Sequences restart.** Rolling back a migration that created an `[AutoIncrement]` table drops that table's
+  sequence along with it, so re-applying the migration starts numbering from 1 again. A sequence named
+  explicitly with `[AutoIncrement(SequenceName = "...")]` and shared by more than one table is left in place
+  while any table still uses it, and the CLI reports a warning when it skips such a drop.
+- **Indexes are rebuilt, not restored.** Rolling back a migration that dropped an index recreates it from
+  scratch, which on a large table takes as long as building it did originally.
+
+Rows written at runtime are not recoverable by a rollback. A DOWN script restores schema and seed data only, and
+the CLI marks every data-losing statement it generates so it is visible before you apply it.
 
 ---
 

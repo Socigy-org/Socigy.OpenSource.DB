@@ -47,7 +47,8 @@ namespace Socigy.OpenSource.DB.Tool
 
                 bool hasSchemaChanges = alteration.AddedColumns.Any() || alteration.RemovedColumns.Any() ||
                                         alteration.ModifiedColumns.Any() || alteration.RenamedColumns.Any() ||
-                                        alteration.AddedConstraints.Any() || alteration.RemovedConstraints.Any();
+                                        alteration.AddedConstraints.Any() || alteration.RemovedConstraints.Any() ||
+                                        alteration.AddedIndexes.Any() || alteration.RemovedIndexes.Any();
 
                 bool hasDataChanges = alteration.AddedRows.Any() || alteration.RemovedRows.Any() ||
                                       alteration.ModifiedRows.Any();
@@ -116,7 +117,21 @@ namespace Socigy.OpenSource.DB.Tool
             }
             alteration.RemovedConstraints.AddRange(oldConstraints);
 
-            // --- 3. DATA (InstantiatedValues) COMPARISON ---
+            // --- 3. INDEX COMPARISON ---
+            // No engine can ALTER an index in place, so a redefined index comes out as a removal plus an
+            // addition and the generator emits DROP-then-CREATE.
+            var oldIndexes = oldTable.Indexes?.ToList() ?? new List<DbIndex>();
+            var newIndexes = newTable.Indexes?.ToList() ?? new List<DbIndex>();
+
+            foreach (var newIndex in newIndexes)
+            {
+                var match = oldIndexes.FirstOrDefault(oldIndex => DbIndex.AreFunctionallyEqual(oldIndex, newIndex));
+                if (match != null) oldIndexes.Remove(match);
+                else alteration.AddedIndexes.Add(newIndex);
+            }
+            alteration.RemovedIndexes.AddRange(oldIndexes);
+
+            // --- 4. DATA (InstantiatedValues) COMPARISON ---
             CompareTableData(oldTable, newTable, alteration);
 
             return alteration;

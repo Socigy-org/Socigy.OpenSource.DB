@@ -24,5 +24,11 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
 
         public IList<DbColumn> Columns { get; set; }
         public IList<DbConstraint> Constraints { get; set; }
+
+        /// <summary>
+        /// Indexes declared by <c>[Index]</c>. Null in a snapshot written before index support existed, which
+        /// reads as "no indexes" and makes the next migration create the declared ones.
+        /// </summary>
+        public IList<DbIndex> Indexes { get; set; }
     }
 }

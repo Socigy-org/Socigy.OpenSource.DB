@@ -75,17 +75,10 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
             set { _Name = value; }
         }
 
-        // Deterministic FNV-1a 32-bit hash — unlike string.GetHashCode() it is stable across runs and
-        // processes, so generated constraint names are reproducible.
-        private static string StableHash(string s)
-        {
-            unchecked
-            {
-                uint hash = 2166136261;
-                foreach (char c in s) { hash ^= c; hash *= 16777619; }
-                return hash.ToString("x8");
-            }
-        }
+        // Deterministic hash — unlike string.GetHashCode() it is stable across runs and processes, so
+        // generated constraint names are reproducible. Shared with index naming so both derive names the
+        // same way.
+        private static string StableHash(string s) => StableName.Hash(s);
 
         public IEnumerable<string> Columns { get; set; }
 

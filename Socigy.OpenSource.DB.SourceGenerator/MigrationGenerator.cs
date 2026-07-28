@@ -31,6 +31,10 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                 BaseNamespace = migrationTableNamespace,
                 DbName = dbName
             }.TransformText());
+            // The table/sequence names below are the same literals as
+            // Socigy.OpenSource.DB.Core.Migrations.MigrationHistory.TableName (which the migration tool
+            // reads to keep the bookkeeping table out of any DOWN script). An analyzer cannot reference
+            // Core, so they are duplicated here and must be kept in sync.
             ctx.AddSource("Migrations.table.g.cs", new TableColumnNameClassTemplate()
             {
                 ClassName = "Migration",

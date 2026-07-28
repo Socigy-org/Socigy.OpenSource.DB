@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Npgsql;
+using Socigy.OpenSource.DB.Attributes;
 using Socigy.OpenSource.DB.Tool.Structures.Analysis;
 
 namespace Socigy.OpenSource.DB.Tool.Introspection
@@ -31,6 +32,7 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
             await ApplyKeyColumnsAsync(conn, schemaName, byName, "PRIMARY KEY", cancellationToken).ConfigureAwait(false);
             await ReadUniqueConstraintsAsync(conn, schemaName, byName, cancellationToken).ConfigureAwait(false);
             await ReadForeignKeysAsync(conn, schemaName, byName, cancellationToken).ConfigureAwait(false);
+            await ReadIndexesAsync(conn, schemaName, byName, cancellationToken).ConfigureAwait(false);
 
             return new DbSchema { Id = Guid.NewGuid().ToString(), Tables = tables };
         }
@@ -179,6 +181,174 @@ namespace Socigy.OpenSource.DB.Tool.Introspection
                     Columns = columns.Select(c => Naming.ToPascalCase(c)).ToList(),
                 });
             }
+        }
+
+        /// <summary>
+        /// Reads standalone indexes into <see cref="DbTable.Indexes"/>, mapping each access method back to a
+        /// portable <c>DbIndexMethods</c> token so a scaffolded schema is as engine-neutral as a generated one.
+        /// </summary>
+        /// <remarks>
+        /// Indexes that merely implement a PRIMARY KEY or UNIQUE constraint are skipped: they are already
+        /// modelled as constraints, and reading them here too would emit both a constraint and an index for
+        /// the same thing, then generate a migration that adds a duplicate index on every run.
+        /// <para>
+        /// Expression indexes (<c>ON t ((lower(email)))</c>) have no attribute form. They are skipped with a
+        /// warning rather than half-read, so the gap is visible instead of silently producing an index over
+        /// the wrong thing.
+        /// </para>
+        /// </remarks>
+        private static async Task ReadIndexesAsync(NpgsqlConnection conn, string schema, Dictionary<string, DbTable> tables, CancellationToken ct)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT t.relname        AS table_name,
+                                       i.relname        AS index_name,
+                                       am.amname        AS access_method,
+                                       ix.indisunique   AS is_unique,
+                                       pg_get_expr(ix.indpred, ix.indrelid) AS filter,
+                                       ix.indnkeyatts   AS key_count,
+                                       ix.indoption::int2[] AS options,
+                                       ARRAY(
+                                           SELECT pg_get_indexdef(ix.indexrelid, k + 1, true)
+                                           FROM generate_subscripts(ix.indkey, 1) AS k
+                                           ORDER BY k
+                                       )                AS column_defs
+                                FROM pg_index ix
+                                JOIN pg_class i     ON i.oid = ix.indexrelid
+                                JOIN pg_class t     ON t.oid = ix.indrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                JOIN pg_am am       ON am.oid = i.relam
+                                WHERE n.nspname = @s
+                                  AND NOT ix.indisprimary
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM pg_constraint c WHERE c.conindid = ix.indexrelid
+                                  )
+                                ORDER BY t.relname, i.relname;";
+            cmd.Parameters.AddWithValue("s", schema);
+
+            await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await r.ReadAsync(ct).ConfigureAwait(false))
+            {
+                string tableName = r.GetString(0);
+                string indexName = r.GetString(1);
+                if (!tables.TryGetValue(tableName, out var table)) continue;
+
+                string accessMethod = r.GetString(2);
+                bool isUnique = r.GetBoolean(3);
+                string filter = r.IsDBNull(4) ? null : r.GetString(4);
+                int keyCount = r.GetInt32(5);
+                var options = r.IsDBNull(6) ? Array.Empty<short>() : (short[])r.GetValue(6);
+                var columnDefs = (string[])r.GetValue(7);
+
+                var index = new DbIndex
+                {
+                    Name = indexName,
+                    TableName = tableName,
+                    IsUnique = isUnique,
+                    Where = filter,
+                };
+
+                var keyColumns = new List<string>();
+                var descending = new List<string>();
+                var nullsFirst = new List<string>();
+                var nullsLast = new List<string>();
+                var included = new List<string>();
+                bool expression = false;
+
+                for (int i = 0; i < columnDefs.Length; i++)
+                {
+                    var column = ParseIndexColumn(columnDefs[i]);
+                    if (column == null) { expression = true; break; }
+
+                    // Columns past indnkeyatts are the INCLUDE list, which carries no ordering.
+                    if (i >= keyCount) { included.Add(column); continue; }
+
+                    keyColumns.Add(column);
+
+                    var (isDescending, nulls) = DecodeIndexOption(i < options.Length ? options[i] : (short)0);
+                    if (isDescending) descending.Add(column);
+                    if (nulls == DbIndexNulls.First) nullsFirst.Add(column);
+                    else if (nulls == DbIndexNulls.Last) nullsLast.Add(column);
+                }
+
+                if (expression || keyColumns.Count == 0)
+                {
+                    Logger.Warning($"Index \"{indexName}\" on \"{tableName}\" indexes an expression, which [Index] " +
+                                   "cannot express. It was left out of the scaffolded model; re-create it by hand or " +
+                                   "the next generated migration will drop it.");
+                    continue;
+                }
+
+                index.Columns = keyColumns.Select(Naming.ToPascalCase).ToList();
+                if (included.Count > 0) index.IncludeColumns = included.Select(Naming.ToPascalCase).ToList();
+                if (descending.Count > 0) index.DescendingColumns = descending.Select(Naming.ToPascalCase).ToList();
+                if (nullsFirst.Count > 0) index.NullsFirstColumns = nullsFirst.Select(Naming.ToPascalCase).ToList();
+                if (nullsLast.Count > 0) index.NullsLastColumns = nullsLast.Select(Naming.ToPascalCase).ToList();
+
+                var method = FromAccessMethod(accessMethod);
+                if (method != null) index.Method = method;
+                else if (!string.Equals(accessMethod, "btree", StringComparison.OrdinalIgnoreCase))
+                    // No portable intent covers this access method, so keep it verbatim rather than losing it.
+                    index.RawMethod = accessMethod;
+
+                table.Indexes ??= new List<DbIndex>();
+                table.Indexes.Add(index);
+            }
+        }
+
+        /// <summary>Maps a PostgreSQL access method to a portable intent token, or null when none fits.</summary>
+        /// <remarks>
+        /// <c>gin</c> backs both full-text and containment indexes; containment is the broader everyday use,
+        /// so it is the one recovered. The two generate identical SQL, so the choice cannot round-trip wrong.
+        /// </remarks>
+        private static string FromAccessMethod(string accessMethod) => accessMethod?.ToLowerInvariant() switch
+        {
+            "hash" => DbIndexMethods.Hash,
+            "gin"  => DbIndexMethods.Contains,
+            "gist" => DbIndexMethods.Spatial,
+            "brin" => DbIndexMethods.BlockRange,
+            _      => null,
+        };
+
+        /// <summary>
+        /// Pulls the column name out of one <c>pg_get_indexdef</c> column fragment. Returns null for anything
+        /// that is not a plain column reference (an expression, which has no attribute representation).
+        /// </summary>
+        /// <remarks>
+        /// Per-column <c>pg_get_indexdef</c> renders only the column itself, never its sort options; those
+        /// live in <c>pg_index.indoption</c> and are decoded by <see cref="DecodeIndexOption"/>.
+        /// </remarks>
+        private static string ParseIndexColumn(string definition)
+        {
+            var name = (definition ?? "").Trim();
+            if (name.Length == 0) return null;
+
+            if (name.StartsWith("\"", StringComparison.Ordinal) && name.EndsWith("\"", StringComparison.Ordinal))
+                name = name.Substring(1, name.Length - 2);
+
+            // A parenthesised or function-call fragment is an expression, not a column.
+            return name.Length == 0 || name.Contains("(") || name.Contains(")") ? null : name;
+        }
+
+        // pg_index.indoption bit flags, per PostgreSQL's catalog definition.
+        private const short IndexOptionDescending = 0x0001;
+        private const short IndexOptionNullsFirst = 0x0002;
+
+        /// <summary>
+        /// Decodes one <c>pg_index.indoption</c> entry into sort direction and NULL placement.
+        /// </summary>
+        /// <remarks>
+        /// Only a NULL placement that differs from the direction's default is reported. PostgreSQL defaults to
+        /// NULLS LAST for ascending and NULLS FIRST for descending, and does not print the clause in that case;
+        /// recording it anyway would make the regenerated DDL differ from the definition it was read from for
+        /// no reason.
+        /// </remarks>
+        private static (bool Descending, string Nulls) DecodeIndexOption(short option)
+        {
+            bool descending = (option & IndexOptionDescending) != 0;
+            bool nullsFirst = (option & IndexOptionNullsFirst) != 0;
+
+            if (descending) return (true, nullsFirst ? null : DbIndexNulls.Last);
+            return (false, nullsFirst ? DbIndexNulls.First : null);
         }
 
         private static async Task ReadForeignKeysAsync(NpgsqlConnection conn, string schema, Dictionary<string, DbTable> tables, CancellationToken ct)

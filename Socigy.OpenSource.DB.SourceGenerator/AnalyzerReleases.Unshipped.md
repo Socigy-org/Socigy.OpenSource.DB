@@ -29,3 +29,5 @@ SCGDB021 | Socigy.DB | Error | @returns DTO type cannot be mapped
 SCGDB022 | Socigy.DB | Error | Malformed @returns directive
 SCGDB023 | Socigy.DB | Error | [Encrypted] cannot be applied to a key column
 SCGDB024 | Socigy.DB | Error | Duplicate column name
+SCGDB025 | Socigy.DB | Error | [Table] type must be a top-level, non-generic class
+SCGDB026 | Socigy.DB | Error | [Index] references an unknown property

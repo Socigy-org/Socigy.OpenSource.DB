@@ -12,6 +12,13 @@ namespace Socigy.OpenSource.DB.Core.Migrations
     public static class MigrationHistory
     {
         /// <summary>
+        /// Name of the table the migration bookkeeping rows live in. Canonical definition: the source
+        /// generator emits the same literal (it is a Roslyn analyzer and cannot reference this assembly),
+        /// so keep <c>MigrationGenerator</c> / <c>MigrationTableTemplate</c> in sync with this value.
+        /// </summary>
+        public const string TableName = "_scg_migrations";
+
+        /// <summary>
         /// Orders migrations oldest-&gt;newest by following the <c>PreviousId</c> chain rather than by sorting
         /// their ids. Id-sorting is fragile: ids are minute-granularity timestamps, so two migrations created
         /// in the same minute sort arbitrarily, and a user-named or non-timestamped id may not sort at all.

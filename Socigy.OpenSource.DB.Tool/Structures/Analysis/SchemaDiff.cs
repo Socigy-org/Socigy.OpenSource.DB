@@ -65,6 +65,13 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
         public List<DbConstraint> AddedConstraints { get; set; } = [];
         public List<DbConstraint> RemovedConstraints { get; set; } = [];
 
+        /// <summary>
+        /// Indexes to create / drop. An index has no in-place ALTER on any engine, so a redefinition arrives
+        /// as a pair: the old one in <see cref="RemovedIndexes"/> and the new one in <see cref="AddedIndexes"/>.
+        /// </summary>
+        public List<DbIndex> AddedIndexes { get; set; } = [];
+        public List<DbIndex> RemovedIndexes { get; set; } = [];
+
         [JsonIgnore]
         public List<Dictionary<string, object?>> RawAddedRows { get; set; } = [];
         public IEnumerable<Dictionary<string, string?>>? AddedRows => RawAddedRows?.Select(y => y.ToDictionary(x => x.Key, x => x.Value?.ToString()));
@@ -86,6 +93,9 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
             if (AddedConstraints?.Count == 0) AddedConstraints = null;
             if (RemovedConstraints?.Count == 0) RemovedConstraints = null;
 
+            if (AddedIndexes?.Count == 0) AddedIndexes = null;
+            if (RemovedIndexes?.Count == 0) RemovedIndexes = null;
+
             if (RawAddedRows?.Count == 0) RawAddedRows = null;
             if (RawRemovedRows?.Count == 0) RawRemovedRows = null;
             if (ModifiedRows?.Count == 0) ModifiedRows = null;
@@ -103,6 +113,10 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
             // Constraints
             AddedConstraints ??= [];
             RemovedConstraints ??= [];
+
+            // Indexes
+            AddedIndexes ??= [];
+            RemovedIndexes ??= [];
 
             // Rows
             RawAddedRows ??= [];

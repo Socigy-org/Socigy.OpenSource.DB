@@ -1,4 +1,5 @@
 ﻿using Socigy.OpenSource.DB.Attributes;
+using Socigy.OpenSource.DB.Core.Migrations;
 using Socigy.OpenSource.DB.Tool.Structures.Analysis;
 using System;
 using System.Collections.Generic;
@@ -24,6 +25,14 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         private readonly List<string> _warnings = new List<string>();
 
         private void Warn(string detail) => _warnings.Add(detail);
+
+        /// <inheritdoc/>
+        /// <remarks>PostgreSQL expresses every index feature the model can describe.</remarks>
+        public IndexCapabilities IndexSupport => IndexCapabilities.All;
+
+        /// <inheritdoc/>
+        /// <remarks>PostgreSQL's NAMEDATALEN-1; identifiers longer than this are silently truncated.</remarks>
+        public int MaxIdentifierLength => 63;
 
         /// <summary>Comment prefix for a type change whose in-place cast may fail or lose data (narrowing).</summary>
         public const string LossyMarker = "-- [SOCIGY:LOSSY]";
@@ -75,8 +84,28 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                             "are NOT recoverable.", upCommands);
                 upCommands.Add($"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
 
+                // The sequences go AFTER the table: the column's DEFAULT nextval(...) makes the table depend
+                // on the sequence, and DROP TABLE ... CASCADE does not cover it. A sequence another table
+                // still uses is left alone (see GenerateDropUnsharedSequences), so this cannot orphan a
+                // survivor's column default.
+                foreach (var seqDown in GenerateDropUnsharedSequences(table))
+                    upCommands.Add(seqDown);
+
                 // Down: Recreate Schema (GenerateCreateTable deliberately excludes foreign keys)
+                // An [AutoIncrement] column is recreated with DEFAULT nextval(...), so its sequence has to
+                // exist first. IF NOT EXISTS keeps this a no-op for a sequence the UP deliberately kept.
+                foreach (var seqUp in GenerateCreateSequences(table))
+                    downCommands.Add(seqUp);
+
                 downCommands.Add(GenerateCreateTable(table));
+
+                // The UP's DROP TABLE took the table's indexes with it, so the DOWN has to put them back.
+                // They come after the table for the obvious reason, and there is no matching UP statement.
+                foreach (var index in table.Indexes ?? [])
+                {
+                    var planned = PlanIndex(index, table);
+                    if (planned != null) downCommands.Add(GenerateCreateIndex(planned));
+                }
 
                 // Down: Restore Data (InstantiatedValues)
                 if (table.InstantiatedValues != null && table.InstantiatedValues.Any())
@@ -124,35 +153,83 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     }
                 }
 
-                downCommands.Insert(0, $"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
+                // Indexes come after the table and its seed data: the index has to have something to index,
+                // and building it once over the finished rows beats maintaining it through every INSERT.
+                // No DOWN counterpart is needed — dropping the table drops its indexes with it.
+                foreach (var index in table.Indexes ?? [])
+                {
+                    var planned = PlanIndex(index, table);
+                    if (planned != null) upCommands.Add(GenerateCreateIndex(planned));
+                }
 
-                // Drop sequences after table is gone
-                foreach (var seqDown in GenerateDropSequences(table))
+                // The migration bookkeeping table is infrastructure, not user schema: the executor writes the
+                // IsRollback row into it inside the SAME transaction as the DOWN script, so a DOWN that drops
+                // it can never commit. Leave it (and its sequence) standing, as EF Core does with
+                // __EFMigrationsHistory. Without this, rolling back the root migration always failed.
+                if (table.Name == MigrationHistory.TableName)
+                    continue;
+
+                // Insert(0) reverses emission order, so the sequence drops are emitted FIRST to end up
+                // BEHIND the DROP TABLE. The column's DEFAULT nextval(...) makes the table depend on the
+                // sequence (not the reverse), so DROP TABLE ... CASCADE does not cover the sequence and
+                // dropping the sequence first fails with "other objects depend on it".
+                foreach (var seqDown in GenerateDropUnsharedSequences(table))
                     downCommands.Insert(0, seqDown);
+
+                downCommands.Insert(0, $"DROP TABLE IF EXISTS {Quote(table.Name)} CASCADE;");
             }
 
             // --- UP: 4. Alter Tables (Schema & Data) ---
             // --- DOWN: 2. Revert Alterations ---
             foreach (var alteration in diff.AlteredTables)
             {
-                // A. Schema Changes
+                // A. Indexes to drop. These go FIRST in the UP: an index over a column this migration is about
+                // to drop or retype has to be out of the way, and a redefined index (same name, new shape)
+                // arrives as a removal plus an addition, so the DROP must precede its CREATE.
+                var indexDrops = new List<string>();
+                var indexDropUndo = new List<string>();
+                foreach (var index in alteration.RemovedIndexes ?? [])
+                {
+                    var planned = PlanIndex(index, alteration.Table);
+                    if (planned == null) continue;
+
+                    Warn($"Drops index \"{planned.Name}\" on \"{alteration.Table.Name}\". Rebuilding it on a " +
+                         "large table is expensive, and queries relying on it will be slower until it is back.");
+                    indexDrops.Add(GenerateDropIndex(planned.Name));
+                    indexDropUndo.Add(GenerateCreateIndex(planned));
+                }
+                upCommands.AddRange(indexDrops);
+
+                // B. Schema Changes
                 var (schemaUps, schemaDowns) = GenerateTableAlterations(alteration);
                 upCommands.AddRange(schemaUps);
 
-                foreach (var cmd in ((IEnumerable<string>)schemaDowns).Reverse())
-                {
-                    downCommands.Insert(0, cmd);
-                }
-
-                // B. Data Changes (Rows Added/Removed/Modified)
+                // C. Data Changes (Rows Added/Removed/Modified)
                 var (dataUps, dataDowns) = GenerateDataAlterations(alteration);
                 upCommands.AddRange(dataUps);
 
-                // Prepend data rollbacks so they happen before schema rollbacks
-                foreach (var cmd in ((IEnumerable<string>)dataDowns).Reverse())
+                // D. Indexes to create, last in the UP so every column they reference exists and the index is
+                // built once over the final rows instead of being maintained through the data changes above.
+                var indexCreateUndo = new List<string>();
+                foreach (var index in alteration.AddedIndexes ?? [])
                 {
-                    downCommands.Insert(0, cmd);
+                    var planned = PlanIndex(index, alteration.Table);
+                    if (planned == null) continue;
+
+                    upCommands.Add(GenerateCreateIndex(planned));
+                    indexCreateUndo.Add(GenerateDropIndex(planned.Name));
                 }
+
+                // The DOWN mirrors it: drop what the UP created, revert the data and then the schema, and
+                // finally rebuild the indexes the UP dropped, by which point their columns are back.
+                var alterationDown = new List<string>();
+                alterationDown.AddRange(indexCreateUndo);
+                alterationDown.AddRange(dataDowns);
+                alterationDown.AddRange(schemaDowns);
+                alterationDown.AddRange(indexDropUndo);
+
+                for (int i = alterationDown.Count - 1; i >= 0; i--)
+                    downCommands.Insert(0, alterationDown[i]);
             }
 
             // --- UP: 5. Add Foreign Keys for New Tables ---
@@ -220,7 +297,15 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         private string GenerateCreateTable(DbTable table)
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"CREATE TABLE {Quote(table.Name)} (");
+
+            // The migration bookkeeping table is the one table a DOWN script deliberately leaves standing (the
+            // rollback row is written into it in the same transaction), so rolling the first migration back and
+            // then forward again re-runs this exact statement against a table that still exists. Guard it the
+            // same way its sequence beside it already is. Every other table is left unguarded on purpose: one
+            // that already exists is a real conflict and should fail loudly rather than silently keep whatever
+            // shape it happens to have.
+            var ifNotExists = table.Name == MigrationHistory.TableName ? "IF NOT EXISTS " : "";
+            sb.AppendLine($"CREATE TABLE {ifNotExists}{Quote(table.Name)} (");
 
             var lines = new List<string>();
 
@@ -665,12 +750,49 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             }
         }
 
-        private IEnumerable<string> GenerateDropSequences(DbTable table)
+        /// <summary>
+        /// Drops the sequences owned by <paramref name="table"/>, skipping any still referenced by another
+        /// table in the current schema. An explicit <c>[AutoIncrement(SequenceName = "...")]</c> can point
+        /// several tables at one sequence, and dropping a shared sequence would break the survivors' column
+        /// defaults. Skipped sequences are reported through <see cref="SafetyWarnings"/>.
+        /// </summary>
+        private IEnumerable<string> GenerateDropUnsharedSequences(DbTable table)
         {
             foreach (var col in table.Columns.Where(c => c.IsAutoIncrement == true))
             {
-                yield return $"DROP SEQUENCE IF EXISTS {Quote(GetSequenceName(table.Name, col))};";
+                var seqName = GetSequenceName(table.Name, col);
+                var sharedWith = FindSequenceSharers(seqName, table.Name);
+                if (sharedWith != null)
+                {
+                    Warn($"Sequence \"{seqName}\" is left in place when table \"{table.Name}\" is dropped: " +
+                         $"table \"{sharedWith}\" still uses it for an [AutoIncrement] column.");
+                    continue;
+                }
+
+                yield return $"DROP SEQUENCE IF EXISTS {Quote(seqName)};";
             }
+        }
+
+        /// <summary>
+        /// Name of another table in the current schema whose [AutoIncrement] column resolves to
+        /// <paramref name="seqName"/>, or null when the sequence belongs to <paramref name="ownerTable"/> alone.
+        /// </summary>
+        private string? FindSequenceSharers(string seqName, string ownerTable)
+        {
+            var tables = Configuration.CurrentSchema?.Tables;
+            if (tables == null) return null;
+
+            foreach (var other in tables)
+            {
+                if (other?.Columns == null || other.Name == ownerTable) continue;
+                foreach (var col in other.Columns.Where(c => c.IsAutoIncrement == true))
+                {
+                    if (GetSequenceName(other.Name, col) == seqName)
+                        return other.Name;
+                }
+            }
+
+            return null;
         }
 
         private static string? GetSequenceType(DbColumn col)
@@ -739,18 +861,18 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             switch (con.Type.ToLower())
             {
                 case "unique":
-                    var uniqueCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
+                    var uniqueCols = string.Join(", ", con.Columns.Select(x => Quote(ResolveColumnName(sourceTable, x))));
                     sb.Append($"UNIQUE ({uniqueCols})");
                     break;
                 case "check":
                     sb.Append($"CHECK ({con.Value})");
                     break;
                 case "foreign_key":
-                    var fkCols = string.Join(", ", con.Columns.Select(x => Quote(sourceTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
+                    var fkCols = string.Join(", ", con.Columns.Select(x => Quote(ResolveColumnName(sourceTable, x))));
                     var targetTable = Configuration.CurrentSchema.Tables.FirstOrDefault(x => x.SourceName == con.TargetTable);
                     var targetTableName = targetTable?.Name ?? con.TargetTable;
                     var targetCols = string.Join(", ", con.TargetColumns.Select(x =>
-                        Quote(targetTable?.Columns.FirstOrDefault(y => y.SourceName != null && y.SourceName.Split('.').Last() == x)?.Name ?? ToColumnName(x))));
+                        Quote(ResolveColumnName(targetTable, x))));
                     sb.Append($"FOREIGN KEY ({fkCols}) REFERENCES {Quote(targetTableName)} ({targetCols})");
                     if (!string.IsNullOrEmpty(con.OnDelete)) sb.Append($" ON DELETE {TranslateForeignKeyAction(con.OnDelete)}");
                     if (!string.IsNullOrEmpty(con.OnUpdate)) sb.Append($" ON UPDATE {TranslateForeignKeyAction(con.OnUpdate)}");
@@ -770,6 +892,88 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         // makes the generated DDL fail at apply. Uses the same policy the source generator uses for column names.
         private static string ToColumnName(string propertyOrColumn)
             => System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(propertyOrColumn);
+
+        /// <summary>
+        /// Maps a C# property name to its database column name using <paramref name="sourceTable"/>, falling
+        /// back to the snake_case convention when the property cannot be matched (e.g. a constraint left over
+        /// from a column that has since been renamed).
+        /// </summary>
+        /// <remarks>
+        /// Constraint and index columns are both stored as property names, so both must resolve the same way;
+        /// resolving one of them differently would name the same column two ways in one migration.
+        /// </remarks>
+        private static string ResolveColumnName(DbTable sourceTable, string propertyName)
+            => sourceTable?.Columns?.FirstOrDefault(
+                   y => y.SourceName != null && y.SourceName.Split('.').Last() == propertyName)?.Name
+               ?? ToColumnName(propertyName);
+
+        /// <summary>Translates a portable index-method token to the PostgreSQL access method.</summary>
+        private static string TranslateIndexMethod(string token) => token switch
+        {
+            DbIndexMethods.Hash       => "hash",
+            DbIndexMethods.FullText   => "gin",
+            DbIndexMethods.Spatial    => "gist",
+            DbIndexMethods.Contains   => "gin",
+            DbIndexMethods.BlockRange => "brin",
+            _                         => null,   // Default / unset: btree, which needs no USING clause
+        };
+
+        /// <summary>
+        /// Plans <paramref name="index"/> against this engine's capabilities and pipes the planner's findings
+        /// into the generator's warning sinks. Returns null when the index cannot be emitted.
+        /// </summary>
+        private IndexPlanner.PlannedIndex PlanIndex(DbIndex index, DbTable table)
+        {
+            var plan = IndexPlanner.Plan(
+                index, IndexSupport, property => ResolveColumnName(table, property), MaxIdentifierLength);
+
+            foreach (var warning in plan.Warnings)
+                Warn(warning);
+
+            foreach (var error in plan.Errors)
+                Logger.Error(error);
+
+            return plan.Index;
+        }
+
+        /// <summary>Renders <c>CREATE INDEX</c> for an index already reduced to what PostgreSQL supports.</summary>
+        private string GenerateCreateIndex(IndexPlanner.PlannedIndex index)
+        {
+            var sb = new StringBuilder("CREATE ");
+            if (index.IsUnique) sb.Append("UNIQUE ");
+            sb.Append($"INDEX IF NOT EXISTS {Quote(index.Name)} ON {Quote(index.TableName)}");
+
+            // RawMethod is the caller's explicit engine-specific choice and wins over the portable token.
+            var method = !string.IsNullOrWhiteSpace(index.RawMethod)
+                ? index.RawMethod
+                : TranslateIndexMethod(index.Method);
+            if (!string.IsNullOrWhiteSpace(method)) sb.Append($" USING {method}");
+
+            var columns = index.Columns.Select(c =>
+            {
+                var part = Quote(c.Name);
+                if (c.Descending) part += " DESC";
+                if (c.Nulls == DbIndexNulls.First) part += " NULLS FIRST";
+                else if (c.Nulls == DbIndexNulls.Last) part += " NULLS LAST";
+                return part;
+            });
+            sb.Append($" ({string.Join(", ", columns)})");
+
+            if (index.IncludeColumns.Count > 0)
+                sb.Append($" INCLUDE ({string.Join(", ", index.IncludeColumns.Select(Quote))})");
+
+            if (!string.IsNullOrWhiteSpace(index.Where))
+                sb.Append($" WHERE {index.Where}");
+
+            sb.Append(';');
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Renders <c>DROP INDEX</c>. PostgreSQL identifies an index by name alone, but the owning table is
+        /// carried on <see cref="DbIndex.TableName"/> for engines whose DROP requires it.
+        /// </summary>
+        private string GenerateDropIndex(string indexName) => $"DROP INDEX IF EXISTS {Quote(indexName)};";
 
         private string Quote(string id) => $"\"{id}\"";
 

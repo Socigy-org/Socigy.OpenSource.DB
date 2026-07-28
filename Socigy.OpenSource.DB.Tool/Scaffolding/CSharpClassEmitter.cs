@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using Socigy.OpenSource.DB.Attributes;
+using Socigy.OpenSource.DB.Tool.Generators;
 using Socigy.OpenSource.DB.Tool.Introspection;
 using Socigy.OpenSource.DB.Tool.Structures.Analysis;
 
@@ -57,6 +59,13 @@ namespace Socigy.OpenSource.DB.Tool.Scaffolding
                 sb.AppendLine($"[Unique({string.Join(", ", propNames.Select(p => $"nameof({p})"))})]");
             }
 
+            // Composite indexes map to a class-level [Index(nameof(A), nameof(B))]; single-column ones become a
+            // property-level [Index] below. Without these, scaffolding silently dropped every index, so the next
+            // `generate` produced a migration that removed them from the database.
+            foreach (var index in table.Indexes ?? new List<DbIndex>())
+                if ((index.Columns?.Count() ?? 0) > 1)
+                    sb.AppendLine($"[Index({RenderIndexArguments(table, index, withColumns: true)})]");
+
             sb.AppendLine($"public partial class {table.SourceName}");
             sb.AppendLine("{");
 
@@ -84,14 +93,119 @@ namespace Socigy.OpenSource.DB.Tool.Scaffolding
             {
                 if (!first) sb.AppendLine();
                 first = false;
-                EmitColumn(sb, col, singleColumnUnique.Contains(col.Name) || singleColumnUnique.Contains(col.SourceName), compositePk);
+
+                // A column can carry more than one index (commonly a plain one plus a partial one), and
+                // [Index] is AllowMultiple, so each is emitted on its own line above the property.
+                var columnIndexes = (table.Indexes ?? new List<DbIndex>())
+                    .Where(i => (i.Columns?.Count() ?? 0) == 1)
+                    .Where(i => MatchesColumn(i.Columns.First(), col))
+                    .Select(i => RenderIndexArguments(table, i, withColumns: false))
+                    .ToList();
+
+                EmitColumn(sb, col, singleColumnUnique.Contains(col.Name) || singleColumnUnique.Contains(col.SourceName),
+                           compositePk, columnIndexes);
             }
 
             sb.AppendLine("}");
             return sb.ToString();
         }
 
-        private static void EmitColumn(StringBuilder sb, DbColumn col, bool isUnique, bool compositePk)
+        /// <summary>
+        /// Whether an index column reference names <paramref name="col"/>. The reader stores index columns as
+        /// PascalCase (== SourceName) while a hand-built <see cref="DbIndex"/> may carry the DB name, so both
+        /// are accepted.
+        /// </summary>
+        private static bool MatchesColumn(string reference, DbColumn col) =>
+            string.Equals(reference, col.SourceName, StringComparison.Ordinal) ||
+            string.Equals(reference, col.Name, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Renders the argument list of an <c>[Index]</c> attribute, omitting anything that is already the
+        /// default so the scaffolded model reads like something a person would have written.
+        /// </summary>
+        /// <param name="withColumns">
+        /// True for the class-level composite form, which lists its columns; false for the property-level
+        /// form, where the column is the property the attribute sits on.
+        /// </param>
+        private static string RenderIndexArguments(DbTable table, DbIndex index, bool withColumns)
+        {
+            var args = new List<string>();
+
+            if (withColumns)
+                foreach (var column in index.Columns ?? Enumerable.Empty<string>())
+                    args.Add($"nameof({ToPropertyName(table, column)})");
+
+            // The index name only needs stating when it is not the one the tool would derive anyway.
+            if (!string.IsNullOrEmpty(index.Name) && index.Name != DeriveIndexName(table, index))
+                args.Add($"Name = \"{Escape(index.Name)}\"");
+
+            if (index.IsUnique) args.Add("Unique = true");
+            if (!string.IsNullOrEmpty(index.Method)) args.Add($"Method = {MethodConstant(index.Method)}");
+            if (!string.IsNullOrEmpty(index.RawMethod)) args.Add($"RawMethod = \"{Escape(index.RawMethod)}\"");
+            if (!string.IsNullOrEmpty(index.Where)) args.Add($"Where = \"{Escape(index.Where)}\"");
+
+            AddColumnArray(args, "Include", table, index.IncludeColumns);
+            AddColumnArray(args, "DescendingColumns", table, index.DescendingColumns);
+            AddColumnArray(args, "NullsFirstColumns", table, index.NullsFirstColumns);
+            AddColumnArray(args, "NullsLastColumns", table, index.NullsLastColumns);
+
+            return string.Join(", ", args);
+        }
+
+        private static void AddColumnArray(List<string> args, string member, DbTable table, IEnumerable<string> columns)
+        {
+            var list = (columns ?? Enumerable.Empty<string>()).ToList();
+            if (list.Count == 0) return;
+            args.Add($"{member} = new[] {{ {string.Join(", ", list.Select(c => $"nameof({ToPropertyName(table, c)})"))} }}");
+        }
+
+        /// <summary>
+        /// The name the migration generator would derive for this index, used to decide whether the database's
+        /// actual name has to be stated explicitly.
+        /// </summary>
+        private static string DeriveIndexName(DbTable table, DbIndex index)
+        {
+            var unnamed = new DbIndex
+            {
+                TableName = index.TableName ?? table.Name,
+                Columns = index.Columns,
+                IsUnique = index.IsUnique,
+                Method = index.Method,
+                RawMethod = index.RawMethod,
+                Where = index.Where,
+                IncludeColumns = index.IncludeColumns,
+                DescendingColumns = index.DescendingColumns,
+                NullsFirstColumns = index.NullsFirstColumns,
+                NullsLastColumns = index.NullsLastColumns,
+            };
+
+            var generator = new PostgreSqlGenerator();
+            var plan = IndexPlanner.Plan(unnamed, generator.IndexSupport,
+                property => ToColumnName(table, property), generator.MaxIdentifierLength);
+            return plan.Index?.Name;
+        }
+
+        private static string ToPropertyName(DbTable table, string reference) =>
+            (table.Columns ?? new List<DbColumn>())
+                .FirstOrDefault(c => c.Name == reference || c.SourceName == reference)?.SourceName ?? reference;
+
+        private static string ToColumnName(DbTable table, string reference) =>
+            (table.Columns ?? new List<DbColumn>())
+                .FirstOrDefault(c => c.Name == reference || c.SourceName == reference)?.Name
+            ?? JsonNamingPolicy.SnakeCaseLower.ConvertName(reference);
+
+        private static string MethodConstant(string token) => token switch
+        {
+            DbIndexMethods.Hash       => "DbIndexMethods.Hash",
+            DbIndexMethods.FullText   => "DbIndexMethods.FullText",
+            DbIndexMethods.Spatial    => "DbIndexMethods.Spatial",
+            DbIndexMethods.Contains   => "DbIndexMethods.Contains",
+            DbIndexMethods.BlockRange => "DbIndexMethods.BlockRange",
+            _                         => "DbIndexMethods.Default",
+        };
+
+        private static void EmitColumn(StringBuilder sb, DbColumn col, bool isUnique, bool compositePk,
+                                       IReadOnlyList<string> indexArguments)
         {
             var attrs = new List<string>();
             if (col.IsPrimaryKey == true)
@@ -109,6 +223,11 @@ namespace Socigy.OpenSource.DB.Tool.Scaffolding
 
             if (attrs.Count > 0)
                 sb.AppendLine($"    [{string.Join(", ", attrs)}]");
+
+            // Separate lines: [Index] is AllowMultiple, and folding several of them into one bracket list
+            // would not compile.
+            foreach (var args in indexArguments ?? Array.Empty<string>())
+                sb.AppendLine(args.Length == 0 ? "    [Index]" : $"    [Index({args})]");
 
             string type = col.DotnetType + (col.Nullable == true ? "?" : "");
             string initializer = (col.Nullable != true && ReferenceTypes.Contains(col.DotnetType)) ? " = null!;" : "";

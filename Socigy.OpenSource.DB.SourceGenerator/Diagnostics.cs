@@ -9,7 +9,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     /// suppressed from a project's <c>.editorconfig</c> via
     /// <c>dotnet_diagnostic.SCGDB###.severity = error|warning|none</c>.
     ///
-    /// next free id = SCGDB026
+    /// next free id = SCGDB027
     /// </summary>
     internal static class Diagnostics
     {
@@ -203,6 +203,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             id: "SCGDB024",
             title: "Duplicate column name",
             messageFormat: "Table class '{0}' maps more than one property to the column name '{1}'; column names must be unique after snake_case normalization",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor IndexUnknownProperty = new(
+            id: "SCGDB026",
+            title: "[Index] references an unknown property",
+            messageFormat: "[Index] on '{0}' references '{1}', which is not a mapped property of that table; the index would be generated over a column that does not exist and the migration would fail to apply",
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);

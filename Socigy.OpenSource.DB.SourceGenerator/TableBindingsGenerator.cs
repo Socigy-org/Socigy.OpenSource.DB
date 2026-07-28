@@ -14,6 +14,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     public static class TableBindingsGenerator
     {
         private static readonly string ColumnAttributeFullName = typeof(ColumnAttribute).FullName!;
+        private static readonly string IndexAttributeFullName = typeof(IndexAttribute).FullName!;
         private static readonly string TableAttributeFullName = typeof(TableAttribute).FullName!;
         private static readonly string FlagTableAttributeFullName = typeof(FlagTableAttribute).FullName!;
         private static readonly string TableTypeAttributeFullName = typeof(TableTypeAttribute).FullName!;
@@ -419,6 +420,11 @@ namespace Socigy.OpenSource.DB.SourceGenerator
                     if (!seenColumnNames.Add(col.DatabaseName))
                         ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateColumnName, tableSymbolInfo.Locations.FirstOrDefault(), tableSymbolInfo.Name, col.DatabaseName));
 
+                // SCGDB026 — an [Index] column reference that matches no mapped property. nameof() is checked by
+                // the compiler, but a string literal is not, so a typo would otherwise only surface when the
+                // generated migration failed to apply against the database.
+                ReportUnknownIndexProperties(ctx, tableSymbolInfo, tableColNameClassTemplate.Columns);
+
                 ctx.AddSource($"{hintBase}.table.g.cs", tableColNameClassTemplate.TransformText());
                 ctx.AddSource($"{hintBase}SyntaxMethods.table.g.cs", tableSyntaxTemplate.TransformText());
 
@@ -432,6 +438,67 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             // bridge into the provider-agnostic Core, enabling BulkCopy / DynamicTable.InsertMultipleCopyAsync.
             if (processed.Count > 0)
                 ctx.AddSource("__SocigyBulkCopyBridge.g.cs", BulkCopyBridgeSource);
+        }
+
+        /// <summary>
+        /// Reports every <c>[Index]</c> column reference on <paramref name="tableSymbol"/> that does not name a
+        /// mapped property, whether it appears in the class-level column list or in one of the option arrays.
+        /// </summary>
+        private static void ReportUnknownIndexProperties(
+            SourceProductionContext ctx,
+            INamedTypeSymbol tableSymbol,
+            List<TableColumnNameClassTemplate.ColumnInfo> columns)
+        {
+            var known = new HashSet<string>(columns.Select(c => c.Name), StringComparer.Ordinal);
+
+            void Check(AttributeData attribute, IEnumerable<string> references)
+            {
+                foreach (var reference in references)
+                {
+                    if (string.IsNullOrWhiteSpace(reference) || known.Contains(reference)) continue;
+
+                    var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+                                   ?? tableSymbol.Locations.FirstOrDefault();
+                    ctx.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.IndexUnknownProperty, location, tableSymbol.Name, reference));
+                }
+            }
+
+            // Class-level [Index(...)]: the constructor params are the key columns.
+            foreach (var attribute in tableSymbol.GetAttributes()
+                         .Where(a => a.AttributeClass?.ToDisplayString() == IndexAttributeFullName))
+            {
+                Check(attribute, ReadStringArrayArgument(attribute.ConstructorArguments.FirstOrDefault()));
+                Check(attribute, ReadIndexOptionColumns(attribute));
+            }
+
+            // Property-level [Index]: the key column is the property itself, so only the options can be wrong.
+            foreach (var member in tableSymbol.GetMembers().OfType<IPropertySymbol>())
+                foreach (var attribute in member.GetAttributes()
+                             .Where(a => a.AttributeClass?.ToDisplayString() == IndexAttributeFullName))
+                    Check(attribute, ReadIndexOptionColumns(attribute));
+        }
+
+        /// <summary>Column references from the named arguments that take property names.</summary>
+        private static IEnumerable<string> ReadIndexOptionColumns(AttributeData attribute)
+        {
+            foreach (var named in attribute.NamedArguments)
+            {
+                if (named.Key != nameof(IndexAttribute.Include) &&
+                    named.Key != nameof(IndexAttribute.DescendingColumns) &&
+                    named.Key != nameof(IndexAttribute.NullsFirstColumns) &&
+                    named.Key != nameof(IndexAttribute.NullsLastColumns))
+                    continue;
+
+                foreach (var value in ReadStringArrayArgument(named.Value))
+                    yield return value;
+            }
+        }
+
+        private static IEnumerable<string> ReadStringArrayArgument(TypedConstant constant)
+        {
+            if (constant.Kind != TypedConstantKind.Array) return Array.Empty<string>();
+            return constant.Values.Select(v => v.Value as string).Where(v => v != null);
         }
 
         // Registers the Npgsql binary-COPY implementation into Core's BulkCopySupport at module load. Kept as

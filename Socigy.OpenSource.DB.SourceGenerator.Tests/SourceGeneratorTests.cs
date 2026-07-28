@@ -218,4 +218,57 @@ public class SourceGeneratorTests
         Assert.That(result.Diagnostics.Where(d => d.Id == "SCGDB025"), Is.Not.Empty,
             "a generic [Table] must report SCGDB025, not emit broken code");
     }
+
+    // ── [Index] column references ───────────────────────────────────────────────
+    // nameof() is checked by the compiler, but a string literal is not, so a typo would otherwise survive all
+    // the way to a migration that fails against the database.
+    private static string IndexedModel(string classAttributes, string propertyAttributes = "") => $$"""
+        using System;
+        using Socigy.OpenSource.DB.Attributes;
+        namespace Sample
+        {
+            [Table("users")]
+            {{classAttributes}}
+            public partial class User
+            {
+                [PrimaryKey] public Guid Id { get; set; }
+                public Guid TenantId { get; set; }
+                {{propertyAttributes}} public string Email { get; set; }
+            }
+        }
+        """;
+
+    [Test]
+    public void Index_with_unknown_column_reports_SCGDB026()
+    {
+        var (_, result) = Run(IndexedModel("[Index(\"Emial\")]"), LowercaseJson);
+        Assert.That(result.Diagnostics.Where(d => d.Id == "SCGDB026"), Is.Not.Empty,
+            "a mistyped [Index] column must be caught at compile time");
+    }
+
+    [Test]
+    public void Index_option_naming_an_unknown_column_reports_SCGDB026()
+    {
+        var (_, result) = Run(
+            IndexedModel("[Index(nameof(TenantId), DescendingColumns = new[] { \"Emial\" })]"), LowercaseJson);
+        Assert.That(result.Diagnostics.Where(d => d.Id == "SCGDB026"), Is.Not.Empty,
+            "the ordering and include arrays take property names too and must be checked");
+    }
+
+    [Test]
+    public void Property_level_index_option_naming_an_unknown_column_reports_SCGDB026()
+    {
+        var (_, result) = Run(
+            IndexedModel("", "[Index(Include = new[] { \"Nonexistent\" })]"), LowercaseJson);
+        Assert.That(result.Diagnostics.Where(d => d.Id == "SCGDB026"), Is.Not.Empty);
+    }
+
+    [Test]
+    public void Valid_index_reports_no_diagnostic()
+    {
+        var (_, result) = Run(
+            IndexedModel("[Index(nameof(TenantId), nameof(Email), Include = new[] { nameof(Id) })]", "[Index]"),
+            LowercaseJson);
+        Assert.That(result.Diagnostics.Where(d => d.Id == "SCGDB026"), Is.Empty);
+    }
 }
