@@ -136,10 +136,10 @@
 		<RemoveDir Directories="$(ToolPublishDir)" />
 
 		<Message Text="[Socigy] Building Portable Tool..." Importance="High" />
-		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0;PublishDir=$(ToolPublishDirAny);SelfContained=false" />
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0;PublishDir=$(ToolPublishDirAny);SelfContained=false;NoBuild=false" />
 
 		<Message Text="[Socigy] Building Windows Tool..." Importance="High" />
-		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0-windows;PublishDir=$(ToolPublishDirWin);SelfContained=false;EnableWindowsTargeting=true" />
+		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0-windows;PublishDir=$(ToolPublishDirWin);SelfContained=false;EnableWindowsTargeting=true;NoBuild=false" />
 
 		<ItemGroup>
 			<_ToolFilesAny Include="$(ToolPublishDirAny)**/*" />

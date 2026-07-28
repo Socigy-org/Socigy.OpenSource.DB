@@ -161,7 +161,7 @@ jobs:
 
       - name: Build Tool
         if: steps.version_check.outputs.publish_main == 'true'
-        run: dotnet build Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj /p:EnableWindowsTargeting=true
+        run: dotnet build Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj -c Release /p:EnableWindowsTargeting=true
 
       - name: Restore
         if: steps.version_check.outputs.publish_main == 'true'
