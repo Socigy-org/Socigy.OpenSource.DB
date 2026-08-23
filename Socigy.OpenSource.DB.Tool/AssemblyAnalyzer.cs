@@ -122,12 +122,20 @@ namespace Socigy.OpenSource.DB.Tool
             if (Configuration.SavedSchema != null)
             {
                 foreach (var savedTable in Configuration.SavedSchema.Tables)
+                {
                     foreach (var col in savedTable.Columns ?? [])
                     {
                         var normalized = DbGenerator.GetDatabaseType(col.DatabaseType);
                         if (!string.IsNullOrEmpty(normalized))
                             col.DatabaseType = normalized;
                     }
+
+                    // A snapshot written before the [Index]/[Table] attribute-order fix can carry indexes with
+                    // no table name. Stamp them so they compare equal to the same index read correctly today,
+                    // rather than diffing as removed-and-added and emitting a DROP INDEX for a name that was
+                    // never valid enough to apply in the first place.
+                    StampTableName(savedTable);
+                }
             }
 
             foreach (var table in tables)
@@ -143,7 +151,7 @@ namespace Socigy.OpenSource.DB.Tool
                     if (resTable == null)
                         continue;
 
-                    StampConstraintTableName(resTable);
+                    StampTableName(resTable);
                     GeneratedSchema.Tables.Add(resTable);
                 }
                 catch (TypeLoadException ex)
@@ -440,7 +448,12 @@ namespace Socigy.OpenSource.DB.Tool
                 SourceName = tableType.FullName!,
             };
 
-            // Check for [FlagTable] (junction table class)
+            // Resolve the table's own name BEFORE the general attribute loop below. CustomAttributes is
+            // enumerated in metadata (source declaration) order, so an attribute written above [Table] used to
+            // observe a half-built DbTable: [Index] captured table.Name by value while it was still null and
+            // emitted CREATE INDEX ... ON "", which compiles fine and then aborts at apply time. Reading both
+            // name-bearing attributes up front means declaration order cannot matter for anything in the loop,
+            // including attributes added later.
             var flagTableAttr = tableType.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == FlagTableAttributeFullName);
             if (flagTableAttr != null)
             {
@@ -448,10 +461,14 @@ namespace Socigy.OpenSource.DB.Tool
                 table.IsFlagTable = true;
             }
 
+            var tableAttr = tableType.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == TableAttributeFullName);
+            if (tableAttr != null)
+                table.Name = GetFirstAttributeArgumentValue(tableAttr)!;
+
             foreach (var attribute in tableType.CustomAttributes)
             {
                 if (attribute.AttributeType.FullName == TableAttributeFullName)
-                    table.Name = GetFirstAttributeArgumentValue(attribute)!;
+                    continue; // already read above
                 else if (attribute.AttributeType.FullName == RenamedAttributeFullName)
                     table.RenamedFrom = (attribute.ConstructorArguments.First().Value as string)!;
                 else if (attribute.AttributeType.FullName == ForeignKeyAttributeFullName)
@@ -636,7 +653,7 @@ namespace Socigy.OpenSource.DB.Tool
 
                     if (junctionTable != null)
                     {
-                        StampConstraintTableName(junctionTable);
+                        StampTableName(junctionTable);
                         // Two [FlaggedEnum] properties that resolve to the same junction name (e.g. two properties of
                         // the same enum type on one table) would add two same-named tables: the generator then emits
                         // two CREATE TABLE for it (apply fails "relation already exists"), and the next run crashes on
@@ -963,6 +980,15 @@ namespace Socigy.OpenSource.DB.Tool
                 {
                     column.DatabaseType = "bytea";
                     isEncrypted = true;
+                    column.IsEncrypted = true;
+
+                    // The profile decides which encryptor, and therefore which key, the data lives under.
+                    // Recorded in the snapshot so a change to it is visible to the comparer — both sides are
+                    // bytea, so the database type alone cannot see it.
+                    var profileArg = attribute.NamedArguments
+                        .FirstOrDefault(na => na.MemberName == nameof(EncryptedAttribute.Profile));
+                    if (profileArg.TypedValue.Value is string profile && !string.IsNullOrEmpty(profile))
+                        column.EncryptionProfile = profile;
                 }
                 // Comparison constraints
                 else if (attribute.AttributeType.FullName == MinAttributeFullName)
@@ -1159,11 +1185,21 @@ namespace Socigy.OpenSource.DB.Tool
             };
         }
 
-        private static void StampConstraintTableName(DbTable table)
+        /// <summary>
+        /// Back-fills the owning table's name onto anything that carries its own copy of it. ProcessTable now
+        /// resolves <c>[Table]</c>/<c>[FlagTable]</c> before reading anything else, so nothing should reach here
+        /// with a null — this is the belt to that braces, and it is what caught the difference between indexes
+        /// (which were not stamped, and shipped <c>ON ""</c>) and constraints (which were).
+        /// </summary>
+        private static void StampTableName(DbTable table)
         {
-            if (table.Constraints == null) return;
-            foreach (var c in table.Constraints)
-                c.TableName ??= table.Name;
+            if (table.Constraints != null)
+                foreach (var c in table.Constraints)
+                    c.TableName ??= table.Name;
+
+            if (table.Indexes != null)
+                foreach (var i in table.Indexes)
+                    i.TableName ??= table.Name;
         }
 
         private static DbConstraint MakeCheckConstraint(string colName, string op, string value, string propertyName)

@@ -18,6 +18,33 @@ namespace Socigy.OpenSource.DB.Core.Diagnostics
     /// </summary>
     public static class DbDiagnostics
     {
+        /// <summary>
+        /// Reports that an <see cref="CommandBuilders.InsertFields.ServerDefaultsWhenUnset"/> bulk insert had
+        /// to be split into several batches because its rows disagreed about which <c>[Default]</c> columns
+        /// they left unset.
+        ///
+        /// <para>
+        /// One batch is the fast path and the normal case. More than one is correct but costs a prepared plan
+        /// and a round trip each, so it is surfaced at Information with the columns responsible: a silently
+        /// fragmented batch reads as "the bulk path got slower" with nothing to point at, and the fix
+        /// (naming those columns in <c>keep</c>, or setting them on every row) is only obvious once you know
+        /// which they are.
+        /// </para>
+        /// </summary>
+        public static void LogBulkCopyFragmented(string tableName, int rowCount, int batchCount, string varyingColumns)
+        {
+            var logger = SocigyDbDiagnostics.GetLogger();
+            if (logger == null || !logger.IsEnabled(LogLevel.Information)) return;
+
+            logger.Log(
+                LogLevel.Information,
+                "Bulk insert into '{Table}' split {RowCount} rows into {BatchCount} batches: with " +
+                "ServerDefaultsWhenUnset the written columns depend on each row's values, and these rows " +
+                "disagree about [{VaryingColumns}]. Name those columns in keep, or set them on every row, " +
+                "to get back to a single batch.",
+                tableName, rowCount, batchCount, varyingColumns);
+        }
+
         /// <summary>Instruments an <c>ExecuteNonQueryAsync</c> call.</summary>
         public static async Task<int> ExecuteNonQueryAsync(
             DbCommand command,

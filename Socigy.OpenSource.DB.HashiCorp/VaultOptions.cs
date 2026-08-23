@@ -21,6 +21,16 @@ namespace Socigy.OpenSource.DB.HashiCorp
     }
 
     /// <summary>
+    /// Connection and authentication settings for the shared Vault client, registered once via
+    /// <c>AddSocigyVaultClient</c> so several Vault features can be enabled without each repeating them.
+    /// Carries nothing beyond <see cref="VaultConnectionOptions"/>: mounts, paths and key names are
+    /// feature-specific and stay on each feature's own options.
+    /// </summary>
+    public sealed class VaultClientOptions : VaultConnectionOptions
+    {
+    }
+
+    /// <summary>
     /// Settings for Vault-backed field encryption. The data-encryption key is read from a Vault KV-v2
     /// secret at startup and used for local AES-256-CBC+HMAC encryption (so per-field crypto stays
     /// synchronous and local — no Vault round-trip per field).
@@ -114,6 +124,40 @@ namespace Socigy.OpenSource.DB.HashiCorp
 
         /// <summary>How often to renew leased credentials in the background (default 30 minutes).</summary>
         public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// Renew the existing lease in place while Vault still allows it, instead of leasing a fresh
+        /// credential every round (default <see langword="true"/>).
+        ///
+        /// A renewal keeps the same username and password, so the connection string does not change and the
+        /// database role is not re-minted. Turning this off restores the previous behaviour — every refresh
+        /// mints a brand-new PostgreSQL user — which leaves up to <c>ceil(TTL / RefreshInterval) + 1</c>
+        /// dynamic roles alive per database at once.
+        /// </summary>
+        public bool RenewLeases { get; set; } = true;
+
+        /// <summary>
+        /// Revoke the previous lease after successfully leasing a replacement (default <see langword="true"/>).
+        ///
+        /// Without this, a superseded credential stays valid until its TTL expires on its own, so the count of
+        /// live dynamic roles is bounded only by the role's <c>default_ttl</c>. Revoking makes the handover
+        /// explicit and immediate.
+        /// </summary>
+        public bool RevokeOnRefresh { get; set; } = true;
+
+        /// <summary>
+        /// Revoke every held lease when the provider is disposed, i.e. at host shutdown
+        /// (default <see langword="true"/>).
+        /// </summary>
+        public bool RevokeOnShutdown { get; set; } = true;
+
+        /// <summary>
+        /// How long a single lease may be renewed for before it is replaced with a fresh one (default 24
+        /// hours). Vault enforces its own <c>max_ttl</c> per role and will refuse to renew past it; this is
+        /// the client-side bound, so set it at or below the role's <c>max_ttl</c> to avoid a failed renewal
+        /// round-trip before the inevitable re-lease.
+        /// </summary>
+        public TimeSpan MaxLeaseLifetime { get; set; } = TimeSpan.FromHours(24);
     }
 #nullable disable
 }

@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  AOT/trim regression harness for Socigy.OpenSource.DB.Core.
+
+	  Core targets netstandard2.0, where the ILLink/ILC Roslyn analyzers cannot run — so no trim or AOT
+	  warning has ever been visible in this repo's own build. Consumers only discovered them at their
+	  `dotnet publish -p:PublishAot=true` step, against the shipped netstandard2.0 assembly.
+
+	  This project compiles the *same* Core sources under a modern TFM with the analyzers switched on.
+	  It ships nothing (IsPackable=false, never referenced) and exists purely so `dotnet build` fails
+	  the moment Core grows an IL2xxx/IL3xxx. It is strictly stronger than a consumer's publish: the
+	  analyzers inspect every method body regardless of reachability, whereas ILC only compiles the
+	  call graph an app happens to reach (which is why Benchmarks.Aot reported clean while a real app
+	  publishing an UPDATE did not).
+
+	  Keep the PackageReference list in sync with Socigy.OpenSource.DB.Core.csproj.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+		<IsPackable>false</IsPackable>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+		<Nullable>annotations</Nullable>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+		<!-- The point of the project. IsAotCompatible turns on the AOT + trim + single-file analyzers;
+		     TrimmerSingleWarn=false keeps each warning attributed to the member at fault instead of
+		     collapsing the lot into IL2104/IL3053 (the collapse is what hid these for so long). -->
+		<IsAotCompatible>true</IsAotCompatible>
+		<TrimmerSingleWarn>false</TrimmerSingleWarn>
+
+		<!-- Fail the build, not just warn: this project's only job is to be a gate.
+		     The code list lives in Directory.Build.props, shared with Benchmarks.Aot. -->
+		<WarningsAsErrors>$(WarningsAsErrors);$(SocigyAotWarningCodes)</WarningsAsErrors>
+
+		<!-- The netstandard2.0 build carries its own copies of the trim-annotation attributes
+		     (Compatibility/TrimAnnotations.cs). Under net10.0 the BCL supplies them, so that file
+		     compiles to nothing — see the #if guard inside it. -->
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="..\Socigy.OpenSource.DB.Core\**\*.cs"
+		         Exclude="..\Socigy.OpenSource.DB.Core\obj\**\*.cs;..\Socigy.OpenSource.DB.Core\bin\**\*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.8" />
+		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+	</ItemGroup>
+
+</Project>

@@ -18,6 +18,43 @@ namespace Socigy.OpenSource.DB.HashiCorp
     public static class VaultServiceCollectionExtensions
     {
         /// <summary>
+        /// Registers the shared Vault client explicitly, so several Vault features can be enabled without each
+        /// repeating the connection and authentication settings.
+        ///
+        /// <para>
+        /// Every <c>AddSocigyVault*</c> helper shares one client (which keeps a single auth token renewed), so
+        /// they must agree on how to reach Vault. Registering it once here and leaving
+        /// <see cref="VaultConnectionOptions.Address"/>, <see cref="VaultConnectionOptions.Token"/> and the
+        /// AppRole pair unset on each feature's own options is the clearest way to express that; the
+        /// feature-specific mounts, paths and key names stay where they are. Supplying settings that conflict
+        /// with an already-registered client throws, rather than silently discarding one of them.
+        /// </para>
+        ///
+        /// <code>
+        /// builder.Services.AddSocigyVaultClient(o =>
+        /// {
+        ///     o.Address = "https://vault.example.com:8200";
+        ///     o.AppRoleId = appRoleId;
+        ///     o.AppRoleSecretId = appRoleSecretId;
+        /// });
+        /// builder.Services.AddSocigyVaultEnvelopeEncryption(o => o.TransitKeyName = "socigy-db");
+        /// builder.Services.AddSocigyVaultCredentials(o => o.DatabaseRoles["AuthDb"] = "auth-role");
+        /// </code>
+        /// </summary>
+        public static IServiceCollection AddSocigyVaultClient(this IServiceCollection services, Action<VaultClientOptions> configure)
+        {
+            if (configure == null) throw new ArgumentNullException(nameof(configure));
+            var options = new VaultClientOptions();
+            configure(options);
+
+            VaultClientRegistration.AddSharedClient(services, options, nameof(AddSocigyVaultClient));
+            services.AddHostedService(sp => new VaultAuthRenewalService(
+                sp.GetRequiredService<VaultClientProvider>(),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<VaultAuthRenewalService>()));
+            return services;
+        }
+
+        /// <summary>
         /// Registers a Vault-backed <see cref="IFieldEncryptor"/> for <c>[Encrypted]</c> columns. The key is
         /// read from Vault KV-v2 at host startup and installed as the ambient
         /// <see cref="SocigyFieldEncryption"/> encryptor. Background actions are logged and traced under the
@@ -29,11 +66,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             var options = new VaultEncryptionOptions();
             configure(options);
 
-            // Shared client provider keeps the auth token alive (renew/relogin). If both Vault features are
-            // registered they share one provider (TryAdd, first wins) — configure them with the same Vault
-            // connection/auth settings; feature-specific paths/mounts stay on each feature's own options.
-            services.TryAddSingleton(sp => new VaultClientProvider(options,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            VaultClientRegistration.AddSharedClient(services, options, nameof(AddSocigyVaultEncryption));
             services.AddSingleton(sp => new VaultFieldEncryptor(
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
@@ -58,8 +91,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             var options = new VaultEnvelopeEncryptionOptions();
             configure(options);
 
-            services.TryAddSingleton(sp => new VaultClientProvider(options,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            VaultClientRegistration.AddSharedClient(services, options, nameof(AddSocigyVaultEnvelopeEncryption));
             services.AddSingleton(sp => new VaultEnvelopeEncryptor(
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
@@ -89,8 +121,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             var options = new VaultTransitEncryptionOptions();
             configure(options);
 
-            services.TryAddSingleton(sp => new VaultClientProvider(options,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            VaultClientRegistration.AddSharedClient(services, options, nameof(AddSocigyVaultTransitEncryption));
             services.AddSingleton(sp => new VaultTransitFieldEncryptor(
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Encryption")));
@@ -137,8 +168,7 @@ namespace Socigy.OpenSource.DB.HashiCorp
             var options = new VaultCredentialsOptions();
             configure(options);
 
-            services.TryAddSingleton(sp => new VaultClientProvider(options,
-                sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Client")));
+            VaultClientRegistration.AddSharedClient(services, options, nameof(AddSocigyVaultCredentials));
             services.AddSingleton(sp => new VaultDbCredentialsProvider(
                 sp.GetRequiredService<VaultClientProvider>(), options,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Socigy.OpenSource.DB.Vault.Credentials")));

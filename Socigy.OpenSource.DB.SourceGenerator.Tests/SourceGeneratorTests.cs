@@ -10,13 +10,13 @@ using GenProgram = Socigy.OpenSource.DB.SourceGenerator.Program;
 namespace Socigy.OpenSource.DB.SourceGenerator.Tests;
 
 /// <summary>
-/// Runs the incremental generator over in-memory compilations to cover the praxe_app fixes:
-/// #1 (no-op without socigy.json), #2 (required members), #4 (identifier casing / contextName).
+/// Runs the incremental generator over in-memory compilations: no-op without socigy.json, required
+/// members, identifier casing / contextName, and the table-shape diagnostics.
 /// </summary>
 [TestFixture]
 public class SourceGeneratorTests
 {
-    private const string LowercaseJson = """{ "database": { "platform": "postgresql", "databaseName": "identity" } }""";
+    private const string LowercaseJson = GeneratorTestHarness.LowercaseJson;
 
     private static string Model(string body = "") => $$"""
         using System;
@@ -32,41 +32,8 @@ public class SourceGeneratorTests
         }
         """;
 
-    private sealed class JsonAdditionalText : AdditionalText
-    {
-        private readonly string _text;
-        public override string Path { get; }
-        public JsonAdditionalText(string path, string text) { Path = path; _text = text; }
-        public override SourceText GetText(CancellationToken cancellationToken = default) => SourceText.From(_text);
-    }
-
     private static (Compilation Output, GeneratorDriverRunResult Result) Run(string source, string? socigyJson)
-    {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest);
-        var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
-
-        var references = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
-            .Select(a => (MetadataReference)MetadataReference.CreateFromFile(a.Location))
-            .ToList();
-        references.Add(MetadataReference.CreateFromFile(typeof(Socigy.OpenSource.DB.Attributes.TableAttribute).Assembly.Location));
-
-        // Assembly name must NOT start with "Socigy.OpenSource.DB" or the generator self-skips.
-        var compilation = CSharpCompilation.Create("SampleModel", new[] { tree }, references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        var additional = socigyJson == null
-            ? ImmutableArray<AdditionalText>.Empty
-            : ImmutableArray.Create<AdditionalText>(new JsonAdditionalText("socigy.json", socigyJson));
-
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            generators: new[] { new GenProgram().AsSourceGenerator() },
-            additionalTexts: additional,
-            parseOptions: parseOptions);
-
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
-        return (output, driver.GetRunResult());
-    }
+        => GeneratorTestHarness.Run(source, socigyJson);
 
     private static string AllGenerated(GeneratorDriverRunResult result) =>
         string.Join("\n", result.Results.SelectMany(r => r.GeneratedSources).Select(s => s.SourceText.ToString()));

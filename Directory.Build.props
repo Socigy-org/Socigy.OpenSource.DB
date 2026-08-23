@@ -4,19 +4,28 @@
 		     informational version that the OpenTelemetry instrumentation scope reports as
 		     "SocigyDbInstrumentation". It is also the default NuGet version for each package
 		     when that package does not set its own version below. Bump it on each release. -->
-		<Version>0.3.7</Version>
+		<Version>0.3.8</Version>
 
 		<!-- Per-package NuGet versions, settable independently so each package can ship at a
 		     different version. Edit a value to release that package on its own track, or leave
 		     it blank to keep tracking the base <Version> above. -->
-		<DbPackageVersion>0.3.7</DbPackageVersion>
-		<HashiCorpPackageVersion>0.3.7</HashiCorpPackageVersion>
+		<DbPackageVersion>0.3.8</DbPackageVersion>
+		<HashiCorpPackageVersion>0.3.8</HashiCorpPackageVersion>
 	</PropertyGroup>
 
 	<!-- A blank per-package version falls back to the base <Version>. -->
 	<PropertyGroup>
 		<DbPackageVersion Condition="'$(DbPackageVersion)' == ''">$(Version)</DbPackageVersion>
 		<HashiCorpPackageVersion Condition="'$(HashiCorpPackageVersion)' == ''">$(Version)</HashiCorpPackageVersion>
+	</PropertyGroup>
+
+	<!-- Every trim (IL2xxx) and NativeAOT (IL3xxx) analyzer code, for the projects that gate on them:
+	     Socigy.OpenSource.DB.Core.AotAnalysis (Core's sources under a TFM where the analyzers run) and
+	     Benchmarks.Aot (the generated code an application actually links). A consumer publishing with
+	     TreatWarningsAsErrors gets no binary at all when one of these fires, so they are errors here too.
+	     MSBuild has no prefix wildcard for warning codes, hence the explicit list. -->
+	<PropertyGroup>
+		<SocigyAotWarningCodes>IL2026;IL2046;IL2050;IL2055;IL2057;IL2058;IL2059;IL2060;IL2062;IL2063;IL2064;IL2065;IL2066;IL2067;IL2068;IL2069;IL2070;IL2071;IL2072;IL2073;IL2074;IL2075;IL2076;IL2077;IL2078;IL2079;IL2080;IL2081;IL2082;IL2083;IL2084;IL2085;IL2086;IL2087;IL2088;IL2089;IL2090;IL2091;IL2092;IL2093;IL2094;IL2095;IL2096;IL2097;IL2098;IL2099;IL3050;IL3051;IL3052;IL3053;IL3054;IL3055;IL3056</SocigyAotWarningCodes>
 	</PropertyGroup>
 
 	<!-- Release hygiene: reproducible builds + source-linked debug symbols for every packed assembly. -->

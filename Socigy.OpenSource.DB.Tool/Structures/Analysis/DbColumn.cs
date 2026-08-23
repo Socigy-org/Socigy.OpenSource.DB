@@ -38,5 +38,27 @@ namespace Socigy.OpenSource.DB.Tool.Structures.Analysis
         public bool? IsJsonColumn { get; set; }
         /// <summary>Full type name of the <c>JsonSerializerContext</c> subclass; null for raw JSON string columns.</summary>
         public string JsonContextType { get; set; }
+
+        /// <summary>
+        /// True when the column carries <c>[Encrypted]</c>. Stored as <c>bytea</c>, so it is otherwise
+        /// indistinguishable from a real <c>byte[]</c> — which is precisely why it has to be recorded: the
+        /// generator has to refuse the impossible <c>text -&gt; bytea</c> in-place cast when a plaintext column
+        /// becomes encrypted, and cannot tell that from the database type alone.
+        ///
+        /// Null (rather than false) on a column read from a schema snapshot written before this field existed;
+        /// see <c>SchemaComparer.DetectColumnChanges</c>, which skips the encryption diff in that case rather
+        /// than reporting a change that did not happen.
+        /// </summary>
+        public bool? IsEncrypted { get; set; }
+
+        /// <summary>
+        /// The <c>[Encrypted(Profile = "...")]</c> profile, i.e. which encryptor (and therefore which key and
+        /// which code path) the column's data lives under. Null for the default profile.
+        ///
+        /// Recorded because both sides of a profile change are <c>bytea</c>: without it the change is invisible
+        /// to the comparer, no migration is emitted, and every affected row throws on its next typed read — long
+        /// after deploy, on the data that is by definition the most sensitive in the schema.
+        /// </summary>
+        public string EncryptionProfile { get; set; }
     }
 }

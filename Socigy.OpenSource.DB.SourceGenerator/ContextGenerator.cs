@@ -170,7 +170,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine($"        /// <summary>Inserts many entities as batched multi-row INSERTs. Use <c>InsertFields</c> to control which columns the database fills, and <paramref name=\"keep\"/> to write some <c>[Default]</c> columns yourself. Returns the total rows inserted.</summary>");
             sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, Expression<Func<{e}, object?[]>>? keep = null, CancellationToken cancellationToken = default);");
             sb.AppendLine($"        /// <summary>AOT-safe overload of <c>InsertAsync</c> naming the kept columns by string (property or DB column name) instead of an Expression selector.</summary>");
-            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, string[] keepColumns);");
+            sb.AppendLine($"        Task<bool> InsertAsync({e} entity, string[] keepColumns, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults);");
             sb.AppendLine($"        /// <summary>AOT-safe overload of <c>InsertMultipleAsync</c> naming the kept columns by string.</summary>");
             sb.AppendLine($"        Task<int> InsertMultipleAsync(IEnumerable<{e}> entities, string[] keepColumns, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.Default, CancellationToken cancellationToken = default);");
             sb.AppendLine($"        Task<int> UpdateAsync({e} entity);");
@@ -264,9 +264,17 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
+            // `fields` and `keep` COMPOSE: keep names the columns to write by hand, fields decides what happens
+            // to the rest. An earlier version tested `keep != null` first, which silently ignored `fields`
+            // whenever a keep list was present — so ServerDefaultsWhenUnset degraded to ServerDefaults at
+            // exactly the call sites that pass one, which is most of them.
             sb.AppendLine("                var __b = entity.Insert();");
-            sb.AppendLine("                if (keep != null) __b.ExcludeAutoFields(keep);");
-            sb.AppendLine("                else if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.IncludeAutoIncrement) __b.WithAllFields();");
+            sb.AppendLine("                if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.IncludeAutoIncrement && keep == null) __b.WithAllFields();");
+            sb.AppendLine("                else if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaultsWhenUnset)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (keep != null) __b.ExcludeAutoFieldsWhenUnset(keep); else __b.ExcludeAutoFieldsWhenUnset();");
+            sb.AppendLine("                }");
+            sb.AppendLine("                else if (keep != null) __b.ExcludeAutoFields(keep);");
             sb.AppendLine("                else if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults) __b.ExcludeAutoFields();");
             EmitEnlist(sb, "__b");
             sb.AppendLine("                return await __b.ExecuteAsync();");
@@ -290,13 +298,14 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             // AOT-safe overloads: name the kept columns by string (property or DB column name) instead of an
             // Expression selector, which forces Expression.NewArrayInit ([RequiresDynamicCode]) at the call site.
             sb.AppendLine($"        /// <summary>AOT-safe overload of <see cref=\"InsertAsync({e}, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields, Expression{{Func{{{e}, object[]}}}})\"/> naming the kept columns by string.</summary>");
-            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, string[] keepColumns)");
+            sb.AppendLine($"        public async Task<bool> InsertAsync({e} entity, string[] keepColumns, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields fields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaults)");
             sb.AppendLine("        {");
             sb.AppendLine("            var __acq = await _scope.AcquireAsync();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                var __b = entity.Insert();");
-            sb.AppendLine("                __b.ExcludeAutoFields(keepColumns);");
+            sb.AppendLine("                if (fields == global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFields.ServerDefaultsWhenUnset) __b.ExcludeAutoFieldsWhenUnset(keepColumns);");
+            sb.AppendLine("                else __b.ExcludeAutoFields(keepColumns);");
             EmitEnlist(sb, "__b");
             sb.AppendLine("                return await __b.ExecuteAsync();");
             sb.AppendLine("            }");

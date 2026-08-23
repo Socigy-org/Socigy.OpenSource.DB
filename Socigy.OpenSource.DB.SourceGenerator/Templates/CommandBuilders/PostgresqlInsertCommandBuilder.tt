@@ -99,6 +99,9 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         private bool _ForceAllFields;
         private bool _PropagateValues;
         private bool _ExcludeAutoFields;
+        // With _ExcludeAutoFields, restricts the [Default]-column exclusion to columns the row leaves at their
+        // CLR default. Auto-increment columns are unaffected — those are always the database's to generate.
+        private bool _ExcludeDefaultsOnlyWhenUnset;
 
         public PostgresqlInsertCommandBuilder(T rowInstance, Dictionary<string, ColumnInfo>? columnInfo = null)
         {
@@ -213,6 +216,23 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         }
 
         /// <summary>
+        /// Like <see cref="ExcludeAutoFields()"/>, but a <c>[Default]</c> column is excluded only when the row
+        /// still holds its CLR type default for it (<c>0</c>, <c>false</c>, <c>null</c>, <c>default(DateTime)</c>,
+        /// <c>Guid.Empty</c>) — a value the caller actually set is written. Auto-increment columns are excluded
+        /// unconditionally, as before.
+        ///
+        /// This is what callers usually mean by "let the server fill it in": with plain
+        /// <see cref="ExcludeAutoFields()"/>, adding <c>[Default]</c> to an existing column silently changes
+        /// every insert that does not name it, writing the database default over the value the application set.
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFieldsWhenUnset()
+        {
+            ExcludeAutoFields();
+            _ExcludeDefaultsOnlyWhenUnset = true;
+            return this;
+        }
+
+        /// <summary>
         /// Excludes auto-increment and DB-default columns from the INSERT statement, but keeps the
         /// explicitly listed columns so you can supply your own values for them.
         /// Combine with <see cref="WithValuePropagation"/> to read remaining DB-generated values back after insert.
@@ -241,6 +261,30 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
                 throw new InvalidOperationException("ExcludeAutoFields() has already been called. Use one form or the other.");
             _ExcludeAutoFields = true;
             _IncludedAutoFields = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(include, _TableRow);
+            return this;
+        }
+
+        /// <summary>
+        /// <see cref="ExcludeAutoFieldsWhenUnset()"/> combined with an include list: the named columns are
+        /// always written from your own values, and the remaining <c>[Default]</c> columns are omitted only
+        /// where the row still holds the CLR type default for them.
+        /// </summary>
+        /// <param name="include">Selector returning the auto/default columns to always include in the INSERT.</param>
+        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFieldsWhenUnset(Expression<Func<T, object?[]>> include)
+        {
+            ExcludeAutoFields(include);
+            _ExcludeDefaultsOnlyWhenUnset = true;
+            return this;
+        }
+
+        /// <summary>
+        /// AOT-safe overload of <see cref="ExcludeAutoFieldsWhenUnset(Expression{Func{T, object[]}})"/> naming the
+        /// included columns by string (a property name such as <c>nameof(Row.Id)</c>, or a DB column name).
+        /// </summary>
+        public PostgresqlInsertCommandBuilder<T> ExcludeAutoFieldsWhenUnset(params string[] include)
+        {
+            ExcludeAutoFields(include);
+            _ExcludeDefaultsOnlyWhenUnset = true;
             return this;
         }
 
@@ -279,7 +323,13 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
             if (_ExcludeAutoFields && info.HasDbDefault)
             {
                 if (_IncludedAutoFields == null || !_IncludedAutoFields.Contains(dbColName))
-                    return false;
+                {
+                    // ExcludeAutoFieldsWhenUnset: keep the column when the row carries a value for it. The
+                    // live value is already on ColumnInfo, so this costs a comparison and no extra plumbing.
+                    if (!_ExcludeDefaultsOnlyWhenUnset
+                        || global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IsClrDefault(info.Type, info.Value))
+                        return false;
+                }
             }
 
             return true;
@@ -518,9 +568,12 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         {
             var (list, planProvider) = __PrepareInsertMultiple(rows, connection);
             if (list.Count == 0) return Task.FromResult(0);
-            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve<T>(
-                planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
-                fields, keep, list[0]);
+            var planColumns = planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns;
+            if (global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IsRowDependent(fields))
+                return __InsertByRowShapeAsync(list, planColumns,
+                    keep == null ? null : global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.ExtractMemberNames(keep, list[0]),
+                    connection, transaction, cancellationToken);
+            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve<T>(planColumns, fields, keep, list[0]);
             return __InsertResolvedMultipleAsync(list, cols, connection, transaction, cancellationToken);
         }
 
@@ -534,10 +587,61 @@ namespace Socigy.OpenSource.DB.CommandBuilders.Postgresql
         {
             var (list, planProvider) = __PrepareInsertMultiple(rows, connection);
             if (list.Count == 0) return Task.FromResult(0);
-            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve(
-                planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns,
-                fields, keepColumns, list[0]);
+            var planColumns = planProvider.GetInsertPlan(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns;
+            if (global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.IsRowDependent(fields))
+                return __InsertByRowShapeAsync(list, planColumns,
+                    keepColumns == null ? null : global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.MapDbColumnNames(keepColumns, list[0]),
+                    connection, transaction, cancellationToken);
+            var cols = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.Resolve(planColumns, fields, keepColumns, list[0]);
             return __InsertResolvedMultipleAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        /// <summary>
+        /// The ServerDefaultsWhenUnset multi-row path: which columns a row writes depends on that row's
+        /// values, so rows are grouped by the set of columns they omit and one multi-row INSERT runs per
+        /// distinct shape. A batch whose rows agree — the usual case — produces one group and costs exactly
+        /// what ServerDefaults costs; a batch that disagrees is logged so the split is visible.
+        /// </summary>
+        private static async Task<int> __InsertByRowShapeAsync(IList<T> list, global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] planColumns, HashSet<string>? kept, DbConnection connection, DbTransaction? transaction, System.Threading.CancellationToken cancellationToken)
+        {
+            var groups = new Dictionary<string, (global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] Columns, List<T> Rows)>(StringComparer.Ordinal);
+            foreach (var row in list)
+            {
+                var resolved = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.ResolveForRow(planColumns, row!, kept);
+                var key = global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertFieldsResolver.RowShapeKey(resolved);
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    group = (resolved, new List<T>());
+                    groups[key] = group;
+                }
+                group.Rows.Add(row);
+            }
+
+            if (groups.Count > 1)
+                global::Socigy.OpenSource.DB.Core.Diagnostics.DbDiagnostics.LogBulkCopyFragmented(
+                    list[0]!.GetTableName(), list.Count, groups.Count, __DescribeVaryingDefaults(planColumns, groups));
+
+            int total = 0;
+            foreach (var group in groups.Values)
+                total += await __InsertResolvedMultipleAsync(group.Rows, group.Columns, connection, transaction, cancellationToken);
+            return total;
+        }
+
+        private static string __DescribeVaryingDefaults(global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] planColumns, Dictionary<string, (global::Socigy.OpenSource.DB.Core.CommandBuilders.InsertColumnDescriptor[] Columns, List<T> Rows)> groups)
+        {
+            var varying = new List<string>();
+            foreach (var column in planColumns)
+            {
+                if (!column.HasDbDefault) continue;
+                bool present = false, absent = false;
+                foreach (var group in groups.Values)
+                {
+                    if (Array.IndexOf(group.Columns, column) >= 0) present = true;
+                    else absent = true;
+                }
+                if (present && absent) varying.Add(column.ParameterName.Substring(1));
+            }
+            return varying.Count == 0 ? "(none identified)" : string.Join(", ", varying);
         }
 
         private static (IList<T> list, IInsertPlanProvider planProvider) __PrepareInsertMultiple(IEnumerable<T> rows, DbConnection connection)

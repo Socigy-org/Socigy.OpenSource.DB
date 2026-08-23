@@ -125,7 +125,7 @@ await user.Delete().WithConnection(conn).ExecuteAsync();
 - **Value convertors** - custom per-column read/write transformation via `IDbValueConvertor<T>`
 - **Field encryption** - `[Encrypted]` columns with pluggable encryptors, including optional [HashiCorp Vault](https://www.vaultproject.io/) / [OpenBao](https://openbao.org/) (KV-v2 keyring, Transit/envelope encryption) and rotating DB credentials
 - **Observability** - built-in OpenTelemetry instrumentation (`SocigyDbInstrumentation`) for queries and Vault token lifecycle
-- **AOT compatible** - no runtime reflection; safe to publish with `PublishAot=true`
+- **AOT compatible** - no runtime reflection; safe to publish with `PublishAot=true` ([caveats](#nativeaot))
 
 ---
 
@@ -309,6 +309,40 @@ builder.Services.AddSocigyVaultTransitEncryption(o =>
 > **OpenBao** is supported as a drop-in for HashiCorp Vault — point the same options at your OpenBao
 > address (its KV-v2 and Transit APIs are wire-compatible). The integration test suite passes against both.
 
+**One client, one set of connection settings.** All Vault features share a single client, so that one auth
+token is renewed for the process. Register the connection once and leave `Address`/`Token`/AppRole off the
+individual features — supplying settings that *conflict* with an already-registered client now throws at
+startup rather than silently discarding one of them:
+
+```csharp
+builder.Services.AddSocigyVaultClient(o =>
+{
+    o.Address = "https://vault:8200";
+    o.AppRoleId = "…"; o.AppRoleSecretId = "…";
+});
+builder.Services.AddSocigyVaultEnvelopeEncryption(o => o.TransitKeyName = "socigy-db");
+```
+
+**Rotating database credentials** — lease PostgreSQL credentials from Vault's Database secrets engine
+instead of holding a static password. The provider plugs into the generated connection factory, so no
+application code changes:
+
+```csharp
+builder.Services.AddSocigyVaultCredentials(o =>
+{
+    o.DatabaseRoles["MyDb"] = "my-db-role";                  // connection-factory key -> Vault role
+    o.BaseConnectionString = "Host=db;Port=5432;Pooling=true"; // everything except the credentials
+    o.RefreshInterval = TimeSpan.FromMinutes(30);
+});
+```
+
+Leases are **renewed in place** while Vault allows it, so the username and password — and therefore the
+connection pool — stay stable. When a lease reaches `MaxLeaseLifetime` (default 24 h) or the role's own
+`max_ttl`, a fresh one is taken, the superseded lease is revoked immediately rather than left to age out,
+and the pool behind it is disposed rather than stranded. Every lease is revoked again at shutdown. Give the
+Vault role `revocation_statements` that terminate the role's backends and drop it, or PostgreSQL will refuse
+to drop a role that still owns objects and revocation will silently fail.
+
 **Activate before any data work.** `AddSocigyVault*Encryption` only *registers* the encryptors; they are
 primed from Vault at host start. Anything that touches an `[Encrypted]` column before `Run()` — notably the
 migration call in the quickstart above — needs encryption activated first:
@@ -345,6 +379,49 @@ await new FieldReencryptor()
     .AddDynamic<Event>("events_2026_06")     // dynamic / [TableType] tables bound to a runtime name
     .RunAsync(connection);                    // batched, resumable; DryRun/Force via ReencryptOptions
 ```
+
+**Encrypted columns cannot be filtered.** Encryption is non-deterministic, so an `[Encrypted]` column can be
+read and written by primary key but never appear in a `WHERE`, `ORDER BY`, `LIKE` or `SELECT` projection —
+the generated accessor throws `NotSupportedException` if one does. This is a property of every query that
+touches the column, not just of the column, and the two live in different files, so **decide it up front**:
+any column you need to search must either stay plaintext or be split in two.
+
+```csharp
+public string EntityLabel { get; set; }                       // searchable; only ever non-sensitive labels
+[Encrypted] public byte[]? EntityLabelEncrypted { get; set; }  // sensitive values; route on write, coalesce on read
+```
+
+Retro-fitting `[Encrypted]` to a column that is already searched turns a data-protection improvement into a
+broken feature, and the migration generator will refuse the schema change (see
+[Migrations](#migrations)) because encrypting existing rows is an application-level, two-phase operation.
+
+---
+
+## NativeAOT
+
+The main package is AOT-clean, and CI proves it end to end: a sample application is published with
+`PublishAot=true` on every build and must produce a native binary with zero IL warnings.
+
+Two things to know:
+
+- **Use the `string[]` overloads in AOT applications.** Every API that takes a column *selector* —
+  `InsertAsync(keep:)`, `Select`, `OrderBy`/`OrderByDesc`, `WithFields`, `ExceptFields`,
+  `ExcludeAutoFields` — has a `params string[]` sibling. The `Expression` form compiles to
+  `Expression.NewArrayInit`, which is `[RequiresDynamicCode]` and fails an AOT publish *at your call site*.
+  Predicates (`Query(x => x.Age < 18)`) are unaffected and need no change.
+
+  ```csharp
+  row.Update().WithFields(x => new object?[] { x.Name })   // fine under JIT, IL3050 under NativeAOT
+  row.Update().WithFields(nameof(Row.Name))                // AOT-safe, identical SQL
+  ```
+
+- **`Socigy.OpenSource.DB.HashiCorp` currently rules out a NativeAOT publish.** Its `VaultSharp` dependency
+  (1.17.5.1) serializes its request/response models with reflection-based `System.Text.Json`, producing
+  `IL2026` warnings from `VaultSharp.Core.Polymath.MakeRequestAsync` and `VaultApiException`. There is no
+  consumer-side escape: `TrimmerRootAssembly` makes the reflection *safe* but does not silence `IL2026`, and
+  suppressing `IL2026` wholesale would suppress it for your own code too. Under `TreatWarningsAsErrors` the
+  publish produces no binary at all. This is upstream of us; if you need both Vault and NativeAOT today, run
+  the Vault integration in a separate, JIT-compiled process.
 
 ---
 

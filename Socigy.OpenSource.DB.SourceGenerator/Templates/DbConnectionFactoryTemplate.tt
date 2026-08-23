@@ -34,12 +34,16 @@ namespace <#= BaseNamespace #>
         // Optional: when a credential provider is registered (e.g. HashiCorp Vault), it supplies a
         // dynamically-rotated base connection string; otherwise the static config string is used.
         private readonly IDbCredentialsProvider? _Credentials;
-        public PostgresqlConnectionFactory(ILogger<PostgresqlConnectionFactory> logger, IConfiguration configuration, [ServiceKey] object? key, IDbCredentialsProvider? credentials = null)
+        // Optional: a credential provider that owns its own pool (and disposes it on rotation) rather than
+        // handing back a connection string. Preferred when present — see IDbConnectionSource for why.
+        private readonly IDbConnectionSource? _ConnectionSource;
+        public <#= DatabasePrefix #>ConnectionFactory(ILogger<<#= DatabasePrefix #>ConnectionFactory> logger, IConfiguration configuration, [ServiceKey] object? key, IDbCredentialsProvider? credentials = null)
         {
             _Configuration = configuration;
             _ServiceKey = key as string;
             _Logger = logger;
             _Credentials = credentials;
+            _ConnectionSource = credentials as IDbConnectionSource;
 
             var connStrings = _Configuration.GetRequiredSection("ConnectionStrings");
             if (!string.IsNullOrEmpty(_ServiceKey))
@@ -159,6 +163,16 @@ namespace <#= BaseNamespace #>
 
         public DbConnection Create(string? connectionKey = null)
         {
+            // A provider that owns its pool wins: it disposes the old pool when credentials rotate, whereas
+            // handing back a changed connection string makes Npgsql open a new pool and strand the previous
+            // one for the life of the process (its PoolManager keys by exact string and never evicts).
+            if (_ConnectionSource != null)
+            {
+                var pooled = _ConnectionSource.CreateConnection(_ServiceKey ?? string.Empty, connectionKey);
+                if (pooled != null)
+                    return pooled;
+            }
+
             string connectionString = ResolveBaseConnectionString(connectionKey)
                 ?? throw new InvalidDataException("Unable to create DbConnection without a ConnectionString. Please provide a connection string (or register an IDbCredentialsProvider) and try again!");
 

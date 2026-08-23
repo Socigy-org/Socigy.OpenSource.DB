@@ -26,11 +26,11 @@ namespace Socigy.OpenSource.DB.Tool
                     currentTables.Remove(newTable.Name);
                 }
                 else if (!string.IsNullOrEmpty(newTable.RenamedFrom) &&
-                         currentTables.TryGetValue(newTable.RenamedFrom, out var oldRenamedTable))
+                         ResolveRenamedTable(currentTables, newTable.RenamedFrom) is { } oldRenamedTable)
                 {
                     diff.RenamedTables.Add((oldRenamedTable, newTable));
                     matchedTables.Add((oldRenamedTable, newTable));
-                    currentTables.Remove(newTable.RenamedFrom);
+                    currentTables.Remove(oldRenamedTable.Name);
                 }
                 else
                 {
@@ -62,6 +62,71 @@ namespace Socigy.OpenSource.DB.Tool
             return diff;
         }
 
+        /// <summary>
+        /// Resolves a class-level <c>[Renamed("...")]</c> against the previous schema, accepting EITHER the
+        /// database table name or the C# class name.
+        ///
+        /// Only the database name used to match, while the column-level attribute matched only the C# name —
+        /// the same attribute meaning different things at its two valid targets, with nothing in the API
+        /// saying so. Accepting both removes the trap: the developer writes whichever name they are looking at.
+        /// </summary>
+        private static DbTable ResolveRenamedTable(Dictionary<string, DbTable> currentTables, string renamedFrom)
+        {
+            if (currentTables.TryGetValue(renamedFrom, out var byDatabaseName))
+                return byDatabaseName;
+
+            // SourceName is the class's full name ("App.Data.ChatThread"), but a developer writing the
+            // attribute reaches for the simple name they see in the file, so accept either.
+            var bySourceName = currentTables.Values
+                .Where(t => NameMatches(t.SourceName, renamedFrom) || NameMatches(SimpleName(t.SourceName), renamedFrom))
+                .ToList();
+
+            if (bySourceName.Count > 1)
+                throw new InvalidOperationException(
+                    $"[Renamed(\"{renamedFrom}\")] is ambiguous: it matches the previous classes " +
+                    $"{string.Join(", ", bySourceName.Select(t => $"'{t.SourceName}' (table \"{t.Name}\")"))}. " +
+                    "Use the database table name instead, which is unique.");
+
+            return bySourceName.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Resolves a property-level <c>[Renamed("...")]</c> against the previous columns, accepting EITHER
+        /// the C# property name or the database column name.
+        ///
+        /// Only the C# property name used to match — while the generator's own remedy message printed the
+        /// database column name, so following the tool's advice verbatim silently did nothing and the column
+        /// fell through to a data-destroying DROP + ADD. Consumers reasonably reach for the database name,
+        /// because that is what they see in the SQL the tool just showed them.
+        /// </summary>
+        private static DbColumn ResolveRenamedColumn(IEnumerable<DbColumn> oldColumns, DbColumn newCol, DbTable newTable)
+        {
+            var matches = oldColumns
+                .Where(c => NameMatches(c.SourceName, newCol.RenamedFrom) || NameMatches(c.Name, newCol.RenamedFrom))
+                .Distinct()
+                .ToList();
+
+            // Two different columns answering to the same name (one by its property name, another by its
+            // database name) cannot be resolved by guessing — and guessing wrong here drops a column's data.
+            if (matches.Count > 1)
+                throw new InvalidOperationException(
+                    $"[Renamed(\"{newCol.RenamedFrom}\")] on \"{newTable.Name}\".\"{newCol.Name}\" is ambiguous: it " +
+                    $"matches {string.Join(" and ", matches.Select(c => $"\"{c.Name}\" (property '{c.SourceName}')"))}. " +
+                    "Name the column unambiguously — the database column name and the C# property name are both accepted.");
+
+            return matches.FirstOrDefault();
+        }
+
+        private static bool NameMatches(string candidate, string wanted)
+            => !string.IsNullOrEmpty(candidate) && string.Equals(candidate, wanted, StringComparison.Ordinal);
+
+        private static string SimpleName(string fullName)
+        {
+            if (string.IsNullOrEmpty(fullName)) return fullName;
+            int lastDot = fullName.LastIndexOf('.');
+            return lastDot >= 0 ? fullName.Substring(lastDot + 1) : fullName;
+        }
+
         private static TableAlteration CompareTableInternals(DbTable oldTable, DbTable newTable)
         {
             var alteration = new TableAlteration { Table = newTable };
@@ -83,7 +148,7 @@ namespace Socigy.OpenSource.DB.Tool
                 }
                 else if (!string.IsNullOrEmpty(newCol.RenamedFrom))
                 {
-                    oldCol = oldColsMap.Values.FirstOrDefault(c => c.SourceName == newCol.RenamedFrom);
+                    oldCol = ResolveRenamedColumn(oldColsMap.Values, newCol, newTable);
                     if (oldCol != null) matchedKey = oldCol.SourceName ?? oldCol.Name;
                 }
 
@@ -279,6 +344,24 @@ namespace Socigy.OpenSource.DB.Tool
             if (oldCol.DefaultValue != newCol.DefaultValue) changes.Add("Default");
             if (oldCol.IsPrimaryKey != newCol.IsPrimaryKey) changes.Add("PrimaryKey");
             if ((oldCol.IsAutoIncrement == true) != (newCol.IsAutoIncrement == true)) changes.Add("AutoIncrement");
+
+            // Which encryptor — and therefore which key — the column's data lives under. Both sides are bytea,
+            // so none of the checks above can see this: without it, moving a column between profiles produced
+            // no statement, no warning and no comment, and every affected row threw on its next typed read
+            // months later. There is no SQL that can fix it (the key is only reachable from the application),
+            // so the generator emits a [SOCIGY:MANUAL] note rather than DDL — the goal is only that the change
+            // stops being invisible.
+            //
+            // A null IsEncrypted on the OLD column means the snapshot predates these fields, not that the
+            // column was unencrypted. Skip the comparison in that case and let the value be recorded forward,
+            // so upgrading does not fire a one-off warning on every encrypted column in the schema.
+            if (oldCol.IsEncrypted != null)
+            {
+                if ((oldCol.IsEncrypted == true) != (newCol.IsEncrypted == true)
+                    || oldCol.EncryptionProfile != newCol.EncryptionProfile)
+                    changes.Add("EncryptionProfile");
+            }
+
             return changes;
         }
 

@@ -106,6 +106,19 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                 return result;
             }
 
+            // An index that does not know its table cannot produce valid DDL: Quote(null) renders "" and the
+            // statement fails at apply time with 42601 ("zero-length delimited identifier"), by which point it
+            // is inside a migration file and typically takes every test sharing the fixture with it. Refuse
+            // here instead — errors are non-empty, so the generator will not fall back to a weaker index.
+            if (string.IsNullOrWhiteSpace(index.TableName))
+            {
+                result.Errors.Add(
+                    $"Index \"{index.Name ?? string.Join(",", keyColumns)}\" has no table name, so it cannot be " +
+                    "emitted. This is a bug in the analyzer, not in the model — please report it, quoting the " +
+                    $"index columns ({string.Join(", ", keyColumns)}).");
+                return result;
+            }
+
             var planned = new PlannedIndex
             {
                 TableName = index.TableName,

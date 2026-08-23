@@ -62,6 +62,18 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         /// </summary>
         IReadOnlyList<string> SafetyWarnings { get; }
 
+        /// <summary>
+        /// Reasons the migration must NOT be written to disk, from the most recent <see cref="Generate"/>
+        /// call. Unlike <see cref="DestructiveOperations"/> and <see cref="SafetyWarnings"/> — which describe
+        /// SQL that is correct but consequential, and which the developer may knowingly accept — a blocking
+        /// issue means there is no correct SQL to emit for the change at all. The orchestrator aborts without
+        /// writing the file or advancing the schema snapshot.
+        ///
+        /// Each entry should say what cannot be generated and what the developer should do instead, since the
+        /// alternative is invariably a hand-authored migration.
+        /// </summary>
+        IReadOnlyList<string> BlockingIssues { get; }
+
         string GetDatabaseType(string csharpType);
 
         /// <summary>Index features this engine can express.</summary>

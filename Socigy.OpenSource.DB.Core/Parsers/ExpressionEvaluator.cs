@@ -73,14 +73,14 @@ namespace Socigy.OpenSource.DB.Core.Parsers
                         : Eval(cond.IfFalse, param, paramValue);
 
                 case NewExpression ne:
-                    return ne.Constructor == null
-                        ? Activator.CreateInstance(ne.Type)
-                        : ne.Constructor.Invoke(EvalArgs(ne.Arguments, param, paramValue));
+                    return ne.Constructor != null
+                        ? ne.Constructor.Invoke(EvalArgs(ne.Arguments, param, paramValue))
+                        : CreateDefaultInstance(ne.Type);
 
                 case NewArrayExpression na when na.NodeType == ExpressionType.NewArrayInit:
                 {
                     Type elem = na.Type.GetElementType()!;
-                    Array arr = Array.CreateInstance(elem, na.Expressions.Count);
+                    Array arr = CreateArray(elem, na.Expressions.Count);
                     for (int i = 0; i < na.Expressions.Count; i++)
                         arr.SetValue(Eval(na.Expressions[i], param, paramValue), i);
                     return arr;
@@ -360,10 +360,72 @@ namespace Socigy.OpenSource.DB.Core.Parsers
             foreach (var item in enumerable)
                 items.Add(WhereParameter.Normalize(item));
 
-            Array array = Array.CreateInstance(normalizedElementType, items.Count);
+            Array array = CreateArray(normalizedElementType, items.Count);
             items.CopyTo(array);
             return array;
         }
+
+        /// <summary>
+        /// Zero-initializes a value type whose <see cref="NewExpression"/> carries no constructor
+        /// (<c>new TStruct()</c> — the only shape where <c>NewExpression.Constructor</c> is null).
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+            "Trimming", "IL2067",
+            Justification = "Only ever called for a value type (guarded below), where Activator.CreateInstance " +
+                            "zero-initializes the struct without invoking or requiring any constructor. The " +
+                            "DynamicallyAccessedMemberTypes.PublicParameterlessConstructor requirement therefore " +
+                            "cannot be violated: there is no constructor to trim away.")]
+        private static object? CreateDefaultInstance(Type type)
+        {
+            if (!type.IsValueType)
+                throw new NotSupportedException(
+                    $"Cannot evaluate 'new {type.Name}()': the expression carries no constructor and '{type.Name}' " +
+                    "is not a value type. Fold the value into a captured variable before the query.");
+
+            return Activator.CreateInstance(type);
+        }
+
+        /// <summary>
+        /// Allocates an array of <paramref name="elementType"/> without runtime code generation where the
+        /// element type is one this evaluator normalizes to (a closed, statically-known set).
+        /// </summary>
+        private static Array CreateArray(Type elementType, int length)
+        {
+            // The normalization targets in NormalizeArrayElementType, allocated directly so NativeAOT sees a
+            // static `newarr` rather than a [RequiresDynamicCode] Array.CreateInstance call. These are the
+            // element types a uint[]/enum[]/ulong[] collection is rewritten to, which are exactly the ones an
+            // app is least likely to have already rooted itself.
+            if (elementType == typeof(int)) return new int[length];
+            if (elementType == typeof(long)) return new long[length];
+            if (elementType == typeof(decimal)) return new decimal[length];
+            if (elementType == typeof(string)) return new string[length];
+            if (elementType == typeof(Guid)) return new Guid[length];
+            if (elementType == typeof(DateTime)) return new DateTime[length];
+            if (elementType == typeof(DateTimeOffset)) return new DateTimeOffset[length];
+            if (elementType == typeof(bool)) return new bool[length];
+            if (elementType == typeof(double)) return new double[length];
+            if (elementType == typeof(float)) return new float[length];
+            if (elementType == typeof(short)) return new short[length];
+            if (elementType == typeof(byte)) return new byte[length];
+            if (elementType == typeof(sbyte)) return new sbyte[length];
+            if (elementType == typeof(ushort)) return new ushort[length];
+            if (elementType == typeof(uint)) return new uint[length];
+            if (elementType == typeof(ulong)) return new ulong[length];
+            if (elementType == typeof(char)) return new char[length];
+
+            return CreateArrayReflective(elementType, length);
+        }
+
+        [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+            "AOT", "IL3050",
+            Justification = "The element type always comes from a collection the application has already " +
+                            "materialized (an array literal's own Type.GetElementType(), or the element type of " +
+                            "an IEnumerable the caller passed in — and List<T>/HashSet<T> are themselves backed " +
+                            "by a T[]). Its array type is therefore already in the AOT closure. Every element " +
+                            "type this evaluator *introduces* by normalization is allocated statically in " +
+                            "CreateArray above and never reaches here.")]
+        private static Array CreateArrayReflective(Type elementType, int length)
+            => Array.CreateInstance(elementType, length);
 
         // The array element type after WhereParameter.Normalize. Mirrors its scalar rules: enum -> underlying,
         // ushort -> int, uint -> long, ulong -> decimal. DateTime/DateTimeOffset keep their type (only the value
@@ -385,8 +447,40 @@ namespace Socigy.OpenSource.DB.Core.Parsers
 
             // Preserve nullability so an array that may contain nulls can still hold them.
             if (nullableUnderlying != null && normalizedCore.IsValueType)
-                return typeof(Nullable<>).MakeGenericType(normalizedCore);
+            {
+                // Normalization left the core alone (DateTime?, Guid?, a signed integer, a user struct), so the
+                // caller's own element type IS the Nullable<T> we want — no construction needed, and it is by
+                // definition already in the AOT closure.
+                if (normalizedCore == nullableUnderlying)
+                    return elementType;
+
+                return MakeNullable(normalizedCore);
+            }
             return normalizedCore;
+        }
+
+        /// <summary>
+        /// <c>Nullable&lt;T&gt;</c> for the closed set of types <see cref="NormalizeArrayElementType"/> can
+        /// normalize *to*, without <c>Type.MakeGenericType</c> (which is <c>[RequiresDynamicCode]</c> and
+        /// unusable under NativeAOT).
+        /// </summary>
+        private static Type MakeNullable(Type core)
+        {
+            // Reachable only when normalization changed the core type, i.e. from the enum-underlying set or the
+            // unsigned widenings — every one of which is listed here, so the lookup is total.
+            if (core == typeof(int)) return typeof(int?);
+            if (core == typeof(long)) return typeof(long?);
+            if (core == typeof(decimal)) return typeof(decimal?);
+            if (core == typeof(byte)) return typeof(byte?);
+            if (core == typeof(sbyte)) return typeof(sbyte?);
+            if (core == typeof(short)) return typeof(short?);
+            if (core == typeof(ushort)) return typeof(ushort?);
+            if (core == typeof(uint)) return typeof(uint?);
+            if (core == typeof(ulong)) return typeof(ulong?);
+
+            throw new NotSupportedException(
+                $"Cannot bind a nullable collection of '{core.Name}' as a SQL array parameter. " +
+                "Project the collection to a supported element type before the query.");
         }
     }
 #nullable disable

@@ -9,7 +9,7 @@ namespace Socigy.OpenSource.DB.SourceGenerator
     /// suppressed from a project's <c>.editorconfig</c> via
     /// <c>dotnet_diagnostic.SCGDB###.severity = error|warning|none</c>.
     ///
-    /// next free id = SCGDB027
+    /// next free id = SCGDB028
     /// </summary>
     internal static class Diagnostics
     {
@@ -214,6 +214,23 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
+
+        /// <summary>
+        /// Info, not Warning, on purpose. <c>InsertFields.ServerDefaults</c> behaves exactly as documented, so
+        /// this is an audit aid rather than a defect report — and a codebase can easily have hundreds of
+        /// <c>ServerDefaults</c> call sites, which at Warning would be a wall nobody reads. At Info it shows as
+        /// an IDE suggestion and stays out of build output; promote it with
+        /// <c>dotnet_diagnostic.SCGDB027.severity = warning</c> in <c>.editorconfig</c> to get the full list,
+        /// which is exactly what you want after discovering a column that silently took its database default.
+        /// </summary>
+        public static readonly DiagnosticDescriptor ServerDefaultsOmitsSetColumn = new(
+            id: "SCGDB027",
+            title: "InsertFields.ServerDefaults omits a [Default] column",
+            messageFormat: "This insert uses InsertFields.ServerDefaults, so the [Default] columns {0} on '{1}' are omitted and the database default is written instead of whatever the row holds. Name them in 'keep' to write them yourself, or use InsertFields.ServerDefaultsWhenUnset to omit them only where the row leaves them at the CLR default.",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Info,
+            isEnabledByDefault: true,
+            description: "Adding [Default] to an existing column changes the behaviour of every InsertFields.ServerDefaults insert that does not name it in 'keep' — silently, with no compile error and no log line.");
 
         public static readonly DiagnosticDescriptor UnsupportedTableShape = new(
             id: "SCGDB025",

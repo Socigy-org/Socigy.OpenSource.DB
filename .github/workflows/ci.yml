@@ -44,6 +44,27 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      # AOT/trim gate. Core targets netstandard2.0, where the ILLink/ILC analyzers cannot run, so no trim
+      # warning was ever visible in this repo's own build — consumers only found them at their
+      # `dotnet publish -p:PublishAot=true`. The AotAnalysis project recompiles the same Core sources under
+      # net10.0 with the analyzers on (and IL* promoted to errors), so a regression fails here instead.
+      - name: AOT/trim analysis (Core)
+        run: dotnet build Socigy.OpenSource.DB.Core.AotAnalysis/Socigy.OpenSource.DB.Core.AotAnalysis.csproj -c Release --verbosity normal
+
+      # Complements the above from the other direction: the analyzers see every method body, while this
+      # sees the generated code an application actually links. Covers query, insert, procedure and update.
+      - name: AOT/trim analysis (generated code)
+        run: dotnet build Benchmarks.Aot/Benchmarks.Aot.csproj -c Release --verbosity normal
+
+      # The real thing. The Roslyn analyzers above never flag expression-tree construction, so a project
+      # can build with 0 warnings and still fail `dotnet publish -p:PublishAot=true` — which is exactly
+      # how "Benchmarks.Aot is clean" coexisted with a consumer's publish failing on this library. This
+      # step runs ILC over an app that uses only the AOT-safe string[] overloads: it must produce a native
+      # binary with no IL warning attributed to any Socigy assembly. Slower than a build (~2 min), and the
+      # only check that reproduces what a consumer actually sees.
+      - name: NativeAOT publish gate (end-to-end, runs ILC)
+        run: dotnet publish AotPublishSmoke/AotPublishSmoke.csproj -c Release --verbosity normal
+
       - name: Unit tests (no database)
         run: dotnet test Socigy.OpenSource.DB.UnitTests/Socigy.OpenSource.DB.UnitTests.csproj --verbosity normal
 
@@ -91,6 +112,32 @@ jobs:
           VAULT_ADDR: "http://127.0.0.1:8200"
           VAULT_TOKEN: "root"
         run: dotnet test Socigy.OpenSource.DB.HashiCorp.Tests/Socigy.OpenSource.DB.HashiCorp.Tests.csproj --filter "FullyQualifiedName~VaultEncryptionIntegrationTests" --verbosity normal
+
+      # Wires Vault's Database secrets engine to the Postgres service so the credential-lease tests run for
+      # real. Renewing vs re-leasing is only observable against a live Vault: the difference is whether the
+      # username changes and whether the old lease is revoked, neither of which a fake can demonstrate.
+      # The revocation_statements are required — PostgreSQL refuses to drop a role that still owns or is
+      # granted anything (SQLSTATE 2BP01), so without them every revoke fails and leases accumulate.
+      - name: Configure Vault database secrets engine
+        run: |
+          VADDR=http://127.0.0.1:8200
+          curl -fsS -H "X-Vault-Token: root" -X POST -d '{"type":"database"}' $VADDR/v1/sys/mounts/database
+          curl -fsS -H "X-Vault-Token: root" -X POST $VADDR/v1/database/config/socigypg -d '{
+            "plugin_name":"postgresql-database-plugin",
+            "allowed_roles":"socigy-role",
+            "connection_url":"postgresql://{{username}}:{{password}}@127.0.0.1:5432/postgres?sslmode=disable",
+            "username":"postgres","password":"1234"}'
+          curl -fsS -H "X-Vault-Token: root" -X POST $VADDR/v1/database/roles/socigy-role -d '{
+            "db_name":"socigypg",
+            "creation_statements":"CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '"'"'{{password}}'"'"' VALID UNTIL '"'"'{{expiration}}'"'"'; GRANT ALL PRIVILEGES ON DATABASE postgres TO \"{{name}}\";",
+            "revocation_statements":"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = '"'"'{{name}}'"'"'; REVOKE ALL PRIVILEGES ON DATABASE postgres FROM \"{{name}}\"; DROP ROLE IF EXISTS \"{{name}}\";",
+            "default_ttl":"1h","max_ttl":"24h"}'
+
+      - name: HashiCorp Vault integration tests (leased DB credentials)
+        env:
+          VAULT_ADDR: "http://127.0.0.1:8200"
+          VAULT_TOKEN: "root"
+        run: dotnet test Socigy.OpenSource.DB.HashiCorp.Tests/Socigy.OpenSource.DB.HashiCorp.Tests.csproj --filter "FullyQualifiedName~VaultCredentialsIntegrationTests" --verbosity normal
 
   publish:
     name: Publish to NuGet
@@ -159,6 +206,9 @@ jobs:
         if: steps.version_check.outputs.publish_main == 'true'
         run: dotnet restore Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj /p:EnableWindowsTargeting=true
 
+      # Release, because that is the configuration the package's PackCliTool target publishes into tools/any
+      # and tools/win. Building Debug here compiled a configuration nothing downstream consumes and left Pack
+      # to do the whole tool compile itself.
       - name: Build Tool
         if: steps.version_check.outputs.publish_main == 'true'
         run: dotnet build Socigy.OpenSource.DB.Tool/Socigy.OpenSource.DB.Tool.csproj -c Release /p:EnableWindowsTargeting=true
@@ -190,6 +240,40 @@ jobs:
       - name: Pack HashiCorp
         if: steps.version_check.outputs.publish_hashicorp == 'true'
         run: dotnet pack Socigy.OpenSource.DB.HashiCorp/Socigy.OpenSource.DB.HashiCorp.csproj -c Release --no-build -o ./nupkgs /p:EnableWindowsTargeting=true
+
+      # Pack succeeding is not evidence a package is complete. NU5046 (icon declared but absent) only fires
+      # when PackageIcon is set AND the file is missing — so clearing PackageIcon to work around it produces a
+      # green build and an icon-less package. The <None Update> form that caused it also failed silently under
+      # cross-targeting: Pack runs on the outer build, where the default item globs it relies on are not
+      # applied. Assert the contents instead of trusting the exit code.
+      - name: Verify package contents
+        if: steps.version_check.outputs.should_run == 'true'
+        run: |
+          fail=0
+          for pkg in ./nupkgs/*.nupkg; do
+            echo "== $(basename "$pkg")"
+            contents=$(unzip -l "$pkg")
+
+            # Every package declaring an icon must actually contain it.
+            if unzip -p "$pkg" '*.nuspec' | grep -q '<icon>'; then
+              icon=$(unzip -p "$pkg" '*.nuspec' | sed -n 's/.*<icon>\(.*\)<\/icon>.*/\1/p')
+              if echo "$contents" | grep -q " $icon$"; then
+                echo "   icon '$icon' present"
+              else
+                echo "   ERROR: nuspec declares <icon>$icon</icon> but the package does not contain it"; fail=1
+              fi
+            else
+              echo "   ERROR: no <icon> in the nuspec — was PackageIcon cleared to work around NU5046?"; fail=1
+            fi
+
+            # A lib/ asset for every target framework the project builds.
+            if echo "$contents" | grep -qE "lib/[^/]+/.*\.dll"; then
+              echo "   lib assets: $(echo "$contents" | grep -cE 'lib/[^/]+/.*\.dll')"
+            else
+              echo "   NOTE: no lib/ assets (expected for the main package, which injects its own)"
+            fi
+          done
+          exit $fail
 
       # Exchange the workflow's GitHub OIDC token for a short-lived NuGet.org API key via the
       # Trusted Publishing policy. This authorizes the package owner to push ANY of their packages

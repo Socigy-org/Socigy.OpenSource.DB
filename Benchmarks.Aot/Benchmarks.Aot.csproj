@@ -8,8 +8,13 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <!-- Surface AOT/trim analyzer warnings at build time so the AOT boundary is visible. -->
+    <!-- Surface AOT/trim analyzer warnings at build time so the AOT boundary is visible, and fail on them:
+         a consumer publishing with TreatWarningsAsErrors gets no binary at all when one fires, so a warning
+         here is a shipping defect. TrimmerSingleWarn=false keeps each one attributed to the member at fault
+         instead of collapsing them into IL2104/IL3053. Code list is in Directory.Build.props. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <WarningsAsErrors>$(WarningsAsErrors);$(SocigyAotWarningCodes)</WarningsAsErrors>
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
 

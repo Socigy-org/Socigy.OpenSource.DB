@@ -12,8 +12,15 @@ namespace Socigy.OpenSource.DB.Core.Credentials
     /// (which has no async hook), so it must return a <b>cached</b> value with no I/O. Implementations fetch
     /// and refresh credentials out-of-band — at startup via <see cref="RefreshAsync"/> and on a renewal
     /// timer before the lease expires — and serve the latest cached connection string from
-    /// <see cref="GetConnectionString"/>. When credentials rotate, returning the new string causes Npgsql
-    /// to open a fresh pool; connections in the old pool drain and fail over naturally.
+    /// <see cref="GetConnectionString"/>.
+    /// </para>
+    /// <para>
+    /// <b>On rotation:</b> returning a changed connection string makes the driver open a fresh pool, and the
+    /// previous pool object is never evicted from the driver's static registry — its connections drain, but
+    /// the pool itself lives until the process exits. A provider that rotates credentials frequently should
+    /// therefore prefer renewing the existing credential in place (keeping the string stable) and, where the
+    /// string genuinely must change, also implement <see cref="IDbConnectionSource"/> so it owns and disposes
+    /// the pool itself.
     /// </para>
     /// </summary>
     public interface IDbCredentialsProvider

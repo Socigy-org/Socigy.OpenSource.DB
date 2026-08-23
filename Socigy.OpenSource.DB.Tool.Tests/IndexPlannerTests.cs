@@ -32,6 +32,28 @@ public class IndexPlannerTests
         DbIndex index, IndexCapabilities capabilities, int maxIdentifier = PostgreSql)
         => IndexPlanner.Plan(index, capabilities, p => p, maxIdentifier);
 
+    // ── a half-built index is refused, never emitted ──
+
+    // Quote(null) renders "" and the DDL becomes CREATE INDEX ... ON "" — valid-looking C#, invalid SQL, and
+    // it only fails at apply time (42601, "zero-length delimited identifier"), typically taking a whole shared
+    // test fixture down with it. The planner is the last place that can stop it reaching a file.
+    [TestCase(null, TestName = "Index_with_a_null_table_name_is_refused")]
+    [TestCase("", TestName = "Index_with_an_empty_table_name_is_refused")]
+    public void Index_without_a_table_name_is_refused(string tableName)
+    {
+        var index = Index("email");
+        index.TableName = tableName;
+
+        var result = Plan(index, IndexCapabilities.All);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Index, Is.Null, "no index at all beats one that cannot apply");
+            Assert.That(result.Errors, Has.Some.Contains("email"),
+                "the message has to name something the reader can find in their model");
+        });
+    }
+
     // ── the happy path on a fully capable engine ──
 
     [Test]

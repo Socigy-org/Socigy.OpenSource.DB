@@ -18,5 +18,9 @@ var config = ManualConfig.Create(DefaultConfig.Instance)
     .WithArtifactsPath("BenchmarkResults");
 
 BenchmarkRunner.Run(
-    new[] { typeof(AotQueryBenchmarks), typeof(AotProcedureBenchmarks), typeof(AotInsertBenchmarks) },
+    new[]
+    {
+        typeof(AotQueryBenchmarks), typeof(AotProcedureBenchmarks), typeof(AotInsertBenchmarks),
+        typeof(AotUpdateBenchmarks),
+    },
     config);

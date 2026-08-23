@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Socigy.OpenSource.DB.Core.CommandBuilders;
+using Socigy.OpenSource.DB.Core.Diagnostics;
 using Socigy.OpenSource.DB.Core.Interfaces;
 
 namespace Socigy.OpenSource.DB.Core.Bulk
@@ -47,8 +48,13 @@ namespace Socigy.OpenSource.DB.Core.Bulk
             IReadOnlyList<T> list = rows as IReadOnlyList<T> ?? new List<T>(rows);
             if (list.Count == 0) return Task.FromResult(0UL);
 
-            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(
-                list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns, fields, keep, list[0]);
+            var planColumns = list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns;
+            if (InsertFieldsResolver.IsRowDependent(fields))
+                return CopyByRowShapeAsync(list, planColumns,
+                    keep == null ? null : InsertFieldsResolver.ExtractMemberNames(keep, list[0]),
+                    connection, transaction, cancellationToken);
+
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve<T>(planColumns, fields, keep, list[0]);
             return CopyResolvedAsync(list, cols, connection, transaction, cancellationToken);
         }
 
@@ -73,9 +79,84 @@ namespace Socigy.OpenSource.DB.Core.Bulk
             IReadOnlyList<T> list = rows as IReadOnlyList<T> ?? new List<T>(rows);
             if (list.Count == 0) return Task.FromResult(0UL);
 
-            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve(
-                list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns, fields, keepColumns, list[0]);
+            var planColumns = list[0].GetInsertPlan(InsertFieldsResolver.IncludesAutoIncrement(fields)).Columns;
+            if (InsertFieldsResolver.IsRowDependent(fields))
+                return CopyByRowShapeAsync(list, planColumns,
+                    keepColumns == null ? null : InsertFieldsResolver.MapDbColumnNames(keepColumns, list[0]),
+                    connection, transaction, cancellationToken);
+
+            InsertColumnDescriptor[] cols = InsertFieldsResolver.Resolve(planColumns, fields, keepColumns, list[0]);
             return CopyResolvedAsync(list, cols, connection, transaction, cancellationToken);
+        }
+
+        /// <summary>
+        /// The <see cref="InsertFields.ServerDefaultsWhenUnset"/> COPY path: which columns a row writes depends
+        /// on that row's values, so rows are grouped by the set of columns they omit and one COPY runs per
+        /// distinct shape.
+        ///
+        /// <para>
+        /// A batch whose rows agree — the usual case, and the only one for a batch of freshly-constructed rows
+        /// — produces a single group and costs exactly what <see cref="InsertFields.ServerDefaults"/> costs.
+        /// A batch that disagrees costs one COPY per shape, which is why the split is logged: a silently
+        /// fragmented batch reads as "COPY got slower" with nothing to point at.
+        /// </para>
+        /// </summary>
+        private static async Task<ulong> CopyByRowShapeAsync<T>(
+            IReadOnlyList<T> list,
+            InsertColumnDescriptor[] planColumns,
+            HashSet<string>? kept,
+            DbConnection connection,
+            DbTransaction? transaction,
+            CancellationToken cancellationToken)
+            where T : class, IDbTable
+        {
+            var groups = new Dictionary<string, (InsertColumnDescriptor[] Columns, List<object> Rows)>(StringComparer.Ordinal);
+
+            foreach (var row in list)
+            {
+                var resolved = InsertFieldsResolver.ResolveForRow(planColumns, row, kept);
+                string key = InsertFieldsResolver.RowShapeKey(resolved);
+
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    group = (resolved, new List<object>());
+                    groups[key] = group;
+                }
+                group.Rows.Add(row);
+            }
+
+            if (groups.Count > 1)
+                DbDiagnostics.LogBulkCopyFragmented(list[0].GetTableName(), list.Count, groups.Count,
+                    DescribeShapeDifferences(planColumns, groups));
+
+            string tableName = list[0].GetTableName();
+            ulong total = 0;
+            foreach (var group in groups.Values)
+                total += await CopyCoreAsync(connection, transaction, tableName, group.Columns, group.Rows, cancellationToken)
+                    .ConfigureAwait(false);
+
+            return total;
+        }
+
+        /// <summary>The <c>[Default]</c> columns the rows disagreed about, so the log names the actual cause.</summary>
+        private static string DescribeShapeDifferences(
+            InsertColumnDescriptor[] planColumns,
+            Dictionary<string, (InsertColumnDescriptor[] Columns, List<object> Rows)> groups)
+        {
+            var varying = new List<string>();
+            foreach (var column in planColumns)
+            {
+                if (!column.HasDbDefault) continue;
+
+                bool present = false, absent = false;
+                foreach (var group in groups.Values)
+                {
+                    if (Array.IndexOf(group.Columns, column) >= 0) present = true;
+                    else absent = true;
+                }
+                if (present && absent) varying.Add(column.ParameterName.Substring(1));
+            }
+            return varying.Count == 0 ? "(none identified)" : string.Join(", ", varying);
         }
 
         private static Task<ulong> CopyResolvedAsync<T>(IReadOnlyList<T> list, InsertColumnDescriptor[] cols,

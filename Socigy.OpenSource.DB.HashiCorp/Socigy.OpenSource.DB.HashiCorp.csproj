@@ -1,7 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<!-- Multi-targeted, mirroring the main package: netstandard2.0 keeps the broad surface, and net8.0
+		     carries the Npgsql dependency needed to own an NpgsqlDataSource per leased database. That is what
+		     lets VaultDbCredentialsProvider dispose the old pool when credentials rotate instead of stranding
+		     it — Npgsql's PoolManager keys pools by exact connection string and never evicts one, so a
+		     rotating username otherwise leaks a pool object per rotation for the life of the process.
+		     Npgsql 10 ships no netstandard2.0 asset, so the ns2.0 build simply omits that feature and falls
+		     back to handing the connection factory a connection string, exactly as before. -->
+		<TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
@@ -37,6 +44,10 @@
 		<PackageReference Include="VaultSharp" Version="1.17.5.1" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
+		<!-- net8.0 only: NpgsqlDataSource (and DbDataSource itself) do not exist on netstandard2.0.
+		     Consumers already have Npgsql — the generated connection factory constructs NpgsqlConnection —
+		     so this adds no new dependency to an app, only to this package's net8.0 asset. -->
+		<PackageReference Include="Npgsql" Version="10.0.3" Condition="'$(TargetFramework)' == 'net8.0'" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -51,11 +62,16 @@
 			<PrivateAssets>all</PrivateAssets>
 		</ProjectReference>
 	</ItemGroup>
+	<!-- Include, not Update. `<None Update>` only modifies an item that already exists, and the default item
+	     globs that would have created it are not applied in the OUTER build of a cross-targeting project —
+	     which is exactly where Pack/GenerateNuspec runs, with $(TargetFramework) empty. So under
+	     <TargetFrameworks> the Update matched nothing, the icon was never packed, and PackageIcon pointed at
+	     a file absent from the package: NU5046. It worked only while this project was single-target.
+	     `<None Include>` creates the item unconditionally, so it exists in the outer build too. This mirrors
+	     what Socigy.OpenSource.DB.csproj already does, for the same reason. -->
 	<ItemGroup>
-		<None Update="icon.png">
-			<PackagePath>\</PackagePath>
-			<Pack>True</Pack>
-		</None>
+		<None Remove="icon.png" />
+		<None Include="icon.png" Pack="true" PackagePath="\" Visible="false" />
 	</ItemGroup>
 
 	<!-- A ProjectReference to the main packable project makes NuGet emit a <dependency> on

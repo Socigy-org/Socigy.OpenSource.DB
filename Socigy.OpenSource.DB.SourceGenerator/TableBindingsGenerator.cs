@@ -56,6 +56,43 @@ namespace Socigy.OpenSource.DB.SourceGenerator
             return string.Join(".", namespaces);
         }
 
+        /// <summary>
+        /// Property names of the <c>[Default]</c>, non-auto-increment columns of every <c>[Table]</c> class,
+        /// keyed by the class's fully-qualified name. These are exactly the columns an
+        /// <c>InsertFields.ServerDefaults</c> insert drops, so this is what SCGDB027 compares a call's
+        /// <c>keep</c> list against.
+        ///
+        /// Auto-increment columns are excluded deliberately: the database generating an identity is the point
+        /// of the column, not a surprise, and flagging it would bury the signal.
+        /// </summary>
+        public static Dictionary<string, ImmutableArray<string>> CollectDefaultColumns(
+            Compilation compilation, ImmutableArray<ClassDeclarationSyntax> tables)
+        {
+            var result = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal);
+
+            foreach (var table in tables)
+            {
+                var model = compilation.GetSemanticModel(table.SyntaxTree);
+                if (model.GetDeclaredSymbol(table) is not INamedTypeSymbol symbol)
+                    continue;
+
+                var columns = ImmutableArray.CreateBuilder<string>();
+                foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
+                {
+                    var attrs = member.GetAttributes();
+                    bool hasDefault = attrs.Any(a => a.AttributeClass?.ToDisplayString() == DefaultAttributeFullName);
+                    bool isAutoIncrement = attrs.Any(a => a.AttributeClass?.ToDisplayString() == AutoIncrementAttributeFullName);
+                    if (hasDefault && !isAutoIncrement)
+                        columns.Add(member.Name);
+                }
+
+                if (columns.Count > 0)
+                    result[symbol.ToDisplayString()] = columns.ToImmutable();
+            }
+
+            return result;
+        }
+
         public static void Execute(SourceProductionContext ctx, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> tables, Program program)
         {
             // Emit [SetsRequiredMembers] on generated ctors only when the consumer's compilation has the

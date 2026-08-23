@@ -12,13 +12,20 @@ namespace Socigy.OpenSource.DB.Tool.Tests;
 public class AssemblyAnalyzerIndexTests
 {
     private static DbTable AnalyzeTable(string classAttributes, string properties)
+        => AnalyzeTableWithAttributeOrder($@"[Table(""users"")]
+    {classAttributes}", properties);
+
+    /// <summary>
+    /// Analyzes a model whose complete class-level attribute list is supplied verbatim, so a test can
+    /// control where <c>[Table]</c> sits relative to the others.
+    /// </summary>
+    private static DbTable AnalyzeTableWithAttributeOrder(string classAttributes, string properties)
     {
         string model = $@"
 using System;
 using Socigy.OpenSource.DB.Attributes;
 namespace Fixture
 {{
-    [Table(""users"")]
     {classAttributes}
     public partial class User
     {{
@@ -156,5 +163,28 @@ namespace Fixture
     public void A_table_without_indexes_has_none()
     {
         Assert.That(AnalyzeTable("", "public string Email { get; set; }").Indexes, Is.Null.Or.Empty);
+    }
+
+    // Attributes are enumerated in metadata (i.e. source declaration) order. [Index] written ABOVE [Table]
+    // used to be read while table.Name was still null, and the null was captured by value into the index —
+    // so the CREATE TABLE looked fine while the index DDL came out as ON "" and aborted at apply time with
+    // "zero-length delimited identifier". Nothing downstream repaired it. Declaration order must not matter.
+    [TestCase("[Table(\"users\")]\n    [Index(nameof(Email))]", TestName = "Class_level_index_after_Table")]
+    [TestCase("[Index(nameof(Email))]\n    [Table(\"users\")]", TestName = "Class_level_index_before_Table")]
+    public void Class_level_index_gets_the_table_name_whatever_the_attribute_order(string classAttributes)
+    {
+        var index = Single(AnalyzeTableWithAttributeOrder(classAttributes, "public string Email { get; set; }"));
+
+        Assert.That(index.TableName, Is.EqualTo("users"));
+    }
+
+    [TestCase("[Table(\"users\")]\n    [Unique(nameof(Email))]", TestName = "Class_level_unique_after_Table")]
+    [TestCase("[Unique(nameof(Email))]\n    [Table(\"users\")]", TestName = "Class_level_unique_before_Table")]
+    public void Class_level_constraint_gets_the_table_name_whatever_the_attribute_order(string classAttributes)
+    {
+        var table = AnalyzeTableWithAttributeOrder(classAttributes, "public string Email { get; set; }");
+
+        Assert.That(table.Constraints, Is.Not.Null.And.Count.EqualTo(1));
+        Assert.That(table.Constraints[0].TableName, Is.EqualTo("users"));
     }
 }

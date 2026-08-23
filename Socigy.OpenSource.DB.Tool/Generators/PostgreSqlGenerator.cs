@@ -24,7 +24,32 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         public IReadOnlyList<string> SafetyWarnings => _warnings;
         private readonly List<string> _warnings = new List<string>();
 
+        /// <inheritdoc/>
+        public IReadOnlyList<string> BlockingIssues => _blocking;
+        private readonly List<string> _blocking = new List<string>();
+
         private void Warn(string detail) => _warnings.Add(detail);
+
+        /// <summary>
+        /// Records a change for which no correct SQL exists, so the orchestrator refuses to write the
+        /// migration at all. Prefer this over emitting SQL that is known to fail or to be wrong: a generated
+        /// file reads as an endorsement, and a broken one costs far more than a refusal.
+        /// </summary>
+        private void Block(string detail) => _blocking.Add(detail);
+
+        /// <summary>Comment prefix for a change the generator refuses to express; the developer must hand-author it.</summary>
+        public const string ManualMarker = "-- [SOCIGY:MANUAL]";
+
+        /// <summary>
+        /// Records a change the generator cannot express in SQL but which is not an error to proceed past —
+        /// the migration is still written, carrying a loud comment, so there is a schema artefact the change
+        /// can be hung on and reviewed against.
+        /// </summary>
+        private void Manual(string detail, List<string> sink)
+        {
+            _warnings.Add(detail);
+            sink.Add($"{ManualMarker} {detail}");
+        }
 
         /// <inheritdoc/>
         /// <remarks>PostgreSQL expresses every index feature the model can describe.</remarks>
@@ -47,6 +72,49 @@ namespace Socigy.OpenSource.DB.Tool.Generators
         {
             _destructive.Add(detail);
             sink.Add($"{LossyMarker} {detail}");
+        }
+
+        private static string Describe(string profile) => string.IsNullOrEmpty(profile) ? "the default" : $"\"{profile}\"";
+
+        /// <summary>
+        /// True when the column is gaining or losing <c>[Encrypted]</c> — i.e. its contents change between
+        /// plaintext and ciphertext, which no SQL statement can perform.
+        /// </summary>
+        private static bool IsEncryptionBoundaryChange(ColumnAlteration mod)
+        {
+            // Null on the old column means the snapshot predates the field, not that the column was plaintext;
+            // treating it as false would refuse to generate anything for every encrypted column after an
+            // upgrade. SchemaComparer already skips the diff in that case, so this is belt and braces.
+            if (mod.OldColumn.IsEncrypted == null) return false;
+
+            return (mod.OldColumn.IsEncrypted == true) != (mod.NewColumn.IsEncrypted == true);
+        }
+
+        private void BlockEncryptionBoundaryChange(string table, ColumnAlteration mod)
+        {
+            string column = mod.NewColumn.Name;
+            bool encrypting = mod.NewColumn.IsEncrypted == true;
+
+            if (encrypting)
+                // The generic path emitted `ALTER COLUMN ... TYPE bytea USING "col"::bytea`. text::bytea is an
+                // I/O-conversion cast, so PostgreSQL hands the text to byteain: any value containing a
+                // backslash aborts the migration outright, and where it does succeed the column ends up
+                // holding readable plaintext that the model thereafter reports as encrypted — a failure that
+                // does not surface until the first typed read, potentially months later.
+                Block($"Cannot encrypt the existing column \"{table}\".\"{column}\" in a migration: " +
+                      $"{mod.OldColumn.DatabaseType} -> bytea has no valid in-place cast, and SQL cannot encrypt " +
+                      "(only the application holds the key). Do it in two phases instead: " +
+                      $"(1) rename \"{column}\" to a temporary plaintext column and add the new [Encrypted] " +
+                      $"\"{column}\" as nullable; (2) backfill by reading each row and re-writing it through the " +
+                      "typed row set, so the ciphertext carries the right profile, key id and table:column " +
+                      $"context; (3) once every row is written, drop the temporary column and set \"{column}\" " +
+                      "NOT NULL. Hand-author that migration; this tool will not guess at it.");
+            else
+                Block($"Cannot decrypt the existing column \"{table}\".\"{column}\" in a migration: " +
+                      $"bytea -> {mod.NewColumn.DatabaseType} would cast raw ciphertext bytes to text, producing " +
+                      "unreadable values rather than the original plaintext, because SQL cannot decrypt (only " +
+                      "the application holds the key). Use the same two-phase shape as encrypting, reading each " +
+                      "row through the typed row set to obtain the plaintext.");
         }
 
         // Known-safe widenings within a type family — the in-place cast cannot lose data. Anything else
@@ -72,6 +140,7 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             var downCommands = new List<string>();
             _destructive.Clear();
             _warnings.Clear();
+            _blocking.Clear();
             CollectSafetyWarnings(diff);
 
             // --- UP: 1. Drop Removed Tables ---
@@ -287,9 +356,16 @@ namespace Socigy.OpenSource.DB.Tool.Generators
                     {
                         if (string.Equals(removed.DatabaseType, added.DatabaseType, StringComparison.OrdinalIgnoreCase)
                             && removed.Nullable == added.Nullable)
+                            // Print a name the comparer actually matches. This used to interpolate removed.Name
+                            // (the database column name) while the comparer matched only SourceName (the C#
+                            // property name), so the one value the message told you to write was the one value
+                            // that could never match — the attribute was read, never matched, and the column
+                            // still went through a data-destroying DROP + ADD. Both names are accepted now;
+                            // the source name is suggested because it is the one the model file shows.
                             Warn($"Column \"{table}\".\"{removed.Name}\" is dropped and \"{added.Name}\" added with the same " +
-                                 $"type ({added.DatabaseType}). If this is a rename, set [Renamed(\"{removed.Name}\")] on the new " +
-                                 "property so the data is preserved instead of dropped.");
+                                 $"type ({added.DatabaseType}). If this is a rename, set " +
+                                 $"[Renamed(\"{removed.SourceName ?? removed.Name}\")] on the new property so the data is " +
+                                 "preserved instead of dropped.");
                     }
             }
         }
@@ -409,12 +485,39 @@ namespace Socigy.OpenSource.DB.Tool.Generators
             {
                 var colName = Quote(mod.NewColumn.Name);
 
+                // Crossing the [Encrypted] boundary is not a type change that SQL can carry out at all: only
+                // the application holds the key. Refuse the whole column rather than letting the generic
+                // machinery below emit a cast, and skip its other changes — they are meaningless against a
+                // column that is not going to be migrated.
+                if (IsEncryptionBoundaryChange(mod))
+                {
+                    BlockEncryptionBoundaryChange(alteration.Table.Name, mod);
+                    continue;
+                }
+
                 foreach (var change in mod.Changes)
                 {
                     if (change == "PrimaryKey") continue;
 
                     switch (change)
                     {
+                        case "EncryptionProfile":
+                            // Both sides are bytea, so there is no DDL to emit — and none that could help, since
+                            // re-encrypting requires the key. Emit a loud comment instead, so the change has a
+                            // schema artefact to hang on and shows up in review, rather than surfacing months
+                            // later as a decrypt failure on one row.
+                            var oldProfile = Describe(mod.OldColumn.EncryptionProfile);
+                            var newProfile = Describe(mod.NewColumn.EncryptionProfile);
+                            Manual($"\"{alteration.Table.Name}\".\"{mod.NewColumn.Name}\" moves from encryption profile " +
+                                   $"{oldProfile} to {newProfile}. Existing rows still hold ciphertext the new profile " +
+                                   "cannot read, and no SQL can fix that — the key is only reachable from the " +
+                                   "application. Run a re-encryption pass (read and re-write each row through the " +
+                                   "typed row set) before or immediately after this migration.", up);
+                            Manual($"\"{alteration.Table.Name}\".\"{mod.NewColumn.Name}\" moves back from encryption profile " +
+                                   $"{newProfile} to {oldProfile}. The same application-level re-encryption pass is " +
+                                   "required in the other direction.", down);
+                            break;
+
                         case "Type":
                             var newType = mod.NewColumn.DatabaseType;
                             var oldType = mod.OldColumn.DatabaseType;

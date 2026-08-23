@@ -135,6 +135,14 @@
 
 		<RemoveDir Directories="$(ToolPublishDir)" />
 
+		<!-- NoBuild=false is deliberate and load-bearing: do not remove it. A "dotnet pack" run with the
+		     no-build switch (what CI does) sets NoBuild=true as a GLOBAL property, and global properties flow
+		     into these MSBuild task calls, which made the tool's Publish skip its Build and fail with MSB3030
+		     ("could not copy obj/Release/net10.0/Socigy.OpenSource.DB.Tool.dll ... not found") because nothing
+		     in the pipeline ever builds the tool in Release. That switch means "do not rebuild the project
+		     being packed"; the tool is a separate project whose publish output is an INPUT to this package, so
+		     it has to be produced either way. Overriding it here keeps pack self-sufficient however it is
+		     invoked. -->
 		<Message Text="[Socigy] Building Portable Tool..." Importance="High" />
 		<MSBuild Projects="..\Socigy.OpenSource.DB.Tool\Socigy.OpenSource.DB.Tool.csproj" Targets="Publish" Properties="Configuration=Release;TargetFramework=net10.0;PublishDir=$(ToolPublishDirAny);SelfContained=false;NoBuild=false" />
 

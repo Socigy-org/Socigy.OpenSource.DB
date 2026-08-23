@@ -63,7 +63,9 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
         private static InsertColumnDescriptor[] ApplyServerDefaults(
             InsertColumnDescriptor[] columns, InsertFields fields, bool hasKeep, HashSet<string>? kept)
         {
-            bool serverDefaults = fields == InsertFields.ServerDefaults || hasKeep;
+            bool serverDefaults = fields == InsertFields.ServerDefaults
+                || fields == InsertFields.ServerDefaultsWhenUnset
+                || hasKeep;
             if (!serverDefaults)
                 return columns;
 
@@ -76,6 +78,114 @@ namespace Socigy.OpenSource.DB.Core.CommandBuilders
             }
             return result.ToArray();
         }
+
+        /// <summary>
+        /// Whether the plan for <paramref name="fields"/> depends on each row's values rather than on the
+        /// entity's shape alone. True only for <see cref="InsertFields.ServerDefaultsWhenUnset"/>: every other
+        /// mode resolves its column set once and reuses one plan for a whole batch, which is what makes the
+        /// bulk paths fast. Callers use this to decide whether the per-row grouping below is needed at all.
+        /// </summary>
+        public static bool IsRowDependent(InsertFields fields)
+            => fields == InsertFields.ServerDefaultsWhenUnset;
+
+        /// <summary>
+        /// The <see cref="InsertFields.ServerDefaultsWhenUnset"/> filter for one row: a <c>[Default]</c> column
+        /// is omitted only when <paramref name="row"/> still holds its CLR type default for it, so a value the
+        /// caller actually set survives.
+        /// </summary>
+        /// <param name="kept">Columns named in <c>keep</c>, which are always written regardless of value.</param>
+        public static InsertColumnDescriptor[] ResolveForRow(
+            InsertColumnDescriptor[] columns, object row, HashSet<string>? kept)
+        {
+            if (row == null) throw new ArgumentNullException(nameof(row));
+
+            var result = new List<InsertColumnDescriptor>(columns.Length);
+            foreach (var d in columns)
+            {
+                if (d.HasDbDefault
+                    && (kept == null || !kept.Contains(d.ParameterName.Substring(1)))
+                    && IsClrDefault(d.Type, d.GetValue(row)))
+                    continue;
+                result.Add(d);
+            }
+            return result.ToArray();
+        }
+
+        /// <summary>
+        /// A stable key describing which columns a row omits, so rows that agree can share one prepared plan.
+        /// Rows in a batch usually agree, in which case the batch costs exactly one plan as before.
+        /// </summary>
+        public static string RowShapeKey(InsertColumnDescriptor[] resolved)
+        {
+            var names = new string[resolved.Length];
+            for (int i = 0; i < resolved.Length; i++)
+                names[i] = resolved[i].ParameterName;
+            return string.Join(",", names);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="value"/> is the CLR default for <paramref name="type"/> — <c>null</c>,
+        /// <c>0</c>, <c>false</c>, <c>default(DateTime)</c>, <c>Guid.Empty</c>, and so on.
+        ///
+        /// This is the whole judgement <see cref="InsertFields.ServerDefaultsWhenUnset"/> rests on, and it
+        /// deliberately cannot tell "the caller set false" from "the caller set nothing" on a non-nullable
+        /// value type — no runtime check can. What it does is resolve that ambiguity towards the server
+        /// default only when the value looks genuinely absent, instead of always.
+        /// </summary>
+        public static bool IsClrDefault(Type type, object? value)
+        {
+            if (value == null || value is DBNull) return true;
+
+            // A nullable column can express "unset" exactly — as null, handled above. So a non-null value in
+            // one was chosen by the caller, including an explicit 0 or false, and is written. Only a
+            // non-nullable value type has the "present but indistinguishable from unset" problem this whole
+            // mode exists to make a judgement call about.
+            if (Nullable.GetUnderlyingType(type) != null) return false;
+
+            // A reference type holding a non-null value was set by definition.
+            if (!type.IsValueType) return false;
+
+            // Boxed comparison against a freshly zeroed instance of the same type. Enums compare correctly
+            // (their zero member equals default), as do DateTime, Guid, TimeSpan and the numeric primitives.
+            var zero = type.IsEnum ? Enum.ToObject(type, 0) : GetValueTypeDefault(type);
+            return zero != null && zero.Equals(value);
+        }
+
+        // Zero-initializes a struct without Activator.CreateInstance(Type), whose
+        // [DynamicallyAccessedMembers(PublicParameterlessConstructor)] requirement would produce an IL2xxx
+        // trim warning here. A struct needs no preserved constructor — the runtime just zeroes it — but the
+        // trimmer cannot see that, so the common types are listed and the rest fall back safely.
+        private static object? GetValueTypeDefault(Type type)
+        {
+            if (type == typeof(int)) return default(int);
+            if (type == typeof(long)) return default(long);
+            if (type == typeof(bool)) return default(bool);
+            if (type == typeof(Guid)) return default(Guid);
+            if (type == typeof(DateTime)) return default(DateTime);
+            if (type == typeof(DateTimeOffset)) return default(DateTimeOffset);
+            if (type == typeof(decimal)) return default(decimal);
+            if (type == typeof(double)) return default(double);
+            if (type == typeof(float)) return default(float);
+            if (type == typeof(short)) return default(short);
+            if (type == typeof(byte)) return default(byte);
+            if (type == typeof(sbyte)) return default(sbyte);
+            if (type == typeof(ushort)) return default(ushort);
+            if (type == typeof(uint)) return default(uint);
+            if (type == typeof(ulong)) return default(ulong);
+            if (type == typeof(char)) return default(char);
+            if (type == typeof(TimeSpan)) return default(TimeSpan);
+
+            // An exotic struct: treat it as set rather than guess. Omitting a column the caller may have
+            // populated is the damaging direction, so the safe answer here is "not default".
+            return null;
+        }
+
+        /// <summary>
+        /// The DB column names a <c>keep</c> selector refers to. Exposed so the bulk paths can reuse the
+        /// expression-to-column mapping for the per-row filter without duplicating the visitor plumbing.
+        /// </summary>
+        public static HashSet<string> ExtractMemberNames<T>(Expression<Func<T, object?[]>> keep, IDbTable sample)
+            => ExtractDbColumnNames(keep, sample);
 
         private static HashSet<string> ExtractDbColumnNames<T>(Expression<Func<T, object?[]>> keep, IDbTable sample)
         {

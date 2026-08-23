@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  End-to-end NativeAOT publish gate.
+
+	  The Roslyn AOT analyzer (IsAotCompatible) and the real ILC compiler do not see the same things:
+	  the analyzer never flags expression-tree construction, so a project can build with 0 warnings and
+	  still fail `dotnet publish -p:PublishAot=true`. That gap is exactly how "Benchmarks.Aot is clean"
+	  coexisted with a consumer's publish failing on the same library.
+
+	  This app therefore gets *published*, not just built — ILC runs over the whole graph. It uses only
+	  the AOT-safe string[] overloads (never the Expression selectors), so it models a consumer who has
+	  migrated fully: such a consumer must get a clean publish, and any IL warning attributed to
+	  Socigy.OpenSource.DB.Core is a shipping defect. TreatWarningsAsErrors turns that into a build
+	  failure, matching what a real consumer with the same setting experiences (an empty output dir).
+
+	  It never connects to a database — ILC only needs the call sites reachable from Main, not executed.
+	-->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+		<Configurations>Debug;Release;DB_Migration</Configurations>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+		<PublishAot>true</PublishAot>
+		<!-- Without this, ILC collapses every warning into IL2104/IL3053 and hides which member is at
+		     fault — the single most expensive part of diagnosing this class of bug. -->
+		<TrimmerSingleWarn>false</TrimmerSingleWarn>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+		<!-- Keep the publish cheap: this is a correctness gate, not a shipping binary. -->
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<OptimizationPreference>Size</OptimizationPreference>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<AdditionalFiles Include="socigy.json" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Npgsql" Version="10.0.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Socigy.OpenSource.DB.Core\Socigy.OpenSource.DB.Core.csproj" />
+		<ProjectReference Include="..\Socigy.OpenSource.DB.SourceGenerator\Socigy.OpenSource.DB.SourceGenerator.csproj">
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+			<OutputItemType>Analyzer</OutputItemType>
+		</ProjectReference>
+	</ItemGroup>
+
+</Project>

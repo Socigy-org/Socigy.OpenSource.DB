@@ -9,8 +9,23 @@ namespace Socigy.OpenSource.DB.Attributes
     /// <see cref="Socigy.OpenSource.DB.Core.Encryption.IFieldEncryptor"/> configured via
     /// <see cref="Socigy.OpenSource.DB.Core.Encryption.SocigyFieldEncryption"/>.
     /// <para>
-    /// Because encryption is non-deterministic, an encrypted column cannot be used in a <c>WHERE</c>,
-    /// <c>ORDER BY</c>, or <c>LIKE</c> clause — doing so throws <see cref="NotSupportedException"/>.
+    /// <b>Plan the column split up front.</b> Because encryption is non-deterministic, an encrypted column can
+    /// be read and written by primary key but can never appear in a <c>WHERE</c>, <c>ORDER BY</c>, <c>LIKE</c>
+    /// or <c>SELECT</c> projection — doing so throws <see cref="NotSupportedException"/>. That makes
+    /// <c>[Encrypted]</c> in practice a property of every query that touches the column, not just of the
+    /// column, and the two live in different files. Any column you need to search must therefore either stay
+    /// plaintext or be split in two:
+    /// </para>
+    /// <code>
+    /// public string EntityLabel { get; set; }                        // searchable; non-sensitive labels only
+    /// [Encrypted] public byte[]? EntityLabelEncrypted { get; set; }  // sensitive values; route on write, coalesce on read
+    /// </code>
+    /// <para>
+    /// Deciding this at design time is much cheaper than discovering it later: retro-fitting <c>[Encrypted]</c>
+    /// to a column that is already searched turns a data-protection improvement into a broken feature, and by
+    /// the time the exception fires the schema is usually deployed. The migration generator also refuses to
+    /// encrypt an existing populated column, because doing so is a two-phase, application-level data migration
+    /// that no SQL statement can perform.
     /// </para>
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
