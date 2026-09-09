@@ -49,6 +49,6 @@
 
 	<ItemGroup>
 		<!-- Build-time only (PrivateAssets=All): never flows to consumers as a dependency. -->
-		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.303" PrivateAssets="All" />
 	</ItemGroup>
 </Project>
